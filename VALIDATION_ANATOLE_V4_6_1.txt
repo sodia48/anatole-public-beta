@@ -1,0 +1,11 @@
+Anatole V4.6.1 — Validation
+
+Résultat : SUCCÈS
+
+Fichiers Python validés : 48
+
+Correctif validé :
+- import du contexte public ;
+- lien Diagnostics protégé par is_admin ;
+- message public alternatif ;
+- aucune migration de données requise.

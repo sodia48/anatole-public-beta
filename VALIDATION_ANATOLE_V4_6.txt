@@ -1,0 +1,36 @@
+Anatole V4.6 — Validation Public Beta
+
+Résultat : SUCCÈS
+
+Fichiers Python validés : 48
+
+Éléments ajoutés :
+- authentification OIDC optionnelle ;
+- profils isolés et pseudonymisés ;
+- modes login, hybrid et guest ;
+- consentement légal ;
+- confidentialité, conditions et suppression des données ;
+- PostgreSQL avec fallback SQLite ;
+- feedback de bêta ;
+- limitation anti-abus ;
+- diagnostics réservés aux administrateurs ;
+- configuration Streamlit sécurisée ;
+- Dockerfile avec healthcheck ;
+- render.yaml avec PostgreSQL ;
+- GitHub Actions ;
+- dépendances verrouillées ;
+- documentation de déploiement.
+
+Avant ouverture publique, configure les secrets OIDC, DATABASE_URL et
+ANATOLE_ADMIN_EMAILS sur l'hébergeur.
+
+
+Vérifications finales :
+- DATABASE_URL peut être lue depuis les variables d'environnement ou st.secrets ;
+- le mode hybrid fonctionne sans fournisseur OIDC en session invitée ;
+- création du schéma SQLite testée ;
+- watchlist testée ;
+- portefeuille testée ;
+- feedback testé ;
+- préférences testées ;
+- suppression du profil testée.
