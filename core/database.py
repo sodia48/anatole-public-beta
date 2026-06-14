@@ -37,7 +37,16 @@ class ConnectionAdapter:
         return self.raw.execute(_convert_placeholders(query), params)
 
     def executemany(self, query: str, params: Any):
-        return self.raw.executemany(_convert_placeholders(query), params)
+        converted_query = _convert_placeholders(query)
+
+        if self.backend == "postgresql":
+            # Psycopg 3 expose executemany() sur le curseur,
+            # et non directement sur l'objet Connection.
+            with self.raw.cursor() as cursor:
+                cursor.executemany(converted_query, params)
+            return None
+
+        return self.raw.executemany(converted_query, params)
 
     def execute_statements(self, script: str) -> None:
         statements = [
