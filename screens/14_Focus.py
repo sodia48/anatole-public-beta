@@ -292,7 +292,7 @@ elif section == "Finances":
 
     rows = [
         ("Secteur", financial_info.get("sector") or fallback_sector),
-        ("Industrie", financial_info.get("industry", "N/D")),
+        ("Industrie", financial_info.get("industry") or "Non classée"),
         ("Capitalisation", format_compact(financial_info.get("marketCap"))),
         ("Valeur d'entreprise", format_compact(financial_info.get("enterpriseValue"))),
         ("P/E historique", format_number(financial_info.get("trailingPE"))),
@@ -337,7 +337,12 @@ elif section == "Finances":
         st.subheader("Activités")
         st.write(financial_info["longBusinessSummary"])
 
-    st.caption(f"Source : {financials.get('source', 'Données de marché')}. Les valeurs peuvent être différées ou révisées.")
+    available_rows = sum(value != "N/D" for _, value in rows)
+    st.caption(
+        f"Couverture : {available_rows}/{len(rows)} indicateurs disponibles. "
+        f"Sources : {financials.get('source', 'Données de marché')}. "
+        "Les valeurs peuvent être différées ou révisées."
+    )
 
 elif section == "Actualités":
     with st.spinner("Chargement des actualités…"):
