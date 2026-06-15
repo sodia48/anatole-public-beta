@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from io import StringIO
+import re
 from typing import Any
 
 import numpy as np
@@ -276,13 +277,77 @@ def fetch_history(ticker: str, period: str = "1y", interval: str = "1d") -> pd.D
     return extract_ticker_frame(data, ticker)
 
 
-@st.cache_data(ttl=86_400, show_spinner=False)
+@st.cache_data(ttl=21_600, show_spinner=False)
 def fetch_company_info(ticker: str) -> dict[str, Any]:
+    """Return the broadest company profile available without requiring an API key.
+
+    Yahoo's full ``info`` payload can occasionally be unavailable or rate-limited.
+    Anatole therefore merges it with ``fast_info`` and history metadata so that
+    basic market fields remain usable whenever possible.
+    """
+    stock = yf.Ticker(ticker)
+    info: dict[str, Any] = {}
+
     try:
-        info = yf.Ticker(ticker).info
-        return info if isinstance(info, dict) else {}
+        raw_info = stock.get_info()
+        if isinstance(raw_info, dict):
+            info.update(raw_info)
     except Exception:
-        return {}
+        try:
+            raw_info = stock.info
+            if isinstance(raw_info, dict):
+                info.update(raw_info)
+        except Exception:
+            pass
+
+    fast_mapping = {
+        "currency": "currency",
+        "exchange": "exchange",
+        "timezone": "exchangeTimezoneName",
+        "last_price": "currentPrice",
+        "market_cap": "marketCap",
+        "shares": "sharesOutstanding",
+        "year_high": "fiftyTwoWeekHigh",
+        "year_low": "fiftyTwoWeekLow",
+        "previous_close": "previousClose",
+        "open": "open",
+        "day_high": "dayHigh",
+        "day_low": "dayLow",
+        "last_volume": "volume",
+        "ten_day_average_volume": "averageDailyVolume10Day",
+        "three_month_average_volume": "averageVolume",
+        "fifty_day_average": "fiftyDayAverage",
+        "two_hundred_day_average": "twoHundredDayAverage",
+    }
+    try:
+        fast = dict(stock.fast_info)
+        for fast_key, info_key in fast_mapping.items():
+            value = fast.get(fast_key)
+            if info.get(info_key) in (None, "") and value not in (None, ""):
+                info[info_key] = value
+    except Exception:
+        pass
+
+    try:
+        metadata = stock.get_history_metadata()
+        if isinstance(metadata, dict):
+            metadata_mapping = {
+                "currency": "currency",
+                "exchangeName": "exchange",
+                "instrumentType": "quoteType",
+                "regularMarketPrice": "currentPrice",
+                "previousClose": "previousClose",
+                "longName": "longName",
+                "shortName": "shortName",
+            }
+            for source_key, target_key in metadata_mapping.items():
+                value = metadata.get(source_key)
+                if info.get(target_key) in (None, "") and value not in (None, ""):
+                    info[target_key] = value
+    except Exception:
+        pass
+
+    return info
 
 
 def _one_fundamental(ticker: str) -> dict[str, Any]:
@@ -427,22 +492,501 @@ def fetch_dividend_history(ticker: str, period: str = "10y") -> pd.DataFrame:
         return pd.DataFrame(columns=["Date", "Dividende"])
 
 
-@st.cache_data(ttl=21_600, show_spinner=False)
-def fetch_recommendation_summary(ticker: str) -> pd.DataFrame:
+def _normalise_label(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).lower())
+
+
+def _as_dataframe(value: Any) -> pd.DataFrame:
+    if isinstance(value, pd.DataFrame):
+        return value.copy()
+    if isinstance(value, pd.Series):
+        return value.to_frame().T
+    if isinstance(value, list):
+        return pd.DataFrame(value)
+    if isinstance(value, dict) and value:
+        try:
+            return pd.DataFrame(value)
+        except ValueError:
+            return pd.DataFrame([value])
+    return pd.DataFrame()
+
+
+def _safe_stock_frame(stock: Any, method_name: str, attribute_name: str) -> pd.DataFrame:
     try:
-        frame = yf.Ticker(ticker).recommendations_summary
-        return frame.reset_index(drop=True) if isinstance(frame, pd.DataFrame) else pd.DataFrame()
+        method = getattr(stock, method_name, None)
+        if callable(method):
+            frame = _as_dataframe(method())
+            if not frame.empty:
+                return frame
+    except Exception:
+        pass
+    try:
+        return _as_dataframe(getattr(stock, attribute_name, None))
     except Exception:
         return pd.DataFrame()
+
+
+def _clean_external_frame(
+    frame: pd.DataFrame,
+    rename_map: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+
+    result = frame.copy().reset_index()
+    if "index" in result.columns and result["index"].equals(pd.Series(range(len(result)))):
+        result = result.drop(columns=["index"])
+
+    rename_map = rename_map or {}
+    translated: dict[Any, str] = {}
+    for column in result.columns:
+        key = _normalise_label(column)
+        translated[column] = rename_map.get(key, str(column))
+    result = result.rename(columns=translated)
+
+    for column in result.columns:
+        lowered = str(column).lower()
+        if "date" in lowered or "début" in lowered:
+            parsed = pd.to_datetime(result[column], errors="coerce")
+            if parsed.notna().any():
+                result[column] = parsed.dt.strftime("%Y-%m-%d")
+        result[column] = result[column].map(
+            lambda value: str(value) if isinstance(value, (dict, list, tuple, set)) else value
+        )
+    return result
+
+
+def _statement_value(
+    frame: pd.DataFrame,
+    aliases: tuple[str, ...],
+) -> tuple[float, str]:
+    if frame is None or frame.empty:
+        return np.nan, ""
+
+    alias_keys = {_normalise_label(alias) for alias in aliases}
+    matched_index = next(
+        (index for index in frame.index if _normalise_label(index) in alias_keys),
+        None,
+    )
+    if matched_index is None:
+        return np.nan, ""
+
+    row = frame.loc[matched_index]
+    if isinstance(row, pd.DataFrame):
+        row = row.iloc[0]
+    row = pd.to_numeric(row, errors="coerce").dropna()
+    if row.empty:
+        return np.nan, ""
+
+    if all(isinstance(column, (pd.Timestamp, datetime, np.datetime64)) for column in row.index):
+        row = row.sort_index(ascending=False)
+
+    value = safe_float(row.iloc[0])
+    period_value = row.index[0]
+    try:
+        period = pd.Timestamp(period_value).strftime("%Y-%m-%d")
+    except Exception:
+        period = str(period_value)
+    return value, period
+
+
+def _compact_statement_value(value: Any, decimals: int = 2) -> str:
+    number = safe_float(value)
+    if np.isnan(number):
+        return "N/D"
+    absolute = abs(number)
+    if absolute >= 1_000_000_000_000:
+        return f"{number / 1_000_000_000_000:.2f} T"
+    if absolute >= 1_000_000_000:
+        return f"{number / 1_000_000_000:.2f} G"
+    if absolute >= 1_000_000:
+        return f"{number / 1_000_000:.2f} M"
+    if absolute >= 1_000:
+        return f"{number / 1_000:.2f} k"
+    return f"{number:,.{decimals}f}"
+
+
+def _statement_display(
+    frame: pd.DataFrame,
+    definitions: tuple[tuple[str, tuple[str, ...], bool], ...],
+) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+
+    columns = list(frame.columns)
+    try:
+        columns = sorted(columns, key=pd.Timestamp, reverse=True)
+    except Exception:
+        pass
+    columns = columns[:4]
+
+    records: list[dict[str, Any]] = []
+    for label, aliases, is_per_share in definitions:
+        alias_keys = {_normalise_label(alias) for alias in aliases}
+        matched = next(
+            (index for index in frame.index if _normalise_label(index) in alias_keys),
+            None,
+        )
+        if matched is None:
+            continue
+        row = frame.loc[matched]
+        if isinstance(row, pd.DataFrame):
+            row = row.iloc[0]
+        record: dict[str, Any] = {"Indicateur": label}
+        for column in columns:
+            try:
+                heading = pd.Timestamp(column).strftime("%Y-%m-%d")
+            except Exception:
+                heading = str(column)
+            record[heading] = _compact_statement_value(
+                row.get(column),
+                decimals=2 if is_per_share else 2,
+            )
+        records.append(record)
+    return pd.DataFrame(records)
+
+
+def _stock_statement(stock: Any, method_name: str, attribute_name: str) -> pd.DataFrame:
+    try:
+        method = getattr(stock, method_name, None)
+        if callable(method):
+            frame = _as_dataframe(method(freq="yearly"))
+            if not frame.empty:
+                return frame
+    except Exception:
+        pass
+    try:
+        return _as_dataframe(getattr(stock, attribute_name, None))
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=21_600, show_spinner=False)
+def fetch_company_financials(ticker: str) -> dict[str, Any]:
+    stock = yf.Ticker(ticker)
+    info = fetch_company_info(ticker)
+    income = _stock_statement(stock, "get_income_stmt", "income_stmt")
+    balance = _stock_statement(stock, "get_balance_sheet", "balance_sheet")
+    cashflow = _stock_statement(stock, "get_cashflow", "cashflow")
+
+    definitions: dict[str, tuple[pd.DataFrame, tuple[str, ...], tuple[str, ...]]] = {
+        "revenue": (income, ("Total Revenue", "Operating Revenue"), ("totalRevenue",)),
+        "gross_profit": (income, ("Gross Profit",), ("grossProfits",)),
+        "operating_income": (income, ("Operating Income", "EBIT"), ("operatingIncome",)),
+        "ebitda": (income, ("EBITDA", "Normalized EBITDA"), ("ebitda",)),
+        "net_income": (
+            income,
+            ("Net Income", "Net Income Common Stockholders"),
+            ("netIncomeToCommon", "netIncome"),
+        ),
+        "eps": (income, ("Diluted EPS", "Basic EPS"), ("trailingEps",)),
+        "assets": (balance, ("Total Assets",), ("totalAssets",)),
+        "cash": (
+            balance,
+            ("Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"),
+            ("totalCash",),
+        ),
+        "debt": (
+            balance,
+            ("Total Debt", "Long Term Debt And Capital Lease Obligation", "Long Term Debt"),
+            ("totalDebt",),
+        ),
+        "equity": (
+            balance,
+            ("Stockholders Equity", "Common Stock Equity", "Total Equity Gross Minority Interest"),
+            ("bookValue",),
+        ),
+        "current_assets": (balance, ("Current Assets", "Total Current Assets"), tuple()),
+        "current_liabilities": (balance, ("Current Liabilities", "Total Current Liabilities"), tuple()),
+        "operating_cashflow": (
+            cashflow,
+            ("Operating Cash Flow", "Total Cash From Operating Activities"),
+            ("operatingCashflow",),
+        ),
+        "capital_expenditure": (
+            cashflow,
+            ("Capital Expenditure", "Capital Expenditures"),
+            tuple(),
+        ),
+        "free_cashflow": (cashflow, ("Free Cash Flow",), ("freeCashflow",)),
+    }
+
+    metrics: dict[str, dict[str, Any]] = {}
+    for key, (frame, aliases, info_keys) in definitions.items():
+        value, period = _statement_value(frame, aliases)
+        source = "États financiers"
+        if np.isnan(value):
+            for info_key in info_keys:
+                candidate = safe_float(info.get(info_key))
+                if not np.isnan(candidate):
+                    value = candidate
+                    period = "TTM / dernier disponible"
+                    source = "Profil de marché"
+                    break
+        metrics[key] = {"value": value, "period": period, "source": source}
+
+    cfo = safe_float(metrics["operating_cashflow"]["value"])
+    capex = safe_float(metrics["capital_expenditure"]["value"])
+    if np.isnan(safe_float(metrics["free_cashflow"]["value"])) and not np.isnan(cfo) and not np.isnan(capex):
+        metrics["free_cashflow"] = {
+            "value": cfo + capex if capex < 0 else cfo - abs(capex),
+            "period": metrics["operating_cashflow"]["period"],
+            "source": "Calcul Anatole",
+        }
+
+    revenue = safe_float(metrics["revenue"]["value"])
+    net_income = safe_float(metrics["net_income"]["value"])
+    profit_margin = safe_float(info.get("profitMargins"))
+    if np.isnan(profit_margin) and not np.isnan(revenue) and revenue != 0 and not np.isnan(net_income):
+        profit_margin = net_income / revenue
+
+    current_ratio = safe_float(info.get("currentRatio"))
+    current_assets = safe_float(metrics["current_assets"]["value"])
+    current_liabilities = safe_float(metrics["current_liabilities"]["value"])
+    if np.isnan(current_ratio) and not np.isnan(current_assets) and current_liabilities not in (0, np.nan):
+        current_ratio = current_assets / current_liabilities if current_liabilities else np.nan
+
+    metrics.update(
+        {
+            "profit_margin": {"value": profit_margin, "period": "TTM", "source": "Calcul / profil"},
+            "gross_margin": {"value": safe_float(info.get("grossMargins")), "period": "TTM", "source": "Profil de marché"},
+            "operating_margin": {"value": safe_float(info.get("operatingMargins")), "period": "TTM", "source": "Profil de marché"},
+            "revenue_growth": {"value": safe_float(info.get("revenueGrowth")), "period": "YoY", "source": "Profil de marché"},
+            "earnings_growth": {"value": safe_float(info.get("earningsGrowth")), "period": "YoY", "source": "Profil de marché"},
+            "return_on_equity": {"value": safe_float(info.get("returnOnEquity")), "period": "TTM", "source": "Profil de marché"},
+            "return_on_assets": {"value": safe_float(info.get("returnOnAssets")), "period": "TTM", "source": "Profil de marché"},
+            "current_ratio": {"value": current_ratio, "period": "Dernier disponible", "source": "Calcul / profil"},
+            "quick_ratio": {"value": safe_float(info.get("quickRatio")), "period": "Dernier disponible", "source": "Profil de marché"},
+        }
+    )
+
+    income_table = _statement_display(
+        income,
+        (
+            ("Chiffre d'affaires", ("Total Revenue", "Operating Revenue"), False),
+            ("Bénéfice brut", ("Gross Profit",), False),
+            ("Résultat d'exploitation", ("Operating Income", "EBIT"), False),
+            ("EBITDA", ("EBITDA", "Normalized EBITDA"), False),
+            ("Résultat net", ("Net Income", "Net Income Common Stockholders"), False),
+            ("BPA dilué", ("Diluted EPS", "Basic EPS"), True),
+        ),
+    )
+    balance_table = _statement_display(
+        balance,
+        (
+            ("Total de l'actif", ("Total Assets",), False),
+            ("Trésorerie", ("Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"), False),
+            ("Dette totale", ("Total Debt", "Long Term Debt And Capital Lease Obligation", "Long Term Debt"), False),
+            ("Capitaux propres", ("Stockholders Equity", "Common Stock Equity", "Total Equity Gross Minority Interest"), False),
+            ("Actif courant", ("Current Assets", "Total Current Assets"), False),
+            ("Passif courant", ("Current Liabilities", "Total Current Liabilities"), False),
+        ),
+    )
+    cashflow_table = _statement_display(
+        cashflow,
+        (
+            ("Flux de trésorerie d'exploitation", ("Operating Cash Flow", "Total Cash From Operating Activities"), False),
+            ("Dépenses en immobilisations", ("Capital Expenditure", "Capital Expenditures"), False),
+            ("Flux de trésorerie disponible", ("Free Cash Flow",), False),
+        ),
+    )
+
+    return {
+        "info": info,
+        "metrics": metrics,
+        "income": income_table,
+        "balance": balance_table,
+        "cashflow": cashflow_table,
+        "source": "Yahoo Finance via yfinance",
+    }
+
+
+_RECOMMENDATION_LABELS = {
+    "strong_buy": "Achat fort",
+    "strongbuy": "Achat fort",
+    "buy": "Achat",
+    "hold": "Conserver",
+    "underperform": "Sous-performance",
+    "sell": "Vente",
+    "strong_sell": "Vente forte",
+    "strongsell": "Vente forte",
+    "none": "Non couvert",
+}
+
+
+@st.cache_data(ttl=21_600, show_spinner=False)
+def fetch_analyst_consensus(ticker: str) -> dict[str, Any]:
+    stock = yf.Ticker(ticker)
+    info = fetch_company_info(ticker)
+
+    targets: dict[str, Any] = {}
+    try:
+        raw_targets = stock.get_analyst_price_targets()
+        if isinstance(raw_targets, dict):
+            targets.update(raw_targets)
+    except Exception:
+        try:
+            raw_targets = stock.analyst_price_targets
+            if isinstance(raw_targets, dict):
+                targets.update(raw_targets)
+        except Exception:
+            pass
+
+    summary = _safe_stock_frame(
+        stock,
+        "get_recommendations_summary",
+        "recommendations_summary",
+    )
+    if summary.empty:
+        summary = _safe_stock_frame(stock, "get_recommendations", "recommendations")
+
+    recommendation_rename = {
+        "period": "Période",
+        "strongbuy": "Achat fort",
+        "buy": "Achat",
+        "hold": "Conserver",
+        "sell": "Vente",
+        "strongsell": "Vente forte",
+    }
+    summary = _clean_external_frame(summary, recommendation_rename)
+
+    upgrades = _safe_stock_frame(
+        stock,
+        "get_upgrades_downgrades",
+        "upgrades_downgrades",
+    )
+    upgrades = _clean_external_frame(
+        upgrades,
+        {
+            "gradedate": "Date",
+            "firm": "Firme",
+            "tograde": "Nouvelle recommandation",
+            "fromgrade": "Ancienne recommandation",
+            "action": "Action",
+        },
+    )
+
+    def first_number(*values: Any) -> float:
+        for value in values:
+            number = safe_float(value)
+            if not np.isnan(number):
+                return number
+        return np.nan
+
+    current = first_number(targets.get("current"), info.get("currentPrice"), info.get("regularMarketPrice"))
+    target_low = first_number(targets.get("low"), info.get("targetLowPrice"))
+    target_high = first_number(targets.get("high"), info.get("targetHighPrice"))
+    target_mean = first_number(targets.get("mean"), info.get("targetMeanPrice"))
+    target_median = first_number(targets.get("median"), info.get("targetMedianPrice"))
+    analyst_count = first_number(info.get("numberOfAnalystOpinions"))
+    recommendation_mean = first_number(info.get("recommendationMean"))
+    recommendation_key = str(info.get("recommendationKey") or "none").lower()
+    recommendation = _RECOMMENDATION_LABELS.get(
+        recommendation_key,
+        recommendation_key.replace("_", " ").title() if recommendation_key else "Non couvert",
+    )
+    upside = ((target_mean / current) - 1) if current and not np.isnan(target_mean) else np.nan
+
+    return {
+        "metrics": {
+            "recommendation": recommendation,
+            "recommendation_mean": recommendation_mean,
+            "analyst_count": analyst_count,
+            "current_price": current,
+            "target_low": target_low,
+            "target_high": target_high,
+            "target_mean": target_mean,
+            "target_median": target_median,
+            "upside_mean": upside,
+        },
+        "summary": summary,
+        "upgrades": upgrades,
+        "source": "Yahoo Finance via yfinance",
+    }
+
+
+@st.cache_data(ttl=21_600, show_spinner=False)
+def fetch_recommendation_summary(ticker: str) -> pd.DataFrame:
+    return fetch_analyst_consensus(ticker).get("summary", pd.DataFrame())
+
+
+@st.cache_data(ttl=21_600, show_spinner=False)
+def fetch_insider_activity(ticker: str) -> dict[str, Any]:
+    stock = yf.Ticker(ticker)
+    info = fetch_company_info(ticker)
+
+    transactions = _safe_stock_frame(
+        stock,
+        "get_insider_transactions",
+        "insider_transactions",
+    )
+    transactions = _clean_external_frame(
+        transactions,
+        {
+            "startdate": "Date",
+            "date": "Date",
+            "insider": "Initié",
+            "name": "Initié",
+            "position": "Fonction",
+            "transaction": "Transaction",
+            "text": "Description",
+            "shares": "Actions",
+            "value": "Valeur",
+            "ownership": "Détention",
+        },
+    )
+
+    purchases = _safe_stock_frame(
+        stock,
+        "get_insider_purchases",
+        "insider_purchases",
+    )
+    purchases = _clean_external_frame(
+        purchases,
+        {
+            "insiderpurchaseslast6m": "Activité sur 6 mois",
+            "shares": "Actions",
+            "trans": "Transactions",
+        },
+    )
+
+    roster = _safe_stock_frame(
+        stock,
+        "get_insider_roster_holders",
+        "insider_roster_holders",
+    )
+    roster = _clean_external_frame(
+        roster,
+        {
+            "name": "Initié",
+            "position": "Fonction",
+            "mostrecenttransaction": "Transaction récente",
+            "latesttransactiondate": "Date récente",
+            "sharesowneddirectly": "Actions détenues directement",
+            "sharesownedindirectly": "Actions détenues indirectement",
+        },
+    )
+
+    ownership = {
+        "held_percent_insiders": safe_float(info.get("heldPercentInsiders")),
+        "held_percent_institutions": safe_float(info.get("heldPercentInstitutions")),
+        "shares_outstanding": safe_float(info.get("sharesOutstanding")),
+        "float_shares": safe_float(info.get("floatShares")),
+    }
+
+    return {
+        "transactions": transactions,
+        "purchases": purchases,
+        "roster": roster,
+        "ownership": ownership,
+        "source": "Yahoo Finance via yfinance",
+        "official_url": "https://www.sedi.ca/sedi/SVTReportsAccessController",
+    }
 
 
 @st.cache_data(ttl=21_600, show_spinner=False)
 def fetch_insider_transactions(ticker: str) -> pd.DataFrame:
-    try:
-        frame = yf.Ticker(ticker).insider_transactions
-        return frame.reset_index(drop=True) if isinstance(frame, pd.DataFrame) else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return fetch_insider_activity(ticker).get("transactions", pd.DataFrame())
 
 
 @st.cache_data(ttl=15, show_spinner=False)
