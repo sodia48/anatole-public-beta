@@ -58,7 +58,7 @@ def local_answer(question: str, market: pd.DataFrame) -> str:
 
     return (
         "Je peux analyser les hausses, les baisses, les RSI, les dividendes, la watchlist et le portefeuille. "
-        "Configure une clé OpenAI pour obtenir une réponse contextuelle plus détaillée."
+        "Pose une question plus précise, par exemple sur les gagnants, les perdants ou les titres survendus."
     )
 
 
