@@ -93,20 +93,33 @@ for _, article in filtered.head(60).iterrows():
         if article.get("Resume"):
             st.write(article["Resume"])
 
+st.subheader("Synthèse du fil")
+if filtered.empty:
+    st.write("Aucune manchette ne correspond aux filtres actuels.")
+else:
+    dominant_category = filtered["Categorie"].value_counts().index[0]
+    dominant_sentiment = filtered["Sentiment"].value_counts().index[0]
+    st.write(
+        f"Le fil contient **{len(filtered)} manchettes**. La catégorie dominante est "
+        f"**{dominant_category}** et le sentiment le plus fréquent est **{dominant_sentiment.lower()}**. "
+        f"Le score moyen est de **{average_score:+.0f}/100**."
+    )
+
 openai_key = get_secret("OPENAI_API_KEY")
 if openai_key:
-    st.subheader("Synthèse IA en français")
     model = get_secret("OPENAI_MODEL", "gpt-5.5")
-    if st.button("Générer la synthèse des manchettes", type="primary"):
+    if st.button("Approfondir la synthèse", type="primary"):
         try:
             with st.spinner("Génération de la synthèse..."):
-                st.session_state["news_ai_summary"] = summarize_news_in_french(filtered, openai_key, model)
+                st.session_state["news_ai_summary"] = summarize_news_in_french(
+                    filtered,
+                    openai_key,
+                    model,
+                )
         except Exception as exc:
             st.error(f"Synthèse impossible : {type(exc).__name__}: {exc}")
     if st.session_state.get("news_ai_summary"):
         st.markdown(st.session_state["news_ai_summary"])
-else:
-    st.info("Ajoute OPENAI_API_KEY dans les secrets pour activer une synthèse française assistée par IA.")
 
 st.download_button(
     "Télécharger les nouvelles analysées",

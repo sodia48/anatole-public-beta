@@ -66,7 +66,6 @@ st.subheader("Intégrations")
 integrations = pd.DataFrame(
     [
         ("Twelve Data", bool(get_secret("TWELVE_DATA_API_KEY"))),
-        ("OpenAI", bool(get_secret("OPENAI_API_KEY"))),
         ("Telegram", bool(get_secret("TELEGRAM_BOT_TOKEN") and get_secret("TELEGRAM_CHAT_ID"))),
         ("Courriel SMTP", bool(get_secret("SMTP_HOST") and get_secret("SMTP_USERNAME") and get_secret("SMTP_PASSWORD") and get_secret("ALERT_EMAIL_TO"))),
     ],

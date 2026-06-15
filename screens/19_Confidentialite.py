@@ -43,8 +43,7 @@ st.markdown(
     ## Services externes
 
     Les fonctions peuvent interroger Yahoo Finance, BlackRock, Statistique Canada,
-    la Banque du Canada, le BLS, le BEA, la Réserve fédérale et, si configuré,
-    OpenAI ou Twelve Data. Les politiques de ces services peuvent alors s’appliquer.
+    la Banque du Canada, le BLS, le BEA, la Réserve fédérale et certains services externes facultatifs. Les politiques de ces services peuvent alors s’appliquer.
 
     ## Conservation et suppression
 
