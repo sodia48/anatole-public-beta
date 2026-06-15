@@ -19,6 +19,10 @@ from core.config import (
     FALLBACK_TICKERS,
     TORONTO_TZ,
 )
+from core.fundamental_fallback import (
+    fetch_tradingview_fundamentals,
+    merge_tradingview_into_info,
+)
 from core.utils import extract_ticker_frame, market_status, parse_timestamp, raw_to_yahoo, safe_float
 
 
@@ -347,6 +351,15 @@ def fetch_company_info(ticker: str) -> dict[str, Any]:
     except Exception:
         pass
 
+    # Dernier filet de sécurité pour les sociétés TSX lorsque Yahoo limite
+    # les requêtes depuis une infrastructure cloud.
+    tv = fetch_tradingview_fundamentals(ticker)
+    info = merge_tradingview_into_info(info, tv)
+    if tv:
+        info.setdefault("anatoleFundamentalSource", "Yahoo Finance + TradingView")
+    else:
+        info.setdefault("anatoleFundamentalSource", "Yahoo Finance")
+
     return info
 
 
@@ -647,24 +660,66 @@ def _statement_display(
 
 
 def _stock_statement(stock: Any, method_name: str, attribute_name: str) -> pd.DataFrame:
+    method = getattr(stock, method_name, None)
+    if callable(method):
+        for frequency in ("yearly", "trailing", "quarterly"):
+            try:
+                frame = _as_dataframe(method(freq=frequency))
+                if not frame.empty:
+                    return frame
+            except Exception:
+                continue
     try:
-        method = getattr(stock, method_name, None)
-        if callable(method):
-            frame = _as_dataframe(method(freq="yearly"))
-            if not frame.empty:
-                return frame
+        frame = _as_dataframe(getattr(stock, attribute_name, None))
+        if not frame.empty:
+            return frame
     except Exception:
         pass
+    return pd.DataFrame()
+
+
+def _latest_two_statement_values(
+    frame: pd.DataFrame, aliases: tuple[str, ...]
+) -> tuple[float, float]:
+    if frame is None or frame.empty:
+        return np.nan, np.nan
+    keys = {_normalise_label(alias) for alias in aliases}
+    matched = next((idx for idx in frame.index if _normalise_label(idx) in keys), None)
+    if matched is None:
+        return np.nan, np.nan
+    row = frame.loc[matched]
+    if isinstance(row, pd.DataFrame):
+        row = row.iloc[0]
+    values = pd.to_numeric(row, errors="coerce").dropna()
     try:
-        return _as_dataframe(getattr(stock, attribute_name, None))
+        values = values.sort_index(ascending=False)
     except Exception:
-        return pd.DataFrame()
+        pass
+    latest = safe_float(values.iloc[0]) if len(values) else np.nan
+    previous = safe_float(values.iloc[1]) if len(values) > 1 else np.nan
+    return latest, previous
+
+
+def _growth_rate(latest: float, previous: float) -> float:
+    if np.isnan(latest) or np.isnan(previous) or previous == 0:
+        return np.nan
+    return (latest / abs(previous)) - 1
+
+
+def _first_valid(*values: Any) -> float:
+    for value in values:
+        number = safe_float(value)
+        if not np.isnan(number):
+            return number
+    return np.nan
 
 
 @st.cache_data(ttl=21_600, show_spinner=False)
 def fetch_company_financials(ticker: str) -> dict[str, Any]:
     stock = yf.Ticker(ticker)
     info = fetch_company_info(ticker)
+    tv = fetch_tradingview_fundamentals(ticker)
+    info = merge_tradingview_into_info(info, tv)
     income = _stock_statement(stock, "get_income_stmt", "income_stmt")
     balance = _stock_statement(stock, "get_balance_sheet", "balance_sheet")
     cashflow = _stock_statement(stock, "get_cashflow", "cashflow")
@@ -694,10 +749,10 @@ def fetch_company_financials(ticker: str) -> dict[str, Any]:
         "equity": (
             balance,
             ("Stockholders Equity", "Common Stock Equity", "Total Equity Gross Minority Interest"),
-            ("bookValue",),
+            ("totalStockholderEquity",),
         ),
-        "current_assets": (balance, ("Current Assets", "Total Current Assets"), tuple()),
-        "current_liabilities": (balance, ("Current Liabilities", "Total Current Liabilities"), tuple()),
+        "current_assets": (balance, ("Current Assets", "Total Current Assets"), ("totalCurrentAssets",)),
+        "current_liabilities": (balance, ("Current Liabilities", "Total Current Liabilities"), ("totalCurrentLiabilities",)),
         "operating_cashflow": (
             cashflow,
             ("Operating Cash Flow", "Total Cash From Operating Activities"),
@@ -746,15 +801,74 @@ def fetch_company_financials(ticker: str) -> dict[str, Any]:
     if np.isnan(current_ratio) and not np.isnan(current_assets) and current_liabilities not in (0, np.nan):
         current_ratio = current_assets / current_liabilities if current_liabilities else np.nan
 
+    # Croissance calculée à partir des deux derniers exercices quand le profil
+    # de marché ne fournit pas la donnée.
+    revenue_latest, revenue_previous = _latest_two_statement_values(
+        income, ("Total Revenue", "Operating Revenue")
+    )
+    income_latest, income_previous = _latest_two_statement_values(
+        income, ("Net Income", "Net Income Common Stockholders")
+    )
+    calculated_revenue_growth = _growth_rate(revenue_latest, revenue_previous)
+    calculated_earnings_growth = _growth_rate(income_latest, income_previous)
+
+    equity = safe_float(metrics["equity"]["value"])
+    assets = safe_float(metrics["assets"]["value"])
+    debt = safe_float(metrics["debt"]["value"])
+    cash_value = safe_float(metrics["cash"]["value"])
+    shares = _first_valid(info.get("sharesOutstanding"), tv.get("total_shares_outstanding_current"))
+    current_price = _first_valid(info.get("currentPrice"), tv.get("close"))
+    market_cap = _first_valid(info.get("marketCap"), tv.get("market_cap_basic"))
+    if np.isnan(market_cap) and not np.isnan(shares) and not np.isnan(current_price):
+        market_cap = shares * current_price
+        info["marketCap"] = market_cap
+
+    enterprise_value = _first_valid(info.get("enterpriseValue"), tv.get("enterprise_value_fq"))
+    if np.isnan(enterprise_value) and not np.isnan(market_cap):
+        enterprise_value = market_cap
+        if not np.isnan(debt):
+            enterprise_value += debt
+        if not np.isnan(cash_value):
+            enterprise_value -= cash_value
+        info["enterpriseValue"] = enterprise_value
+
+    trailing_pe = _first_valid(info.get("trailingPE"), tv.get("price_earnings_ttm"))
+    if np.isnan(trailing_pe) and not np.isnan(market_cap) and not np.isnan(net_income) and net_income > 0:
+        trailing_pe = market_cap / net_income
+        info["trailingPE"] = trailing_pe
+
+    price_to_book = _first_valid(info.get("priceToBook"), tv.get("price_book_fq"))
+    if np.isnan(price_to_book) and not np.isnan(market_cap) and not np.isnan(equity) and equity > 0:
+        price_to_book = market_cap / equity
+        info["priceToBook"] = price_to_book
+
+    revenue_growth = _first_valid(
+        info.get("revenueGrowth"), tv.get("total_revenue_yoy_growth_ttm"), calculated_revenue_growth
+    )
+    earnings_growth = _first_valid(
+        info.get("earningsGrowth"), tv.get("net_income_yoy_growth_ttm"),
+        tv.get("earnings_per_share_diluted_yoy_growth_ttm"), calculated_earnings_growth
+    )
+    return_on_equity = _first_valid(info.get("returnOnEquity"), tv.get("return_on_equity"))
+    if np.isnan(return_on_equity) and not np.isnan(net_income) and not np.isnan(equity) and equity != 0:
+        return_on_equity = net_income / equity
+    return_on_assets = _first_valid(info.get("returnOnAssets"), tv.get("return_on_assets"))
+    if np.isnan(return_on_assets) and not np.isnan(net_income) and not np.isnan(assets) and assets != 0:
+        return_on_assets = net_income / assets
+    debt_to_equity = _first_valid(info.get("debtToEquity"), tv.get("debt_to_equity"))
+    if np.isnan(debt_to_equity) and not np.isnan(debt) and not np.isnan(equity) and equity != 0:
+        debt_to_equity = debt / equity
+    info["debtToEquity"] = debt_to_equity
+
     metrics.update(
         {
             "profit_margin": {"value": profit_margin, "period": "TTM", "source": "Calcul / profil"},
-            "gross_margin": {"value": safe_float(info.get("grossMargins")), "period": "TTM", "source": "Profil de marché"},
-            "operating_margin": {"value": safe_float(info.get("operatingMargins")), "period": "TTM", "source": "Profil de marché"},
-            "revenue_growth": {"value": safe_float(info.get("revenueGrowth")), "period": "YoY", "source": "Profil de marché"},
-            "earnings_growth": {"value": safe_float(info.get("earningsGrowth")), "period": "YoY", "source": "Profil de marché"},
-            "return_on_equity": {"value": safe_float(info.get("returnOnEquity")), "period": "TTM", "source": "Profil de marché"},
-            "return_on_assets": {"value": safe_float(info.get("returnOnAssets")), "period": "TTM", "source": "Profil de marché"},
+            "gross_margin": {"value": _first_valid(info.get("grossMargins"), tv.get("gross_margin")), "period": "TTM", "source": "Profil / TradingView"},
+            "operating_margin": {"value": _first_valid(info.get("operatingMargins"), tv.get("operating_margin")), "period": "TTM", "source": "Profil / TradingView"},
+            "revenue_growth": {"value": revenue_growth, "period": "YoY", "source": "Profil / TradingView / calcul"},
+            "earnings_growth": {"value": earnings_growth, "period": "YoY", "source": "Profil / TradingView / calcul"},
+            "return_on_equity": {"value": return_on_equity, "period": "TTM", "source": "Profil / TradingView / calcul"},
+            "return_on_assets": {"value": return_on_assets, "period": "TTM", "source": "Profil / TradingView / calcul"},
             "current_ratio": {"value": current_ratio, "period": "Dernier disponible", "source": "Calcul / profil"},
             "quick_ratio": {"value": safe_float(info.get("quickRatio")), "period": "Dernier disponible", "source": "Profil de marché"},
         }
@@ -797,7 +911,8 @@ def fetch_company_financials(ticker: str) -> dict[str, Any]:
         "income": income_table,
         "balance": balance_table,
         "cashflow": cashflow_table,
-        "source": "Yahoo Finance via yfinance",
+        "source": "Yahoo Finance, états financiers et TradingView Screener",
+        "tradingview": tv,
     }
 
 
