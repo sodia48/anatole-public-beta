@@ -34,8 +34,8 @@ configure_page("Vue d'ensemble", "📈")
 apply_style()
 profile = sidebar_context()
 page_header(
-    "Hey Bud, bienvenue sur Anatole.",
-    "Je suis en ce moment en mode bêta sur Render.",
+    "Anatole",
+    "Hey Bud, bienvenue sur Anatole.\nJe suis en ce moment en mode bêta sur Render.",
 )
 
 workspace_name, workspace_layout = active_workspace(profile)
