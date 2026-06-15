@@ -368,6 +368,7 @@ def apply_style() -> None:
             font-size: 1rem;
             line-height: 1.58;
             max-width: 980px;
+            white-space: pre-line;
         }}
 
         .sky-hero-chips {{
@@ -765,6 +766,23 @@ def apply_style() -> None:
 def sidebar_context() -> str:
     init_db()
 
+    from core.public_beta import current_context
+    from core.search import render_universal_search
+    from core.notifications import unread_count
+
+    # Le profil et ses préférences doivent être chargés AVANT la création
+    # des widgets qui utilisent les mêmes clés de session.
+    active_profile = st.session_state.get("profile", DEFAULT_PROFILE)
+    context = current_context()
+
+    if context.public_beta:
+        profile = ensure_profile(context.profile)
+    else:
+        profile = ensure_profile(active_profile)
+
+    st.session_state.profile = profile
+    hydrate_preferences(profile)
+
     st.sidebar.markdown(
         """
         <div class="sky-brand">
@@ -776,30 +794,23 @@ def sidebar_context() -> str:
         unsafe_allow_html=True,
     )
 
-    from core.search import render_universal_search
-    from core.notifications import unread_count
+    render_universal_search("sidebar", profile=profile)
 
-    active_profile = st.session_state.get("profile", DEFAULT_PROFILE)
-    render_universal_search("sidebar", profile=active_profile)
-
+    # Les valeurs existent déjà dans session_state grâce à hydrate_preferences.
+    # Ne pas fournir value= évite tout conflit entre la valeur du widget
+    # et la valeur persistée.
     st.sidebar.toggle(
         "Mode sombre",
-        value=bool(st.session_state.get("theme_toggle", False)),
         key="theme_toggle",
         help="Bascule entre le thème bleu ciel et le terminal sombre.",
     )
     st.sidebar.toggle(
         "Affichage compact",
-        value=bool(st.session_state.get("compact_toggle", False)),
         key="compact_toggle",
         help="Réduit légèrement l'espacement et la hauteur des cartes.",
     )
 
-    from core.public_beta import current_context
-
-    context = current_context()
     if context.public_beta:
-        profile = ensure_profile(context.profile)
         identity_label = context.display_name
         if context.email:
             st.sidebar.caption(f"Connecté : **{identity_label}**")
@@ -814,17 +825,15 @@ def sidebar_context() -> str:
     else:
         profile_input = st.sidebar.text_input(
             "Profil local",
-            value=active_profile,
+            value=profile,
             help="Profil utilisé uniquement pour le développement local.",
         )
-        profile = ensure_profile(profile_input)
-
-    st.session_state.profile = profile
-
-    changed = hydrate_preferences(profile)
-    if changed and st.session_state.get("_signature_style_profile") != profile:
-        st.session_state["_signature_style_profile"] = profile
-        st.rerun()
+        requested_profile = ensure_profile(profile_input)
+        if requested_profile != profile:
+            st.session_state.profile = requested_profile
+            st.session_state.pop("_preferences_profile", None)
+            st.rerun()
+        profile = requested_profile
 
     unread = unread_count(profile)
     st.sidebar.page_link(
