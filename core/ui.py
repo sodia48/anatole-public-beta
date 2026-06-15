@@ -871,8 +871,7 @@ def terminal_topbar() -> None:
         <div class="sky-terminal-bar">
             <div class="sky-terminal-left">
                 <div class="sky-terminal-logo">S</div>
-                <div class="sky-terminal-name">ANATOLE TERMINAL</div>
-                <div class="sky-terminal-nav">Marchés&nbsp;&nbsp;•&nbsp;&nbsp;Screener&nbsp;&nbsp;•&nbsp;&nbsp;Portefeuille&nbsp;&nbsp;•&nbsp;&nbsp;News</div>
+                <div class="sky-terminal-nav">Marchés&nbsp;&nbsp;•&nbsp;&nbsp;Screener&nbsp;&nbsp;•&nbsp;&nbsp;Portefeuille&nbsp;&nbsp;•&nbsp;&nbsp;Actualités</div>
                 <div class="sky-command-hint">Recherche <span class="sky-kbd">Ctrl K</span></div>
             </div>
             <div class="sky-terminal-right">
@@ -894,7 +893,7 @@ def page_header(title: str, subtitle: str, icon: str = "📈") -> None:
         f"""
         <section class="sky-hero">
             <div class="sky-hero-copy">
-                <div class="sky-hero-kicker">● Terminal de marché intelligent</div>
+                <div class="sky-hero-kicker">● Bêta publique sur Render</div>
                 <div class="sky-hero-title">{safe_title}</div>
                 <div class="sky-hero-subtitle">{safe_subtitle}</div>
                 <div class="sky-hero-chips">
