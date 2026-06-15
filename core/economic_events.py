@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, time
 from email.utils import parsedate_to_datetime
 from html import unescape
+from html.parser import HTMLParser
 import re
 from typing import Any
 from urllib.parse import urljoin
@@ -25,6 +26,7 @@ BANK_OF_CANADA_RSS_URL = (
     "https://www.bankofcanada.ca/content_type/upcoming-events/feed/"
 )
 BLS_ICS_URL = "https://www.bls.gov/schedule/news_release/bls.ics"
+BLS_YEAR_CALENDAR_URL = "https://www.bls.gov/schedule/{year}/home.htm"
 BEA_RELEASES_JSON_URL = "https://apps.bea.gov/API/signup/release_dates.json"
 FED_FOMC_CALENDAR_URL = (
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
@@ -227,10 +229,16 @@ BEA_ESSENTIAL_RELEASES = (
 def _headers() -> dict[str, str]:
     return {
         "User-Agent": (
-            "AnatoleEconomicCalendar/1.0 "
-            "(educational Streamlit application; official public calendars)"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/149.0.0.0 Safari/537.36"
         ),
-        "Accept": "*/*",
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "text/calendar;q=0.8,*/*;q=0.7"
+        ),
+        "Accept-Language": "en-US,en;q=0.9,fr-CA;q=0.8",
+        "Cache-Control": "no-cache",
     }
 
 
@@ -661,18 +669,214 @@ def _parse_bls_ics(text: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+
+class _BLSTableParser(HTMLParser):
+    """Extracteur minimal des lignes de tableaux du calendrier BLS."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self._in_row = False
+        self._in_cell = False
+        self._current_row: list[str] = []
+        self._current_cell: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        lowered = tag.lower()
+        if lowered in {"script", "style"}:
+            self._skip_depth += 1
+            return
+        if self._skip_depth:
+            return
+        if lowered == "tr":
+            self._in_row = True
+            self._current_row = []
+        elif lowered in {"td", "th"} and self._in_row:
+            self._in_cell = True
+            self._current_cell = []
+
+    def handle_endtag(self, tag: str) -> None:
+        lowered = tag.lower()
+        if lowered in {"script", "style"} and self._skip_depth:
+            self._skip_depth -= 1
+            return
+        if self._skip_depth:
+            return
+        if lowered in {"td", "th"} and self._in_cell:
+            text = _clean_text(" ".join(self._current_cell))
+            self._current_row.append(text)
+            self._current_cell = []
+            self._in_cell = False
+        elif lowered == "tr" and self._in_row:
+            if any(cell for cell in self._current_row):
+                self.rows.append(self._current_row)
+            self._current_row = []
+            self._in_row = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_cell and not self._skip_depth:
+            self._current_cell.append(data)
+
+
+_BLS_DATE_PATTERN = re.compile(
+    r"^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\\s+"
+    r"[A-Za-z]+\\s+\\d{1,2}(?:,\\s+\\d{4})?$",
+    flags=re.IGNORECASE,
+)
+_BLS_TIME_PATTERN = re.compile(
+    r"^\\d{1,2}:\\d{2}\\s*(?:AM|PM)$",
+    flags=re.IGNORECASE,
+)
+
+
+def _parse_bls_html(html_text: str, year: int) -> pd.DataFrame:
+    parser = _BLSTableParser()
+    parser.feed(html_text)
+
+    records: list[dict[str, Any]] = []
+    last_event_date = None
+
+    for raw_cells in parser.rows:
+        cells = [_clean_text(cell) for cell in raw_cells if _clean_text(cell)]
+        if not cells:
+            continue
+
+        date_index = next(
+            (
+                index
+                for index, cell in enumerate(cells)
+                if _BLS_DATE_PATTERN.match(cell)
+            ),
+            None,
+        )
+        time_index = next(
+            (
+                index
+                for index, cell in enumerate(cells)
+                if _BLS_TIME_PATTERN.match(cell)
+            ),
+            None,
+        )
+
+        if date_index is not None:
+            date_text = cells[date_index]
+            if not re.search(r"\\b\\d{4}\\b", date_text):
+                date_text = f"{date_text}, {year}"
+            parsed_date = pd.to_datetime(date_text, errors="coerce")
+            if pd.notna(parsed_date):
+                last_event_date = parsed_date.date()
+
+        if last_event_date is None or time_index is None:
+            continue
+
+        title_candidates = [
+            cell
+            for index, cell in enumerate(cells)
+            if index not in {date_index, time_index}
+        ]
+        if not title_candidates:
+            continue
+
+        original_title = max(title_candidates, key=len)
+        if not any(
+            pattern.lower() in original_title.lower()
+            for pattern in BLS_ESSENTIAL_PATTERNS
+        ):
+            continue
+
+        parsed_time = datetime.strptime(
+            cells[time_index].upper(),
+            "%I:%M %p",
+        ).time()
+        timestamp = pd.Timestamp(
+            datetime.combine(last_event_date, parsed_time),
+            tz=TORONTO_TZ,
+        )
+
+        records.append(
+            _make_record(
+                timestamp=timestamp,
+                title=_translate_us_title(original_title),
+                source="BLS",
+                country="États-Unis",
+                currency="USD",
+                description=(
+                    "Publication officielle du Bureau of Labor Statistics."
+                ),
+                url=BLS_YEAR_CALENDAR_URL.format(year=year),
+            )
+        )
+
+    frame = pd.DataFrame(records)
+    if frame.empty:
+        return frame
+
+    return frame.drop_duplicates(
+        subset=["DateTime", "Événement", "Source"],
+        keep="first",
+    )
+
+
 @st.cache_data(ttl=21_600, show_spinner=False)
-def fetch_bls_calendar() -> tuple[pd.DataFrame, str]:
+def fetch_bls_calendar(
+    start_year: int | None = None,
+    end_year: int | None = None,
+) -> tuple[pd.DataFrame, str]:
+    """
+    Essaie d'abord le calendrier ICS du BLS. Si le serveur bloque l'ICS,
+    Anatole se rabat automatiquement sur les pages HTML officielles.
+    """
+
     try:
         response = requests.get(
             BLS_ICS_URL,
             headers=_headers(),
-            timeout=30,
+            timeout=15,
         )
         response.raise_for_status()
-        return _parse_bls_ics(response.text), ""
-    except Exception as exc:
-        return pd.DataFrame(), f"BLS : {type(exc).__name__}: {exc}"
+        frame = _parse_bls_ics(response.text)
+        if not frame.empty:
+            return frame, ""
+    except Exception:
+        # Le BLS peut refuser le fichier ICS aux serveurs cloud.
+        # Le calendrier HTML officiel est alors utilisé.
+        pass
+
+    current_year = datetime.now(TORONTO_TZ).year
+    first_year = int(start_year or current_year)
+    last_year = int(end_year or first_year)
+    frames: list[pd.DataFrame] = []
+
+    for year in range(first_year, last_year + 1):
+        try:
+            response = requests.get(
+                BLS_YEAR_CALENDAR_URL.format(year=year),
+                headers=_headers(),
+                timeout=15,
+            )
+            response.raise_for_status()
+            frame = _parse_bls_html(response.text, year)
+            if not frame.empty:
+                frames.append(frame)
+        except Exception:
+            continue
+
+    if frames:
+        return (
+            pd.concat(frames, ignore_index=True)
+            .drop_duplicates(
+                subset=["DateTime", "Événement", "Source"],
+                keep="first",
+            ),
+            "",
+        )
+
+    return pd.DataFrame(), "indisponible temporairement"
 
 
 def _parse_bea_payload(payload: Any) -> pd.DataFrame:
@@ -871,8 +1075,6 @@ def fetch_official_economic_calendar(
         source_calls.append(("Statistique Canada", fetch_statcan_calendar))
     if include_boc:
         source_calls.append(("Banque du Canada", fetch_bank_of_canada_calendar))
-    if include_bls:
-        source_calls.append(("BLS", fetch_bls_calendar))
     if include_bea:
         source_calls.append(("BEA", fetch_bea_calendar))
 
@@ -882,9 +1084,16 @@ def fetch_official_economic_calendar(
         if not frame.empty:
             frames.append(frame)
 
+    start_year = pd.Timestamp(start_date).year
+    end_year = pd.Timestamp(end_date).year
+
+    if include_bls:
+        frame, error = fetch_bls_calendar(start_year, end_year)
+        statuses["BLS"] = error or "OK"
+        if not frame.empty:
+            frames.append(frame)
+
     if include_fomc:
-        start_year = pd.Timestamp(start_date).year
-        end_year = pd.Timestamp(end_date).year
         frame, error = fetch_fomc_calendar(start_year, end_year)
         statuses["Réserve fédérale"] = error or "OK"
         if not frame.empty:
