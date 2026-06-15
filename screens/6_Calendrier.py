@@ -116,18 +116,21 @@ else:
             include_fomc=include_fomc,
         )
 
-problem_sources = {
-    source: status
-    for source, status in source_statuses.items()
-    if status != "OK"
-}
-if problem_sources:
-    with st.expander("État des sources et erreurs temporaires"):
-        for source, status in source_statuses.items():
-            if status == "OK":
-                st.success(f"{source} : disponible")
-            else:
-                st.warning(f"{source} : {status}")
+if source_statuses:
+    available_sources = sum(
+        1 for status in source_statuses.values() if status == "OK"
+    )
+    total_sources = len(source_statuses)
+    if available_sources == total_sources:
+        st.caption(
+            f"Sources officielles synchronisées : {available_sources}/{total_sources}."
+        )
+    else:
+        st.caption(
+            f"Calendrier consolidé à partir de {available_sources} source(s) "
+            f"officielle(s) disponible(s) sur {total_sources}. "
+            "Les sources momentanément bloquées sont ignorées automatiquement."
+        )
 
 if not official_events.empty:
     countries = sorted(
