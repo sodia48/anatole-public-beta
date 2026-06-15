@@ -109,13 +109,10 @@ fig.update_traces(
         "Poids total : %{customdata[2]:.2f}%<br>"
         "Titres : %{customdata[3]}<extra></extra>"
     ),
-    selected={
-        "marker": {
-            "opacity": 1,
-            "line": {"color": "#0F172A", "width": 2},
-        }
-    },
-    unselected={"marker": {"opacity": 0.55}},
+    # Pour les barres Plotly, selected.marker accepte notamment
+    # opacity et color, mais pas la propriété line.
+    selected={"marker": {"opacity": 1}},
+    unselected={"marker": {"opacity": 0.48}},
 )
 fig.update_layout(
     height=520,
