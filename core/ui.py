@@ -9,7 +9,7 @@ import streamlit as st
 
 from core.config import DEFAULT_PROFILE, TORONTO_TZ
 from core.database import ensure_profile, init_db
-from core.preferences import hydrate_preferences
+from core.preferences import hydrate_preferences, save_preferences
 from core.utils import market_status
 
 
@@ -111,9 +111,27 @@ def apply_style() -> None:
             --sky-plot: {plot_bg};
         }}
 
+        html {{
+            scroll-behavior: smooth;
+        }}
+
         html, body, [data-testid="stAppViewContainer"] {{
             background: {background} !important;
             color: var(--sky-text);
+        }}
+
+        [data-testid="stPlotlyChart"] .modebar {{
+            opacity: 0;
+            transition: opacity .16s ease;
+        }}
+
+        [data-testid="stPlotlyChart"]:hover .modebar {{
+            opacity: .82;
+        }}
+
+        [data-testid="stDataFrame"] {{
+            border-radius: 18px;
+            overflow: hidden;
         }}
 
         [data-testid="stAppViewContainer"] > .main {{
@@ -809,6 +827,31 @@ def sidebar_context() -> str:
         key="compact_toggle",
         help="Réduit légèrement l'espacement et la hauteur des cartes.",
     )
+
+    sidebar_pref_signature = (
+        profile,
+        bool(st.session_state.get("theme_toggle", False)),
+        bool(st.session_state.get("compact_toggle", False)),
+    )
+    if st.session_state.get("_sidebar_preference_signature") != sidebar_pref_signature:
+        save_preferences(
+            profile,
+            {
+                "theme": "dark" if sidebar_pref_signature[1] else "light",
+                "density": "compact" if sidebar_pref_signature[2] else "comfortable",
+            },
+        )
+        st.session_state["_sidebar_preference_signature"] = sidebar_pref_signature
+
+    if st.sidebar.button(
+        "↻ Actualiser les données live",
+        width="stretch",
+        help="Renouvelle les cotations sans vider les autres caches.",
+    ):
+        from core.runtime import clear_live_market_caches
+
+        clear_live_market_caches()
+        st.rerun()
 
     if context.public_beta:
         identity_label = context.display_name

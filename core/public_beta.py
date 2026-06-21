@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import os
+import re
 import uuid
 from typing import Any
 
@@ -96,9 +97,24 @@ def _profile_from_identity(subject: str) -> str:
 
 
 def _guest_profile() -> str:
-    if "_anatole_guest_profile" not in st.session_state:
-        st.session_state["_anatole_guest_profile"] = f"guest-{uuid.uuid4().hex[:20]}"
-    return str(st.session_state["_anatole_guest_profile"])
+    """
+    Garde un profil invité stable dans la session et dans l'URL.
+    Cela évite de redemander les conditions lors d'un changement de page,
+    d'un rechargement ou d'un redémarrage léger de session.
+    """
+    session_value = str(st.session_state.get("_anatole_guest_profile", ""))
+    query_value = _query_value("anatole_guest")
+
+    if _valid_guest_profile(session_value):
+        profile = session_value
+    elif _valid_guest_profile(query_value):
+        profile = query_value
+    else:
+        profile = f"guest-{uuid.uuid4().hex[:24]}"
+
+    st.session_state["_anatole_guest_profile"] = profile
+    _set_query_value("anatole_guest", profile)
+    return profile
 
 
 def _admin_emails() -> set[str]:
@@ -108,6 +124,30 @@ def _admin_emails() -> set[str]:
         for value in raw.split(",")
         if value.strip()
     }
+
+
+def _query_value(name: str, default: str = "") -> str:
+    """Lit un paramètre d'URL sans casser l'app hors contexte Streamlit."""
+    try:
+        value = st.query_params.get(name, default)
+        if isinstance(value, list):
+            return str(value[0]) if value else default
+        return str(value or default)
+    except Exception:
+        return default
+
+
+def _set_query_value(name: str, value: str) -> None:
+    """Écrit un paramètre d'URL seulement si nécessaire."""
+    try:
+        if _query_value(name) != value:
+            st.query_params[name] = value
+    except Exception:
+        pass
+
+
+def _valid_guest_profile(value: str) -> bool:
+    return bool(re.fullmatch(r"guest-[0-9a-f]{20,40}", str(value or "")))
 
 
 def _render_login_gate(mode: str) -> None:
@@ -133,19 +173,28 @@ def _render_login_gate(mode: str) -> None:
     if mode == "hybrid":
         if st.button("Continuer comme invité", use_container_width=True):
             st.session_state["_anatole_guest_override"] = True
+            _set_query_value("anatole_guest_mode", "1")
             st.rerun()
     st.stop()
 
 
 def _require_legal_consent(profile: str, authenticated: bool) -> None:
-    stored = (
-        get_preference(profile, "legal_acceptance_version", "")
-        if authenticated
-        else ""
+    # Le consentement est sauvegardé pour tous les profils, y compris les invités.
+    # Le paramètre authenticated reste dans la signature pour compatibilité.
+    stored = get_preference(profile, "legal_acceptance_version", "")
+    profile_key = f"_anatole_legal_accepted_{profile}"
+    session_accepted = bool(
+        st.session_state.get(profile_key)
+        or st.session_state.get("_anatole_legal_accepted")
     )
-    session_accepted = bool(st.session_state.get("_anatole_legal_accepted"))
 
-    if stored == LEGAL_VERSION or session_accepted:
+    if stored == LEGAL_VERSION:
+        st.session_state[profile_key] = True
+        st.session_state["_anatole_legal_accepted"] = True
+        return
+
+    if session_accepted:
+        set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
         return
 
     st.title("Bienvenue dans la bêta publique d’Anatole")
@@ -181,9 +230,10 @@ def _require_legal_consent(profile: str, authenticated: bool) -> None:
         disabled=not (terms and privacy),
         use_container_width=True,
     ):
+        profile_key = f"_anatole_legal_accepted_{profile}"
+        st.session_state[profile_key] = True
         st.session_state["_anatole_legal_accepted"] = True
-        if authenticated:
-            set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
+        set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
         st.rerun()
 
     st.stop()
@@ -195,7 +245,10 @@ def bootstrap_public_beta() -> BetaContext:
     beta = public_beta_enabled()
     mode = access_mode() if beta else "guest"
     logged_in, subject, name, email = _logged_user()
-    guest_override = bool(st.session_state.get("_anatole_guest_override"))
+    guest_override = bool(
+        st.session_state.get("_anatole_guest_override")
+        or _query_value("anatole_guest_mode") == "1"
+    )
 
     if beta and mode == "login" and not logged_in:
         _render_login_gate(mode)
