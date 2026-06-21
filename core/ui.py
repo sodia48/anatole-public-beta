@@ -30,6 +30,33 @@ def configure_page(title: str, icon: str = "📈") -> None:
     st.session_state["_page_configured"] = True
 
 
+
+def hide_streamlit_chrome() -> None:
+    """Masque les éléments Streamlit natifs qui nuisent au rendu produit."""
+    st.markdown(
+        """
+        <style>
+            div[data-testid="stStatusWidget"],
+            div[data-testid="stStatusWidget"] *,
+            div[data-testid="stToolbar"],
+            div[data-testid="stDecoration"],
+            div[data-testid="stDeployButton"],
+            #MainMenu,
+            .stStatusWidget,
+            .stDeployButton {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+                width: 0 !important;
+                height: 0 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def is_dark_mode() -> bool:
     return bool(st.session_state.get("theme_toggle", False))
 
@@ -119,45 +146,6 @@ def apply_style() -> None:
             background: {background} !important;
             color: var(--sky-text);
         }}
-
-        /* Anatole chrome cleanup : masque les indicateurs Streamlit. */
-        div[data-testid="stStatusWidget"],
-        div[data-testid="stStatusWidget"] *,
-        .stStatusWidget,
-        [data-testid="stStatusWidget"],
-        div[data-testid="stDeployButton"],
-        .stDeployButton,
-        [data-testid="stDeployButton"] {{
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-            width: 0 !important;
-            height: 0 !important;
-        }}
-
-        /* Anatole chrome cleanup : masque l'indicateur Streamlit de chargement/rerun. */
-        div[data-testid="stStatusWidget"],
-        div[data-testid="stStatusWidget"] *,
-        .stStatusWidget,
-        [data-testid="stStatusWidget"] {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-            width: 0 !important;
-            height: 0 !important;
-        }
-
-        /* Masque le bouton Deploy si Streamlit l'injecte en haut à droite. */
-        div[data-testid="stDeployButton"],
-        .stDeployButton,
-        [data-testid="stDeployButton"] {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-        }
 
         [data-testid="stPlotlyChart"] .modebar {{
             opacity: 0;
@@ -804,6 +792,7 @@ def apply_style() -> None:
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
+    hide_streamlit_chrome()
 
 
     if not bool(st.session_state.get("show_animations", True)):
