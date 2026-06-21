@@ -120,6 +120,22 @@ def apply_style() -> None:
             color: var(--sky-text);
         }}
 
+        /* Anatole chrome cleanup : masque les indicateurs Streamlit. */
+        div[data-testid="stStatusWidget"],
+        div[data-testid="stStatusWidget"] *,
+        .stStatusWidget,
+        [data-testid="stStatusWidget"],
+        div[data-testid="stDeployButton"],
+        .stDeployButton,
+        [data-testid="stDeployButton"] {{
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }}
+
         /* Anatole chrome cleanup : masque l'indicateur Streamlit de chargement/rerun. */
         div[data-testid="stStatusWidget"],
         div[data-testid="stStatusWidget"] *,
