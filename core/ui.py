@@ -120,6 +120,29 @@ def apply_style() -> None:
             color: var(--sky-text);
         }}
 
+        /* Anatole chrome cleanup : masque l'indicateur Streamlit de chargement/rerun. */
+        div[data-testid="stStatusWidget"],
+        div[data-testid="stStatusWidget"] *,
+        .stStatusWidget,
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
+        /* Masque le bouton Deploy si Streamlit l'injecte en haut à droite. */
+        div[data-testid="stDeployButton"],
+        .stDeployButton,
+        [data-testid="stDeployButton"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
         [data-testid="stPlotlyChart"] .modebar {{
             opacity: 0;
             transition: opacity .16s ease;
