@@ -9,7 +9,6 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import requests
 import yfinance as yf
 

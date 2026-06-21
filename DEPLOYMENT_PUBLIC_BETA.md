@@ -54,3 +54,9 @@ Après la création :
 - Test Chrome, Edge et Safari
 - Vérification des logs
 - Vérification du nombre d’appels Yahoo
+
+## Performance de la bêta publique V4.7
+
+Anatole V4.7 réduit les appels séquentiels et conserve un dernier snapshot valide. Pour éviter la page de réveil et le délai avant le lancement d’Anatole, utilise un service web qui reste actif. Une instance gratuite pouvant se mettre en veille continuera d’afficher un démarrage à froid, indépendamment des optimisations du code.
+
+Après chaque mise à jour GitHub, vérifie dans Render que le dernier commit est marqué `Deploy live`, puis teste l’application dans une fenêtre privée.
