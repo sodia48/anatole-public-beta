@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
+import os
 import re
 from typing import Any
 
@@ -594,8 +595,11 @@ def _fetch_stock_news_uncached(ticker: str) -> list[dict[str, str]]:
     except Exception:
         return []
 
+    # Yahoo peut retourner beaucoup d'éléments ou répondre lentement.
+    # On limite volontairement le volume par titre pour éviter les 502.
+    max_per_ticker = int(os.getenv("ANATOLE_NEWS_PER_TICKER", "8"))
     articles: list[dict[str, str]] = []
-    for item in raw_news:
+    for item in raw_news[:max_per_ticker]:
         if not isinstance(item, dict):
             continue
         content = item.get("content")
@@ -646,25 +650,60 @@ def fetch_stock_news(ticker: str) -> list[dict[str, str]]:
     return _fetch_stock_news_uncached(ticker)
 
 
-@st.cache_data(ttl=900, max_entries=32, show_spinner=False)
+@st.cache_data(ttl=900, max_entries=64, show_spinner=False)
 def fetch_news_bundle(tickers: tuple[str, ...]) -> list[dict[str, str]]:
-    """Récupère plusieurs fils en parallèle pour réduire l'attente."""
+    """Récupère plusieurs fils d'actualité avec garde anti-502.
+
+    La page Actualités ne doit jamais faire tomber l'application si Yahoo
+    répond lentement. Les appels sont donc bornés en nombre, en durée et en
+    volume d'articles.
+    """
     if not tickers:
         return []
 
+    max_tickers = int(os.getenv("ANATOLE_NEWS_MAX_TICKERS", "6"))
+    max_workers = int(os.getenv("ANATOLE_NEWS_WORKERS", "2"))
+    timeout_seconds = int(os.getenv("ANATOLE_NEWS_TIMEOUT", "18"))
+    max_articles = int(os.getenv("ANATOLE_NEWS_MAX_ARTICLES", "60"))
+
+    selected = tuple(dict.fromkeys(tickers))[:max_tickers]
     articles: list[dict[str, str]] = []
-    workers = min(6, max(1, len(tickers)))
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {
-            executor.submit(_fetch_stock_news_uncached, ticker): ticker
-            for ticker in tickers
-        }
-        for future in as_completed(futures):
+
+    executor = ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(selected))))
+    futures = {
+        executor.submit(_fetch_stock_news_uncached, ticker): ticker
+        for ticker in selected
+    }
+
+    try:
+        for future in as_completed(futures, timeout=timeout_seconds):
             try:
-                articles.extend(future.result())
+                articles.extend(future.result(timeout=1))
             except Exception:
                 continue
-    return articles
+            if len(articles) >= max_articles:
+                break
+    except TimeoutError:
+        # Une source lente ne doit pas provoquer de crash ou de 502.
+        pass
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    deduped: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for article in articles:
+        key = (
+            str(article.get("URL") or "").strip()
+            or str(article.get("Titre") or "").strip().lower()
+        )
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(article)
+        if len(deduped) >= max_articles:
+            break
+
+    return deduped
 
 
 @st.cache_data(ttl=3_600, max_entries=128, show_spinner=False)
