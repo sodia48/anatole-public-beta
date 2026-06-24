@@ -55,7 +55,7 @@ def _download_blackrock_holdings(url: str, universe_key: str) -> pd.DataFrame:
             "AppleWebKit/537.36 Chrome/149 Safari/537.36"
         )
     }
-    response = requests.get(url, headers=headers, timeout=12)
+    response = requests.get(url, headers=headers, timeout=8)
     response.raise_for_status()
     lines = response.text.splitlines()
     header_index = next(

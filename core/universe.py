@@ -32,6 +32,45 @@ XMD_HOLDINGS_URL = (
 DEFAULT_UNIVERSE_KEY = "tsx60"
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        value = int(str(os.getenv(name, "")).strip())
+        return value if value > 0 else default
+    except Exception:
+        return default
+
+
+def hosting_profile() -> str:
+    return str(os.getenv("ANATOLE_HOSTING_PROFILE", "starter")).strip().lower() or "starter"
+
+
+def default_limits(universe_key: str) -> tuple[int, int]:
+    """Retourne (snapshot_limit, history_limit) selon l'hébergement."""
+    profile = hosting_profile()
+    matrix = {
+        "tsx60": {
+            "conservative": (70, 60),
+            "starter": (70, 60),
+            "performance": (70, 70),
+        },
+        "tsx_composite": {
+            "conservative": (100, 60),
+            "starter": (160, 80),
+            "performance": (240, 140),
+        },
+        "tsx_full": {
+            "conservative": (80, 40),
+            "starter": (150, 60),
+            "performance": (300, 120),
+        },
+    }
+    limits = matrix.get(universe_key, matrix["tsx60"])
+    snapshot, history = limits.get(profile, limits["starter"])
+    snapshot = _env_int(f"ANATOLE_{universe_key.upper()}_SNAPSHOT_LIMIT", snapshot)
+    history = _env_int(f"ANATOLE_{universe_key.upper()}_HISTORY_LIMIT", history)
+    return snapshot, history
+
+
 @dataclass(frozen=True)
 class MarketUniverse:
     key: str
@@ -54,8 +93,8 @@ UNIVERSES: dict[str, MarketUniverse] = {
         description="Grandes capitalisations canadiennes. Mode le plus rapide.",
         source_kind="blackrock_xiu",
         expected_count=60,
-        snapshot_limit=70,
-        history_limit=70,
+        snapshot_limit=default_limits("tsx60")[0],
+        history_limit=default_limits("tsx60")[1],
         holdings_urls=(BLACKROCK_HOLDINGS_URL,),
     ),
     "tsx_composite": MarketUniverse(
@@ -68,8 +107,8 @@ UNIVERSES: dict[str, MarketUniverse] = {
         ),
         source_kind="blackrock_xic",
         expected_count=None,
-        snapshot_limit=180,
-        history_limit=120,
+        snapshot_limit=default_limits("tsx_composite")[0],
+        history_limit=default_limits("tsx_composite")[1],
         holdings_urls=(XIC_HOLDINGS_URL,),
     ),
     "tsx_full": MarketUniverse(
@@ -82,8 +121,8 @@ UNIVERSES: dict[str, MarketUniverse] = {
         ),
         source_kind="tsx_directory_or_proxy",
         expected_count=None,
-        snapshot_limit=250,
-        history_limit=100,
+        snapshot_limit=default_limits("tsx_full")[0],
+        history_limit=default_limits("tsx_full")[1],
         holdings_urls=(XIC_HOLDINGS_URL, XMD_HOLDINGS_URL),
         allow_user_directory=True,
     ),

@@ -3,9 +3,11 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+import logging
+
 from core.analytics import build_feature_table
 from core.data import fetch_batch_history, fetch_market_snapshot, load_constituents
-from core.universe import current_universe_key, get_universe
+from core.universe import DEFAULT_UNIVERSE_KEY, current_universe_key, get_universe
 
 
 def _active_constituents(constituents: pd.DataFrame, limit: int) -> pd.DataFrame:
@@ -34,8 +36,24 @@ def _load_light_market_bundle_cached(
 
 
 def load_light_market_bundle() -> tuple[pd.DataFrame, dict, pd.DataFrame]:
-    """API compatible avec les pages existantes."""
-    return _load_light_market_bundle_cached(current_universe_key())
+    """API compatible avec les pages existantes, avec garde Render Free."""
+    key = current_universe_key()
+    try:
+        return _load_light_market_bundle_cached(key)
+    except Exception as exc:
+        logging.exception("Échec de l'univers %s, retour TSX 60.", key)
+        if key != DEFAULT_UNIVERSE_KEY:
+            constituents, diagnostics, market = _load_light_market_bundle_cached(
+                DEFAULT_UNIVERSE_KEY
+            )
+            diagnostics = dict(diagnostics)
+            diagnostics["status"] = "Fallback TSX 60"
+            diagnostics["error"] = (
+                f"L'univers demandé ({key}) était temporairement trop lourd "
+                f"ou indisponible : {type(exc).__name__}."
+            )
+            return constituents, diagnostics, market
+        raise
 
 
 @st.cache_data(ttl=1_800, max_entries=8, show_spinner=False)
@@ -72,7 +90,23 @@ def _load_technical_bundle_cached(
 
 
 def load_technical_bundle() -> tuple[pd.DataFrame, dict, pd.DataFrame, pd.DataFrame]:
-    return _load_technical_bundle_cached(current_universe_key())
+    key = current_universe_key()
+    try:
+        return _load_technical_bundle_cached(key)
+    except Exception as exc:
+        logging.exception("Échec technique de l'univers %s, retour TSX 60.", key)
+        if key != DEFAULT_UNIVERSE_KEY:
+            constituents, diagnostics, market, features = _load_technical_bundle_cached(
+                DEFAULT_UNIVERSE_KEY
+            )
+            diagnostics = dict(diagnostics)
+            diagnostics["status"] = "Fallback TSX 60"
+            diagnostics["error"] = (
+                f"L'univers demandé ({key}) était temporairement trop lourd "
+                f"ou indisponible : {type(exc).__name__}."
+            )
+            return constituents, diagnostics, market, features
+        raise
 
 
 # Compatibilité avec les pages existantes.
