@@ -102,35 +102,87 @@ def build_feature_table(
 
 
 def market_pulse(features: pd.DataFrame) -> dict[str, Any]:
+    """Résumé de marché compatible avec données légères et techniques.
+
+    Certaines pages utilisent un snapshot léger pour éviter les timeouts.
+    Dans ce cas, les colonnes techniques `AboveSMA50`, `AboveSMA200` ou
+    `VolumeRelatif` peuvent être absentes.
+    """
     if features.empty:
         return {}
+
     change_col = "Variation" if "Variation" in features else "DailyChangeTech"
+    if change_col not in features:
+        return {}
+
     valid = features.dropna(subset=[change_col])
     sector_perf = (
         valid.groupby("Secteur")[change_col].mean().sort_values(ascending=False)
         if not valid.empty and "Secteur" in valid
         else pd.Series(dtype=float)
     )
-    new_highs = int((features["DistanceHigh52"] >= -1).sum()) if "DistanceHigh52" in features else 0
-    new_lows = int((features["DistanceLow52"] <= 1).sum()) if "DistanceLow52" in features else 0
-    weights = pd.to_numeric(valid.get("PoidsIndice"), errors="coerce") if "PoidsIndice" in valid else pd.Series(index=valid.index, dtype=float)
-    weighted_change = safe_float((valid[change_col] * weights).sum() / weights.sum()) if not weights.empty and weights.sum() else safe_float(valid[change_col].mean())
+
+    new_highs = (
+        int((features["DistanceHigh52"] >= -1).sum())
+        if "DistanceHigh52" in features
+        else 0
+    )
+    new_lows = (
+        int((features["DistanceLow52"] <= 1).sum())
+        if "DistanceLow52" in features
+        else 0
+    )
+
+    weights = (
+        pd.to_numeric(valid.get("PoidsIndice"), errors="coerce")
+        if "PoidsIndice" in valid
+        else pd.Series(index=valid.index, dtype=float)
+    )
+    weighted_change = (
+        safe_float((valid[change_col] * weights).sum() / weights.sum())
+        if not weights.empty and weights.sum()
+        else safe_float(valid[change_col].mean())
+    )
+
+    above_sma50_pct = (
+        safe_float(features["AboveSMA50"].astype(float).mean() * 100)
+        if "AboveSMA50" in features
+        else np.nan
+    )
+    above_sma200_pct = (
+        safe_float(features["AboveSMA200"].astype(float).mean() * 100)
+        if "AboveSMA200" in features
+        else np.nan
+    )
+    relative_volume = (
+        safe_float(
+            pd.to_numeric(features["VolumeRelatif"], errors="coerce")
+            .replace([np.inf, -np.inf], np.nan)
+            .mean()
+        )
+        if "VolumeRelatif" in features
+        else np.nan
+    )
+
+    advancers = int((valid[change_col] > 0).sum()) if not valid.empty else 0
+    decliners = int((valid[change_col] < 0).sum()) if not valid.empty else 0
+
     return {
         "average_change": safe_float(valid[change_col].mean()),
         "weighted_change": weighted_change,
-        "advancers": int((valid[change_col] > 0).sum()),
-        "decliners": int((valid[change_col] < 0).sum()),
-        "unchanged": int((valid[change_col] == 0).sum()),
-        "above_sma50_pct": safe_float(features["AboveSMA50"].mean() * 100),
-        "above_sma200_pct": safe_float(features["AboveSMA200"].mean() * 100),
-        "relative_volume": safe_float(features["VolumeRelatif"].replace([np.inf, -np.inf], np.nan).mean()),
+        "advancers": advancers,
+        "decliners": decliners,
+        "unchanged": int((valid[change_col] == 0).sum()) if not valid.empty else 0,
+        "above_sma50_pct": above_sma50_pct,
+        "above_sma200_pct": above_sma200_pct,
+        "relative_volume": relative_volume,
         "best_sector": sector_perf.index[0] if not sector_perf.empty else "N/D",
         "best_sector_change": safe_float(sector_perf.iloc[0]) if not sector_perf.empty else np.nan,
         "worst_sector": sector_perf.index[-1] if not sector_perf.empty else "N/D",
         "worst_sector_change": safe_float(sector_perf.iloc[-1]) if not sector_perf.empty else np.nan,
         "new_highs": new_highs,
         "new_lows": new_lows,
-        "breadth_ratio": (int((valid[change_col] > 0).sum()) / max(int((valid[change_col] < 0).sum()), 1)),
+        "breadth_ratio": advancers / max(decliners, 1),
     }
 
 
