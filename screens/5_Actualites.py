@@ -6,6 +6,7 @@ import streamlit as st
 from core.ai import summarize_news_in_french
 from core.analytics import enrich_news
 from core.data import fetch_news_bundle, load_constituents
+from core.universe import current_universe
 from core.database import get_watchlist
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 from core.utils import get_secret
@@ -15,20 +16,25 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Actualités et sentiment",
-    "Agrège les manchettes, retire les doublons, classe les événements et estime leur tonalité.",
+    "Agrège les manchettes sans surcharger le serveur. Les fils avancés sont limités pour éviter les erreurs 502.",
     "📰",
 )
 
 constituents, diagnostics = load_constituents()
 lookup = dict(zip(constituents["YahooTicker"], constituents["Ticker"] + " — " + constituents["Nom"]))
 watchlist = [ticker for ticker in get_watchlist(profile) if ticker in lookup]
-defaults = watchlist[:8] or constituents["YahooTicker"].head(6).tolist()
+defaults = watchlist[:4] or constituents["YahooTicker"].head(4).tolist()
 selected = st.multiselect(
-    "Titres à surveiller (maximum 12)",
+    "Titres à surveiller (maximum 6)",
     constituents["YahooTicker"].tolist(),
     default=defaults,
-    max_selections=12,
+    max_selections=6,
     format_func=lambda value: lookup.get(value, value),
+    help="Limité volontairement pour éviter les délais réseau et les erreurs 502.",
+)
+st.caption(
+    f"Univers actif : {current_universe().short_label}. "
+    "Les nouvelles sont récupérées avec un délai maximal afin de garder Anatole disponible."
 )
 
 if not selected:
@@ -36,8 +42,16 @@ if not selected:
     footer()
     st.stop()
 
-with st.spinner("Collecte des nouvelles..."):
-    articles = fetch_news_bundle(tuple(selected))
+try:
+    with st.spinner("Collecte des nouvelles..."):
+        articles = fetch_news_bundle(tuple(selected))
+except Exception:
+    articles = []
+    st.warning(
+        "La source d'actualités est temporairement lente ou indisponible. "
+        "Réessaie dans quelques minutes ou réduis la sélection de titres."
+    )
+
 news = enrich_news(articles)
 
 if news.empty:
@@ -81,7 +95,7 @@ category_table = filtered.groupby(["Categorie", "Sentiment"]).size().unstack(fil
 st.bar_chart(category_table)
 
 st.subheader("Fil d'actualité")
-for _, article in filtered.head(60).iterrows():
+for _, article in filtered.head(40).iterrows():
     with st.container(border=True):
         st.markdown(f"**[{article['Titre']}]({article['URL']})**")
         st.caption(
@@ -125,7 +139,7 @@ if openai_key:
 st.download_button(
     "Télécharger les nouvelles analysées",
     filtered.drop(columns=["DateParsed"], errors="ignore").to_csv(index=False).encode("utf-8-sig"),
-    file_name="actualites_tsx60.csv",
+    file_name=f"actualites_{current_universe().short_label.lower().replace(' ', '_')}.csv",
     mime="text/csv",
 )
 
