@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core.database import (
     ensure_profile,
@@ -18,6 +19,10 @@ from core.database import (
 
 
 LEGAL_VERSION = "2026-06-13"
+LEGAL_QUERY_PARAM = "anatole_accepted"
+LEGAL_STORAGE_KEY = "anatole_legal_acceptance_version"
+GUEST_STORAGE_KEY = "anatole_guest_profile"
+GUEST_MODE_QUERY_PARAM = "anatole_guest_mode"
 
 
 @dataclass(frozen=True)
@@ -150,6 +155,160 @@ def _valid_guest_profile(value: str) -> bool:
     return bool(re.fullmatch(r"guest-[0-9a-f]{20,40}", str(value or "")))
 
 
+def _query_acceptance_is_valid() -> bool:
+    return _query_value(LEGAL_QUERY_PARAM) == LEGAL_VERSION
+
+
+def _mark_legal_accepted_in_url(profile: str) -> None:
+    _set_query_value(LEGAL_QUERY_PARAM, LEGAL_VERSION)
+    if _valid_guest_profile(profile):
+        _set_query_value("anatole_guest", profile)
+
+
+def _inject_mobile_persistence_bridge() -> None:
+    """Synchronise le consentement invité avec le navigateur mobile.
+
+    Sur mobile, un changement de page peut recréer une session Streamlit
+    ou perdre les query params. Ce pont :
+    - copie l'acceptation dans localStorage ;
+    - restaure les query params depuis localStorage ;
+    - ajoute les query params importants aux liens de navigation internes.
+    """
+    try:
+        components.html(
+            f"""
+            <script>
+            (function() {{
+                const LEGAL_VERSION = {LEGAL_VERSION!r};
+                const LEGAL_QUERY = {LEGAL_QUERY_PARAM!r};
+                const LEGAL_STORAGE = {LEGAL_STORAGE_KEY!r};
+                const GUEST_STORAGE = {GUEST_STORAGE_KEY!r};
+                const GUEST_MODE = {GUEST_MODE_QUERY_PARAM!r};
+
+                function parentWindow() {{
+                    try {{
+                        return window.parent || window;
+                    }} catch (e) {{
+                        return window;
+                    }}
+                }}
+
+                function storage(win) {{
+                    try {{
+                        return win.localStorage;
+                    }} catch (e) {{
+                        return null;
+                    }}
+                }}
+
+                const win = parentWindow();
+                const store = storage(win);
+                if (!store) {{
+                    return;
+                }}
+
+                const url = new URL(win.location.href);
+                let changed = false;
+
+                const queryAccepted = url.searchParams.get(LEGAL_QUERY);
+                const queryGuest = url.searchParams.get("anatole_guest");
+                const queryGuestMode = url.searchParams.get(GUEST_MODE);
+
+                if (queryAccepted === LEGAL_VERSION) {{
+                    store.setItem(LEGAL_STORAGE, LEGAL_VERSION);
+                }}
+
+                if (queryGuest && /^guest-[0-9a-f]{{20,40}}$/.test(queryGuest)) {{
+                    store.setItem(GUEST_STORAGE, queryGuest);
+                }}
+
+                if (queryGuestMode === "1") {{
+                    store.setItem(GUEST_MODE, "1");
+                }}
+
+                const storedAccepted = store.getItem(LEGAL_STORAGE);
+                const storedGuest = store.getItem(GUEST_STORAGE);
+                const storedGuestMode = store.getItem(GUEST_MODE);
+
+                if (
+                    storedAccepted === LEGAL_VERSION &&
+                    url.searchParams.get(LEGAL_QUERY) !== LEGAL_VERSION
+                ) {{
+                    url.searchParams.set(LEGAL_QUERY, LEGAL_VERSION);
+                    changed = true;
+                }}
+
+                if (
+                    storedGuest &&
+                    /^guest-[0-9a-f]{{20,40}}$/.test(storedGuest) &&
+                    !url.searchParams.get("anatole_guest")
+                ) {{
+                    url.searchParams.set("anatole_guest", storedGuest);
+                    changed = true;
+                }}
+
+                if (storedGuestMode === "1" && url.searchParams.get(GUEST_MODE) !== "1") {{
+                    url.searchParams.set(GUEST_MODE, "1");
+                    changed = true;
+                }}
+
+                if (changed) {{
+                    win.location.replace(url.toString());
+                    return;
+                }}
+
+                function patchInternalLinks() {{
+                    try {{
+                        const current = new URL(win.location.href);
+                        const paramsToKeep = [
+                            "anatole_guest",
+                            GUEST_MODE,
+                            LEGAL_QUERY,
+                            "universe"
+                        ];
+
+                        win.document.querySelectorAll("a[href]").forEach((anchor) => {{
+                            const href = anchor.getAttribute("href") || "";
+                            if (
+                                href.startsWith("#") ||
+                                href.startsWith("mailto:") ||
+                                href.startsWith("tel:")
+                            ) {{
+                                return;
+                            }}
+
+                            const target = new URL(anchor.href, win.location.origin);
+                            if (target.origin !== win.location.origin) {{
+                                return;
+                            }}
+
+                            let touched = false;
+                            paramsToKeep.forEach((param) => {{
+                                const value = current.searchParams.get(param);
+                                if (value && !target.searchParams.get(param)) {{
+                                    target.searchParams.set(param, value);
+                                    touched = true;
+                                }}
+                            }});
+
+                            if (touched) {{
+                                anchor.href = target.toString();
+                            }}
+                        }});
+                    }} catch (e) {{}}
+                }}
+
+                patchInternalLinks();
+                win.setInterval(patchInternalLinks, 900);
+            }})();
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
+    except Exception:
+        pass
+
 def _render_login_gate(mode: str) -> None:
     st.title("Anatole — bêta publique")
     st.write(
@@ -173,16 +332,17 @@ def _render_login_gate(mode: str) -> None:
     if mode == "hybrid":
         if st.button("Continuer comme invité", use_container_width=True):
             st.session_state["_anatole_guest_override"] = True
-            _set_query_value("anatole_guest_mode", "1")
+            _set_query_value(GUEST_MODE_QUERY_PARAM, "1")
             st.rerun()
     st.stop()
 
 
 def _require_legal_consent(profile: str, authenticated: bool) -> None:
     # Le consentement est sauvegardé pour tous les profils, y compris les invités.
-    # Le paramètre authenticated reste dans la signature pour compatibilité.
+    # Sur mobile, il peut aussi être restauré via query param / localStorage.
     stored = get_preference(profile, "legal_acceptance_version", "")
     profile_key = f"_anatole_legal_accepted_{profile}"
+    browser_accepted = _query_acceptance_is_valid()
     session_accepted = bool(
         st.session_state.get(profile_key)
         or st.session_state.get("_anatole_legal_accepted")
@@ -191,10 +351,14 @@ def _require_legal_consent(profile: str, authenticated: bool) -> None:
     if stored == LEGAL_VERSION:
         st.session_state[profile_key] = True
         st.session_state["_anatole_legal_accepted"] = True
+        _mark_legal_accepted_in_url(profile)
         return
 
-    if session_accepted:
+    if browser_accepted or session_accepted:
+        st.session_state[profile_key] = True
+        st.session_state["_anatole_legal_accepted"] = True
         set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
+        _mark_legal_accepted_in_url(profile)
         return
 
     st.title("Bienvenue dans la bêta publique d’Anatole")
@@ -234,6 +398,7 @@ def _require_legal_consent(profile: str, authenticated: bool) -> None:
         st.session_state[profile_key] = True
         st.session_state["_anatole_legal_accepted"] = True
         set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
+        _mark_legal_accepted_in_url(profile)
         st.rerun()
 
     st.stop()
@@ -241,13 +406,14 @@ def _require_legal_consent(profile: str, authenticated: bool) -> None:
 
 def bootstrap_public_beta() -> BetaContext:
     init_db()
+    _inject_mobile_persistence_bridge()
 
     beta = public_beta_enabled()
     mode = access_mode() if beta else "guest"
     logged_in, subject, name, email = _logged_user()
     guest_override = bool(
         st.session_state.get("_anatole_guest_override")
-        or _query_value("anatole_guest_mode") == "1"
+        or _query_value(GUEST_MODE_QUERY_PARAM) == "1"
     )
 
     if beta and mode == "login" and not logged_in:
@@ -260,6 +426,7 @@ def bootstrap_public_beta() -> BetaContext:
             # En l'absence de fournisseur OIDC, le mode hybride continue
             # automatiquement avec une session invitée temporaire.
             st.session_state["_anatole_guest_override"] = True
+            _set_query_value(GUEST_MODE_QUERY_PARAM, "1")
             guest_override = True
 
     if logged_in:
