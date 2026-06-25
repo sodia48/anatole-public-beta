@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Iterable
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core.config import DEFAULT_PROFILE, TORONTO_TZ
 from core.database import ensure_profile, init_db
@@ -14,21 +15,140 @@ from core.utils import market_status
 from core.universe import current_universe
 
 
-def configure_page(title: str, icon: str = "📈") -> None:
-    if st.session_state.get("_page_configured"):
-        return
-    st.set_page_config(
-        page_title=f"{title} · Anatole",
-        page_icon=icon,
-        layout="wide",
-        initial_sidebar_state="expanded",
-        menu_items={
-            "Get help": None,
-            "Report a bug": None,
-            "About": "TSX 60 Skyline — terminal canadien d'analyse de marché.",
-        },
+def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
+    """Force le titre/favicone/manifest navigateur à Anatole.
+
+    Certains navigateurs mobiles affichent encore le branding Streamlit pendant
+    les chargements ou dans l'aperçu d'onglet. Ce patch agit côté navigateur
+    après chaque rerun Streamlit.
+    """
+    safe_title = page_title if page_title and "Anatole" in page_title else "Anatole"
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            const BRAND_TITLE = {safe_title!r};
+            const SVG_ICON = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+                    <defs>
+                        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                            <stop offset="0%" stop-color="#2563EB"/>
+                            <stop offset="100%" stop-color="#0EA5E9"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="128" height="128" rx="30" fill="url(#g)"/>
+                    <path d="M31 78 L48 62 L61 70 L92 37" fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M30 94 H98" stroke="rgba(255,255,255,.58)" stroke-width="7" stroke-linecap="round"/>
+                </svg>
+            `.trim();
+
+            function parentWindow() {{
+                try {{
+                    return window.parent || window;
+                }} catch (e) {{
+                    return window;
+                }}
+            }}
+
+            function setBrand() {{
+                const win = parentWindow();
+                const doc = win.document;
+                if (!doc) return;
+
+                doc.title = BRAND_TITLE;
+
+                let titleNode = doc.querySelector("head > title");
+                if (!titleNode) {{
+                    titleNode = doc.createElement("title");
+                    doc.head.appendChild(titleNode);
+                }}
+                titleNode.textContent = BRAND_TITLE;
+
+                const iconHref = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG_ICON);
+                const iconSelectors = [
+                    "link[rel='icon']",
+                    "link[rel='shortcut icon']",
+                    "link[rel='apple-touch-icon']"
+                ];
+                iconSelectors.forEach((selector) => {{
+                    doc.querySelectorAll(selector).forEach((node) => node.remove());
+                }});
+
+                [
+                    ["icon", "image/svg+xml"],
+                    ["shortcut icon", "image/svg+xml"],
+                    ["apple-touch-icon", "image/svg+xml"]
+                ].forEach(([rel, type]) => {{
+                    const link = doc.createElement("link");
+                    link.rel = rel;
+                    link.type = type;
+                    link.href = iconHref;
+                    doc.head.appendChild(link);
+                }});
+
+                // Remplace le manifest Streamlit par un manifest Anatole.
+                doc.querySelectorAll("link[rel='manifest']").forEach((node) => node.remove());
+                try {{
+                    const manifest = {{
+                        name: "Anatole",
+                        short_name: "Anatole",
+                        description: "Terminal de marché canadien",
+                        start_url: win.location.origin + win.location.pathname,
+                        scope: win.location.origin + "/",
+                        display: "standalone",
+                        background_color: "#DDF3FF",
+                        theme_color: "#2563EB",
+                        icons: [
+                            {{
+                                src: iconHref,
+                                sizes: "128x128",
+                                type: "image/svg+xml",
+                                purpose: "any maskable"
+                            }}
+                        ]
+                    }};
+                    const blob = new Blob([JSON.stringify(manifest)], {{ type: "application/manifest+json" }});
+                    const manifestUrl = URL.createObjectURL(blob);
+                    const manifestLink = doc.createElement("link");
+                    manifestLink.rel = "manifest";
+                    manifestLink.href = manifestUrl;
+                    doc.head.appendChild(manifestLink);
+                }} catch (e) {{}}
+
+                doc.documentElement.setAttribute("data-anatole-branded", "true");
+            }}
+
+            setBrand();
+            setTimeout(setBrand, 250);
+            setTimeout(setBrand, 1000);
+            setInterval(setBrand, 2500);
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
     )
-    st.session_state["_page_configured"] = True
+
+
+
+def configure_page(title: str, icon: str = "📈") -> None:
+    page_title = "Anatole" if str(title).strip().lower() == "anatole" else f"{title} · Anatole"
+    if not st.session_state.get("_page_configured"):
+        st.set_page_config(
+            page_title=page_title,
+            page_icon=icon,
+            layout="wide",
+            initial_sidebar_state="expanded",
+            menu_items={
+                "Get help": None,
+                "Report a bug": None,
+                "About": "Anatole — terminal canadien d'analyse de marché.",
+            },
+        )
+        st.session_state["_page_configured"] = True
+
+    st.session_state["_anatole_page_title"] = page_title
+    force_anatole_browser_brand(page_title)
 
 
 
@@ -42,6 +162,9 @@ def hide_streamlit_chrome() -> None:
             div[data-testid="stToolbar"],
             div[data-testid="stDecoration"],
             div[data-testid="stDeployButton"],
+            div[title="Streamlit"],
+            a[title="Streamlit"],
+            img[alt="Streamlit"],
             #MainMenu,
             .stStatusWidget,
             .stDeployButton {
@@ -794,6 +917,7 @@ def apply_style() -> None:
     """
     st.markdown(css, unsafe_allow_html=True)
     hide_streamlit_chrome()
+    force_anatole_browser_brand(str(st.session_state.get("_anatole_page_title", "Anatole")))
 
 
     if not bool(st.session_state.get("show_animations", True)):
