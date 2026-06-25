@@ -6,7 +6,7 @@ import streamlit as st
 
 from core.ai import analyze_stock_in_french
 from core.analytics import add_indicators, enrich_news, explain_move
-from core.charts import price_chart
+from core.charts import DEFAULT_PLOTLY_OVERLAYS, price_chart
 from core.data import (
     fetch_analyst_consensus,
     fetch_company_financials,
@@ -18,7 +18,7 @@ from core.data import (
     load_constituents,
 )
 from core.database import add_watchlist
-from core.pro_chart import build_event_markers, render_professional_chart
+from core.pro_chart import build_event_markers
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 from core.utils import format_compact, format_money, format_number, get_secret, safe_float
 
@@ -193,27 +193,17 @@ if not np.isnan(safe_float(info.get("targetMeanPrice"))):
         }
     )
 
-compatibility_mode = st.toggle(
-    "Utiliser le graphique Plotly",
-    value=False,
-    help="Active ce mode si le graphique professionnel est bloqué par le réseau.",
+# Graphique Plotly intégré automatiquement.
+# Aucun bouton d'activation n'est nécessaire pour l'utilisateur.
+st.caption(
+    "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
+    "EMA 20 et bandes de Bollinger lorsque les données sont disponibles."
 )
-if compatibility_mode:
-    st.plotly_chart(
-        price_chart(history, ticker, ["SMA 20", "SMA 50"]),
-        width="stretch",
-        key=f"focus_plotly_compat_{ticker}_{period}_{interval}",
-    )
-else:
-    render_professional_chart(
-        history,
-        ticker,
-        markers=markers,
-        price_lines=price_lines,
-        height=720,
-        dark=bool(st.session_state.get("theme_toggle", False)),
-        key=f"focus_minimal_{ticker}_{period}_{interval}",
-    )
+st.plotly_chart(
+    price_chart(history, ticker, DEFAULT_PLOTLY_OVERLAYS),
+    width="stretch",
+    key=f"focus_plotly_auto_{ticker}_{period}_{interval}",
+)
 
 section = st.segmented_control(
     "Section",
@@ -256,17 +246,11 @@ if section == "Aperçu":
     ):
         st.write(f"**{index}.** {reason}")
 
-    with st.expander("Indicateurs Plotly avancés", expanded=False):
-        overlays = st.multiselect(
-            "Superpositions",
-            ["SMA 20", "SMA 50", "SMA 200", "EMA 20", "Bandes de Bollinger"],
-            default=["SMA 20", "SMA 50"],
-        )
-        st.plotly_chart(
-            price_chart(history, ticker, overlays),
-            width="stretch",
-            key=f"focus_plotly_advanced_{ticker}_{period}_{interval}_{hash(tuple(overlays))}",
-        )
+    st.info(
+        "Les indicateurs Plotly sont intégrés automatiquement au graphique principal "
+        "plus haut : SMA 20, SMA 50, SMA 200, EMA 20, volume et bandes de Bollinger "
+        "lorsque les données sont disponibles."
+    )
 
 elif section == "Finances":
     with st.spinner("Chargement des informations financières…"):

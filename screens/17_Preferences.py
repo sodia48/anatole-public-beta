@@ -36,6 +36,7 @@ with st.form("preferences_form"):
         show_advanced_home = st.checkbox("Charger l'analyse technique sur l'accueil", value=prefs["show_advanced_home"] == "true")
         show_mobile_nav = st.checkbox("Afficher la navigation mobile", value=prefs["show_mobile_nav"] != "false")
         show_event_markers = st.checkbox("Afficher les événements sur le graphique Focus", value=prefs["show_event_markers"] == "true")
+        st.caption("Les indicateurs Plotly du Mode Focus sont maintenant automatiques et ne nécessitent plus d’activation.")
 
     st.subheader("Données")
     d1, d2, d3, d4 = st.columns(4)
