@@ -195,14 +195,32 @@ if not np.isnan(safe_float(info.get("targetMeanPrice"))):
 
 # Graphique Plotly intégré automatiquement.
 # Aucun bouton d'activation n'est nécessaire pour l'utilisateur.
+event_note = (
+    f" · {len(markers)} événement(s) affiché(s)"
+    if show_markers and markers
+    else ""
+)
 st.caption(
     "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
-    "EMA 20 et bandes de Bollinger lorsque les données sont disponibles."
+    "EMA 20 et bandes de Bollinger lorsque les données sont disponibles"
+    f"{event_note}."
 )
+if show_markers and not markers:
+    st.info(
+        "Aucun événement daté n'a été trouvé pour la période affichée. "
+        "Essaie une période plus longue ou vérifie les actualités disponibles."
+    )
+
 st.plotly_chart(
-    price_chart(history, ticker, DEFAULT_PLOTLY_OVERLAYS),
+    price_chart(
+        history,
+        ticker,
+        DEFAULT_PLOTLY_OVERLAYS,
+        markers=markers if show_markers else None,
+        price_lines=price_lines,
+    ),
     width="stretch",
-    key=f"focus_plotly_auto_{ticker}_{period}_{interval}",
+    key=f"focus_plotly_auto_{ticker}_{period}_{interval}_{len(markers)}_{show_markers}",
 )
 
 section = st.segmented_control(
@@ -248,8 +266,8 @@ if section == "Aperçu":
 
     st.info(
         "Les indicateurs Plotly sont intégrés automatiquement au graphique principal "
-        "plus haut : SMA 20, SMA 50, SMA 200, EMA 20, volume et bandes de Bollinger "
-        "lorsque les données sont disponibles."
+        "plus haut : SMA 20, SMA 50, SMA 200, EMA 20, volume, bandes de Bollinger "
+        "et événements lorsque l'option est activée."
     )
 
 elif section == "Finances":
