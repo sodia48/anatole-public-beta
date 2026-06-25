@@ -181,7 +181,160 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
     )
     return fig
 
-def price_chart(history: pd.DataFrame, ticker: str, overlays: list[str] | None = None) -> go.Figure:
+
+def _nearest_history_point(
+    history: pd.DataFrame,
+    raw_time: object,
+) -> tuple[object, float] | None:
+    """Retourne le point d'historique le plus proche d'une date d'événement."""
+    if history is None or history.empty or raw_time is None:
+        return None
+
+    try:
+        event_day = pd.Timestamp(raw_time).tz_localize(None).normalize()
+    except Exception:
+        return None
+
+    index = pd.to_datetime(history.index)
+    try:
+        index = index.tz_localize(None)
+    except TypeError:
+        pass
+
+    normalized = pd.Series(index.normalize(), index=history.index)
+    matches = normalized[normalized == event_day]
+    if matches.empty:
+        # Si l'événement tombe un week-end ou jour férié, on prend la séance
+        # la plus proche dans une fenêtre de quelques jours.
+        distances = (normalized - event_day).abs()
+        if distances.empty or distances.min() > pd.Timedelta(days=5):
+            return None
+        x_value = distances.idxmin()
+    else:
+        x_value = matches.index[-1]
+
+    high = pd.to_numeric(history.get("High"), errors="coerce")
+    close = pd.to_numeric(history.get("Close"), errors="coerce")
+    if x_value in high.index and pd.notna(high.loc[x_value]):
+        y_value = float(high.loc[x_value]) * 1.018
+    elif x_value in close.index and pd.notna(close.loc[x_value]):
+        y_value = float(close.loc[x_value]) * 1.018
+    else:
+        return None
+
+    return x_value, y_value
+
+
+def _add_plotly_event_markers(
+    fig: go.Figure,
+    history: pd.DataFrame,
+    markers: list[dict] | None,
+) -> None:
+    """Affiche les événements sur le graphique Plotly principal."""
+    if not markers:
+        return
+
+    xs: list[object] = []
+    ys: list[float] = []
+    texts: list[str] = []
+    hover_texts: list[str] = []
+
+    for marker in markers[:16]:
+        point = _nearest_history_point(history, marker.get("time"))
+        if point is None:
+            continue
+
+        x_value, y_value = point
+        color = marker.get("color") or "#F59E0B"
+        short_text = str(marker.get("text") or "N")[:3]
+        title = str(
+            marker.get("title")
+            or marker.get("headline")
+            or marker.get("label")
+            or "Événement"
+        )
+        source = str(marker.get("source") or marker.get("publisher") or "").strip()
+        date_label = pd.Timestamp(x_value).strftime("%Y-%m-%d")
+
+        xs.append(x_value)
+        ys.append(y_value)
+        texts.append(short_text)
+        hover_texts.append(
+            f"<b>{title}</b><br>Date : {date_label}"
+            + (f"<br>Source : {source}" if source else "")
+        )
+
+        fig.add_vline(
+            x=x_value,
+            line_width=1.2,
+            line_dash="dot",
+            line_color=color,
+            opacity=0.42,
+            row=1,
+            col=1,
+        )
+
+    if not xs:
+        return
+
+    fig.add_trace(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="markers+text",
+            name="Événements",
+            text=texts,
+            textposition="top center",
+            textfont={"size": 11, "color": "#F59E0B"},
+            marker={
+                "size": 14,
+                "symbol": "diamond",
+                "color": "#F59E0B",
+                "line": {"width": 1.5, "color": "white"},
+            },
+            hovertext=hover_texts,
+            hovertemplate="%{hovertext}<extra></extra>",
+        ),
+        row=1,
+        col=1,
+    )
+
+
+def _add_plotly_price_lines(
+    fig: go.Figure,
+    price_lines: list[dict] | None,
+) -> None:
+    """Affiche les lignes horizontales importantes comme la cible analystes."""
+    for line in price_lines or []:
+        price = line.get("price")
+        try:
+            price = float(price)
+        except Exception:
+            continue
+
+        title = str(line.get("title") or "Niveau")
+        color = str(line.get("color") or "#F59E0B")
+
+        fig.add_hline(
+            y=price,
+            line_dash="dash",
+            line_color=color,
+            line_width=1.4,
+            opacity=0.78,
+            annotation_text=title,
+            annotation_position="top left",
+            row=1,
+            col=1,
+        )
+
+
+def price_chart(
+    history: pd.DataFrame,
+    ticker: str,
+    overlays: list[str] | None = None,
+    markers: list[dict] | None = None,
+    price_lines: list[dict] | None = None,
+) -> go.Figure:
     overlays = overlays or DEFAULT_PLOTLY_OVERLAYS
 
     fig = make_subplots(
@@ -255,6 +408,10 @@ def price_chart(history: pd.DataFrame, ticker: str, overlays: list[str] | None =
             row=2,
             col=1,
         )
+
+    _add_plotly_event_markers(fig, history, markers)
+    _add_plotly_price_lines(fig, price_lines)
+
     fig.update_layout(
         margin={"t": 55, "l": 8, "r": 8, "b": 8},
         title=f"{ticker} · prix et indicateurs",

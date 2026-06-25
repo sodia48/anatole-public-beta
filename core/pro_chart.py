@@ -106,14 +106,43 @@ def _iso_time(index_value: Any) -> str:
 def build_event_markers(news: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     markers: list[dict[str, Any]] = []
     for article in (news or [])[:12]:
-        raw = article.get("published") or article.get("providerPublishTime") or article.get("Date")
+        raw = (
+            article.get("published")
+            or article.get("providerPublishTime")
+            or article.get("Date")
+            or article.get("date")
+        )
         if not raw:
             continue
         try:
             stamp = pd.to_datetime(raw, utc=True).tz_convert("America/Toronto")
         except Exception:
             continue
-        markers.append({"time":stamp.strftime("%Y-%m-%d"),"position":"aboveBar","color":"#0EA5E9","shape":"circle","text":"N"})
+
+        title = (
+            article.get("title")
+            or article.get("Titre")
+            or article.get("headline")
+            or "Nouvelle"
+        )
+        source = (
+            article.get("publisher")
+            or article.get("source")
+            or article.get("Source")
+            or ""
+        )
+
+        markers.append(
+            {
+                "time": stamp.strftime("%Y-%m-%d"),
+                "position": "aboveBar",
+                "color": "#F59E0B",
+                "shape": "circle",
+                "text": "N",
+                "title": str(title),
+                "source": str(source),
+            }
+        )
     return markers
 
 
