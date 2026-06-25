@@ -18,6 +18,14 @@ COLORWAY = [
     "#64748B",
 ]
 
+DEFAULT_PLOTLY_OVERLAYS = [
+    "SMA 20",
+    "SMA 50",
+    "SMA 200",
+    "EMA 20",
+    "Bandes de Bollinger",
+]
+
 
 def _palette() -> dict[str, str]:
     dark = bool(st.session_state.get("theme_toggle", False))
@@ -173,7 +181,9 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
     )
     return fig
 
-def price_chart(history: pd.DataFrame, ticker: str, overlays: list[str]) -> go.Figure:
+def price_chart(history: pd.DataFrame, ticker: str, overlays: list[str] | None = None) -> go.Figure:
+    overlays = overlays or DEFAULT_PLOTLY_OVERLAYS
+
     fig = make_subplots(
         rows=2,
         cols=1,
@@ -210,7 +220,11 @@ def price_chart(history: pd.DataFrame, ticker: str, overlays: list[str]) -> go.F
                 row=1,
                 col=1,
             )
-    if "Bandes de Bollinger" in overlays:
+    if (
+        "Bandes de Bollinger" in overlays
+        and "BB_Haut" in history
+        and "BB_Bas" in history
+    ):
         fig.add_trace(
             go.Scatter(
                 x=history.index,
