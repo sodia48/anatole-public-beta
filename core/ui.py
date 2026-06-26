@@ -16,11 +16,11 @@ from core.universe import current_universe
 
 
 def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
-    """Retire le branding Streamlit visible et force le branding Anatole.
+    """Force un branding navigateur Anatole sans bloquer le rendu.
 
-    Objectif : aucun affichage visible de `Streamlit` après le premier rendu
-    de l'application. Une fraction de seconde peut rester possible au tout
-    premier chargement, avant exécution du JavaScript.
+    Version sûre : pas d'observation globale du DOM, pas de réécriture massive.
+    Cela évite les pages blanches sur mobile/Chrome tout en gardant le titre,
+    le favicon et le manifest Anatole après le premier rendu.
     """
     safe_title = page_title if page_title and "Anatole" in page_title else "Anatole"
     components.html(
@@ -29,7 +29,6 @@ def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
         (function() {{
             const BRAND_TITLE = {safe_title!r};
             const APP_NAME = "Anatole";
-            const BAD_WORD = /streamlit/ig;
             const SVG_ICON = `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
                     <defs>
@@ -52,11 +51,6 @@ def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
                 }}
             }}
 
-            function replaceText(value) {{
-                if (!value || typeof value !== "string") return value;
-                return value.replace(BAD_WORD, APP_NAME);
-            }}
-
             function setMeta(doc, name, content) {{
                 let node = doc.querySelector(`meta[name="${{name}}"]`);
                 if (!node) {{
@@ -67,184 +61,116 @@ def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
                 node.setAttribute("content", content);
             }}
 
-            function removeStreamlitTextNodes(root) {{
-                try {{
-                    const walker = root.ownerDocument.createTreeWalker(
-                        root,
-                        NodeFilter.SHOW_TEXT,
-                        null
-                    );
-                    const nodes = [];
-                    while (walker.nextNode()) nodes.push(walker.currentNode);
-                    nodes.forEach((node) => {{
-                        if (node.nodeValue && BAD_WORD.test(node.nodeValue)) {{
-                            node.nodeValue = replaceText(node.nodeValue);
-                        }}
-                    }});
-                }} catch (e) {{}}
-            }}
-
-            function patchAttributes(root) {{
-                try {{
-                    const attrs = ["title", "alt", "aria-label", "aria-description", "data-testid"];
-                    root.querySelectorAll("*").forEach((node) => {{
-                        attrs.forEach((attr) => {{
-                            const value = node.getAttribute && node.getAttribute(attr);
-                            if (value && /streamlit/i.test(value)) {{
-                                if (attr === "data-testid") {{
-                                    node.setAttribute("data-anatole-hidden-streamlit", "true");
-                                }} else {{
-                                    node.setAttribute(attr, replaceText(value));
-                                }}
-                            }}
-                        }});
-
-                        if (node.shadowRoot) {{
-                            removeStreamlitTextNodes(node.shadowRoot);
-                            patchAttributes(node.shadowRoot);
-                        }}
-                    }});
-                }} catch (e) {{}}
-            }}
-
-            function hideNativeChrome(doc) {{
-                const cssId = "anatole-no-streamlit-branding";
-                let style = doc.getElementById(cssId);
-                if (!style) {{
-                    style = doc.createElement("style");
-                    style.id = cssId;
-                    doc.head.appendChild(style);
-                }}
-                style.textContent = `
-                    div[data-testid="stStatusWidget"],
-                    div[data-testid="stStatusWidget"] *,
-                    div[data-testid="stToolbar"],
-                    div[data-testid="stDecoration"],
-                    div[data-testid="stDeployButton"],
-                    div[title*="Streamlit" i],
-                    a[title*="Streamlit" i],
-                    img[alt*="Streamlit" i],
-                    [aria-label*="Streamlit" i],
-                    [data-anatole-hidden-streamlit="true"],
-                    #MainMenu,
-                    .stStatusWidget,
-                    .stDeployButton {{
-                        display: none !important;
-                        visibility: hidden !important;
-                        opacity: 0 !important;
-                        pointer-events: none !important;
-                        width: 0 !important;
-                        height: 0 !important;
-                        max-width: 0 !important;
-                        max-height: 0 !important;
-                        overflow: hidden !important;
-                    }}
-                `;
-            }}
-
             function setBrand() {{
-                const win = parentWindow();
-                const doc = win.document;
-                if (!doc || !doc.head) return;
-
-                doc.title = BRAND_TITLE;
-
-                let titleNode = doc.querySelector("head > title");
-                if (!titleNode) {{
-                    titleNode = doc.createElement("title");
-                    doc.head.appendChild(titleNode);
-                }}
-                titleNode.textContent = BRAND_TITLE;
-
-                setMeta(doc, "application-name", APP_NAME);
-                setMeta(doc, "apple-mobile-web-app-title", APP_NAME);
-                setMeta(doc, "description", "Terminal de marché canadien.");
-                setMeta(doc, "theme-color", "#2563EB");
-
-                const iconHref = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG_ICON);
-                const iconSelectors = [
-                    "link[rel='icon']",
-                    "link[rel='shortcut icon']",
-                    "link[rel='apple-touch-icon']",
-                    "link[rel='mask-icon']"
-                ];
-                iconSelectors.forEach((selector) => {{
-                    doc.querySelectorAll(selector).forEach((node) => node.remove());
-                }});
-
-                [
-                    ["icon", "image/svg+xml"],
-                    ["shortcut icon", "image/svg+xml"],
-                    ["apple-touch-icon", "image/svg+xml"],
-                    ["mask-icon", "image/svg+xml"]
-                ].forEach(([rel, type]) => {{
-                    const link = doc.createElement("link");
-                    link.rel = rel;
-                    link.type = type;
-                    link.href = iconHref;
-                    doc.head.appendChild(link);
-                }});
-
-                doc.querySelectorAll("link[rel='manifest']").forEach((node) => node.remove());
-                try {{
-                    const manifest = {{
-                        name: APP_NAME,
-                        short_name: APP_NAME,
-                        description: "Terminal de marché canadien",
-                        start_url: win.location.origin + win.location.pathname + win.location.search,
-                        scope: win.location.origin + "/",
-                        display: "standalone",
-                        background_color: "#DDF3FF",
-                        theme_color: "#2563EB",
-                        icons: [
-                            {{
-                                src: iconHref,
-                                sizes: "128x128",
-                                type: "image/svg+xml",
-                                purpose: "any maskable"
-                            }}
-                        ]
-                    }};
-                    const blob = new Blob([JSON.stringify(manifest)], {{ type: "application/manifest+json" }});
-                    const manifestUrl = URL.createObjectURL(blob);
-                    const manifestLink = doc.createElement("link");
-                    manifestLink.rel = "manifest";
-                    manifestLink.href = manifestUrl;
-                    doc.head.appendChild(manifestLink);
-                }} catch (e) {{}}
-
-                hideNativeChrome(doc);
-                removeStreamlitTextNodes(doc.body || doc.documentElement);
-                patchAttributes(doc.body || doc.documentElement);
-
-                doc.documentElement.setAttribute("data-anatole-branded", "true");
-            }}
-
-            function installObserver() {{
                 try {{
                     const win = parentWindow();
                     const doc = win.document;
-                    if (!doc || doc.__anatoleBrandObserverInstalled) return;
-                    doc.__anatoleBrandObserverInstalled = true;
+                    if (!doc || !doc.head) return;
 
-                    const observer = new MutationObserver(() => {{
-                        setBrand();
+                    doc.title = BRAND_TITLE;
+
+                    let titleNode = doc.querySelector("head > title");
+                    if (!titleNode) {{
+                        titleNode = doc.createElement("title");
+                        doc.head.appendChild(titleNode);
+                    }}
+                    titleNode.textContent = BRAND_TITLE;
+
+                    setMeta(doc, "application-name", APP_NAME);
+                    setMeta(doc, "apple-mobile-web-app-title", APP_NAME);
+                    setMeta(doc, "description", "Terminal de marché canadien.");
+                    setMeta(doc, "theme-color", "#2563EB");
+
+                    const iconHref = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG_ICON);
+
+                    [
+                        "link[rel='icon']",
+                        "link[rel='shortcut icon']",
+                        "link[rel='apple-touch-icon']",
+                        "link[rel='mask-icon']"
+                    ].forEach((selector) => {{
+                        doc.querySelectorAll(selector).forEach((node) => node.remove());
                     }});
-                    observer.observe(doc.documentElement, {{
-                        childList: true,
-                        subtree: true,
-                        attributes: true,
-                        characterData: true
+
+                    [
+                        ["icon", "image/svg+xml"],
+                        ["shortcut icon", "image/svg+xml"],
+                        ["apple-touch-icon", "image/svg+xml"]
+                    ].forEach(([rel, type]) => {{
+                        const link = doc.createElement("link");
+                        link.rel = rel;
+                        link.type = type;
+                        link.href = iconHref;
+                        doc.head.appendChild(link);
                     }});
+
+                    doc.querySelectorAll("link[rel='manifest']").forEach((node) => node.remove());
+                    try {{
+                        const manifest = {{
+                            name: APP_NAME,
+                            short_name: APP_NAME,
+                            description: "Terminal de marché canadien",
+                            start_url: win.location.origin + win.location.pathname + win.location.search,
+                            scope: win.location.origin + "/",
+                            display: "standalone",
+                            background_color: "#DDF3FF",
+                            theme_color: "#2563EB",
+                            icons: [
+                                {{
+                                    src: iconHref,
+                                    sizes: "128x128",
+                                    type: "image/svg+xml",
+                                    purpose: "any maskable"
+                                }}
+                            ]
+                        }};
+                        const blob = new Blob([JSON.stringify(manifest)], {{ type: "application/manifest+json" }});
+                        const manifestUrl = URL.createObjectURL(blob);
+                        const manifestLink = doc.createElement("link");
+                        manifestLink.rel = "manifest";
+                        manifestLink.href = manifestUrl;
+                        doc.head.appendChild(manifestLink);
+                    }} catch (e) {{}}
+
+                    let style = doc.getElementById("anatole-safe-branding-css");
+                    if (!style) {{
+                        style = doc.createElement("style");
+                        style.id = "anatole-safe-branding-css";
+                        doc.head.appendChild(style);
+                    }}
+                    style.textContent = `
+                        div[data-testid="stStatusWidget"],
+                        div[data-testid="stStatusWidget"] *,
+                        div[data-testid="stToolbar"],
+                        div[data-testid="stDecoration"],
+                        div[data-testid="stDeployButton"],
+                        #MainMenu,
+                        .stStatusWidget,
+                        .stDeployButton {{
+                            display: none !important;
+                            visibility: hidden !important;
+                            opacity: 0 !important;
+                            pointer-events: none !important;
+                            width: 0 !important;
+                            height: 0 !important;
+                            max-width: 0 !important;
+                            max-height: 0 !important;
+                            overflow: hidden !important;
+                        }}
+                    `;
+
+                    doc.documentElement.setAttribute("data-anatole-branded", "true");
                 }} catch (e) {{}}
             }}
 
             setBrand();
-            installObserver();
-            setTimeout(setBrand, 50);
-            setTimeout(setBrand, 250);
-            setTimeout(setBrand, 1000);
-            setInterval(setBrand, 2000);
+            setTimeout(setBrand, 150);
+            setTimeout(setBrand, 700);
+            setTimeout(setBrand, 1800);
+
+            if (!window.__anatoleSafeBrandingInterval) {{
+                window.__anatoleSafeBrandingInterval = setInterval(setBrand, 4000);
+            }}
         }})();
         </script>
         """,
@@ -285,13 +211,8 @@ def hide_streamlit_chrome() -> None:
             div[data-testid="stDecoration"],
             div[data-testid="stDeployButton"],
             div[title="Streamlit"],
-            div[title*="Streamlit"],
             a[title="Streamlit"],
-            a[title*="Streamlit"],
             img[alt="Streamlit"],
-            img[alt*="Streamlit"],
-            [aria-label*="Streamlit"],
-            [data-anatole-hidden-streamlit="true"],
             #MainMenu,
             .stStatusWidget,
             .stDeployButton {
