@@ -20,7 +20,7 @@ def load_timer(label: str) -> Iterator[dict[str, float]]:
 
 
 def perf_caption(label: str, threshold: float = 2.5) -> None:
-    """Conserve la compatibilité, mais n'affiche rien aux utilisateurs."""
+    """Compatibility hook. Do not display performance messages to public users."""
     return None
 
 
