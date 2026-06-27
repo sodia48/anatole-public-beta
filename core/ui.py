@@ -234,6 +234,8 @@ def is_dark_mode() -> bool:
 
 
 def apply_style() -> None:
+    from core.device import bootstrap_mobile_mode
+    bootstrap_mobile_mode()
     dark = is_dark_mode()
     compact = bool(st.session_state.get("compact_toggle", False))
 
@@ -1051,7 +1053,6 @@ def sidebar_context() -> str:
     from core.public_beta import current_context
     from core.search import render_universal_search
     from core.notifications import unread_count
-    from core.device import render_mobile_mode_toggle
 
     # Le profil et ses préférences doivent être chargés AVANT la création
     # des widgets qui utilisent les mêmes clés de session.
@@ -1096,7 +1097,7 @@ def sidebar_context() -> str:
         key="compact_toggle",
         help="Réduit légèrement l'espacement et la hauteur des cartes.",
     )
-    render_mobile_mode_toggle()
+    bootstrap_mobile_mode()
 
     sidebar_pref_signature = (
         profile,

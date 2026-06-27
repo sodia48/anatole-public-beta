@@ -20,9 +20,8 @@ def load_timer(label: str) -> Iterator[dict[str, float]]:
 
 
 def perf_caption(label: str, threshold: float = 2.5) -> None:
-    seconds = float(st.session_state.get(f"_perf_{label}", 0.0) or 0.0)
-    if seconds >= threshold:
-        st.caption(f"Chargement {label} : {seconds:.1f}s · données mises en cache pour accélérer les prochaines visites.")
+    """Conserve la compatibilité, mais n'affiche rien aux utilisateurs."""
+    return None
 
 
 def render_load_more_button(key: str, label: str = "Charger plus") -> bool:
