@@ -18,6 +18,8 @@ from core.data import (
     load_constituents,
 )
 from core.database import add_watchlist
+from core.device import mobile_chart_height, mobile_is_lite
+from core.performance import load_timer, perf_caption
 from core.pro_chart import build_event_markers
 from core.strategy_lab import (
     STRATEGIES,
@@ -139,7 +141,9 @@ fallback_sector = (
 )
 
 with st.spinner("Chargement du graphique…"):
-    history = add_indicators(fetch_history(ticker, period, interval))
+    with load_timer("focus_history"):
+        history = add_indicators(fetch_history(ticker, period, interval))
+perf_caption("focus_history", threshold=2.0)
 info = fetch_company_info(ticker)
 name = info.get("longName") or info.get("shortName") or fallback_name
 currency = info.get("currency", "CAD")
@@ -208,6 +212,9 @@ event_note = (
     if show_markers and markers
     else ""
 )
+if mobile_is_lite():
+    st.caption("Mode mobile : les données financières lourdes restent chargées seulement à la demande.")
+
 st.caption(
     "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
     "EMA 20 et bandes de Bollinger lorsque les données sont disponibles"

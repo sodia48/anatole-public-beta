@@ -12,8 +12,11 @@ from core.charts import heatmap_figure, market_breadth_chart, sector_performance
 from core.config import TORONTO_TZ
 from core.universe import current_universe
 from core.data import load_constituents
+from core.data_quality import render_data_quality_strip
 from core.database import get_watchlist
+from core.device import mobile_chart_height, mobile_is_lite, mobile_page_limit
 from core.public_beta import current_context
+from core.performance import load_timer, perf_caption, safe_display_count
 from core.runtime import load_light_market_bundle, load_technical_bundle
 from core.summary import daily_market_summary
 from core.ui import (
@@ -36,7 +39,7 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Anatole",
-    "Hey Bud, bienvenue sur Anatole.\nJe suis en ce moment en mode bêta sur Render.",
+    "Terminal canadien de marché — lecture claire du TSX, des secteurs, des nouvelles et des titres à surveiller.",
 )
 
 workspace_name, workspace_layout = active_workspace(profile)
@@ -46,6 +49,19 @@ visible_modules = {
     if bool(item.get("visible", False))
 }
 st.caption(f"Espace actif : {workspace_name}")
+st.markdown(
+    """
+    <div class="sky-mobile-only">
+        <div class="sky-home-panel">
+            <div class="sky-home-panel-title">Version mobile V5</div>
+            <div class="sky-home-panel-text">
+                Navigation simplifiée, graphiques allégés et données lourdes chargées seulement sur demande.
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if bool(st.session_state.get("show_quick_links", False)):
     home_launchpad()
@@ -63,7 +79,8 @@ def live_cockpit() -> None:
     with placeholder.container():
         skeleton_cards(5, 78)
 
-    constituents_live, _, market = load_light_market_bundle()
+    with load_timer("cockpit"):
+        constituents_live, live_diagnostics, market = load_light_market_bundle()
     placeholder.empty()
 
     if market.empty:
@@ -72,6 +89,9 @@ def live_cockpit() -> None:
             "Réessaie dans quelques instants."
         )
         return
+
+    render_data_quality_strip(market, live_diagnostics, compact=True)
+    perf_caption("cockpit", threshold=2.2)
 
     source_values = set(
         market.get("SourceCours", pd.Series(dtype=str))
@@ -93,6 +113,40 @@ def live_cockpit() -> None:
     sector = valid.groupby("Secteur", as_index=False)["Variation"].mean().sort_values("Variation", ascending=False)
     best_sector = sector.iloc[0]["Secteur"] if not sector.empty else "N/D"
     best_sector_change = sector.iloc[0]["Variation"] if not sector.empty else np.nan
+    worst_sector = sector.iloc[-1]["Secteur"] if not sector.empty else "N/D"
+    worst_sector_change = sector.iloc[-1]["Variation"] if not sector.empty else np.nan
+    top_mover = valid.nlargest(1, "Variation").head(1)
+    drag_mover = valid.nsmallest(1, "Variation").head(1)
+    top_label = "N/D" if top_mover.empty else f"{top_mover.iloc[0].get('Ticker', 'N/D')} {safe_float(top_mover.iloc[0].get('Variation')):+.2f}%"
+    drag_label = "N/D" if drag_mover.empty else f"{drag_mover.iloc[0].get('Ticker', 'N/D')} {safe_float(drag_mover.iloc[0].get('Variation')):+.2f}%"
+
+    st.markdown(
+        f"""
+        <div class="sky-home-grid">
+            <div class="sky-home-panel">
+                <div class="sky-home-panel-title">Lecture du marché</div>
+                <div class="sky-home-panel-value">{weighted_change:+.2f}%</div>
+                <div class="sky-home-panel-text">{advancers} titres en hausse · {decliners} en baisse</div>
+            </div>
+            <div class="sky-home-panel">
+                <div class="sky-home-panel-title">Secteur dominant</div>
+                <div class="sky-home-panel-value">{best_sector}</div>
+                <div class="sky-home-panel-text">{best_sector_change:+.2f}% en moyenne</div>
+            </div>
+            <div class="sky-home-panel">
+                <div class="sky-home-panel-title">Titre moteur</div>
+                <div class="sky-home-panel-value">{top_label}</div>
+                <div class="sky-home-panel-text">Plus forte contribution indicative de la séance</div>
+            </div>
+            <div class="sky-home-panel">
+                <div class="sky-home-panel-title">Risque à surveiller</div>
+                <div class="sky-home-panel-value">{worst_sector}</div>
+                <div class="sky-home-panel-text">{worst_sector_change:+.2f}% · frein principal : {drag_label}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if bool(st.session_state.get("show_ticker", False)):
         movers = pd.concat(
@@ -196,7 +250,7 @@ def live_cockpit() -> None:
     if filtered.empty:
         st.info("Aucun titre ne correspond aux filtres.")
     else:
-        height = 900 if cinema else 650
+        height = mobile_chart_height(760 if cinema else 580, 430)
         figure = heatmap_figure(filtered, height=height)
         clicks = plotly_events(
             figure,
@@ -228,10 +282,10 @@ def live_cockpit() -> None:
         columns = [column for column in ["Ticker", "Nom", "Prix", "Variation"] if column in market]
         with left:
             st.markdown("**Hausses**")
-            st.dataframe(market.nlargest(8, "Variation")[columns], hide_index=True, width="stretch")
+            st.dataframe(market.nlargest(mobile_page_limit(8, 5), "Variation")[columns], hide_index=True, width="stretch")
         with right:
             st.markdown("**Baisses**")
-            st.dataframe(market.nsmallest(8, "Variation")[columns], hide_index=True, width="stretch")
+            st.dataframe(market.nsmallest(mobile_page_limit(8, 5), "Variation")[columns], hide_index=True, width="stretch")
 
 
 live_cockpit()
@@ -241,7 +295,7 @@ with st.expander("Analyse technique du marché", expanded=show_advanced):
     load_advanced = st.checkbox(
         "Charger la largeur technique et les moyennes mobiles",
         value=show_advanced,
-        help="Ce calcul télécharge l'historique des titres du TSX 60 et peut prendre plusieurs secondes au premier chargement.",
+        help="Ce calcul télécharge l'historique des titres de l'univers actif. Sur mobile, laisse cette option fermée si tu veux une page plus rapide.",
     )
     if load_advanced:
         with st.spinner("Calcul de la largeur technique…"):

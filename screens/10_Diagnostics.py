@@ -8,6 +8,7 @@ import streamlit as st
 
 from core.universe import current_universe
 from core.database import database_backend, database_location, get_alerts, get_positions, get_watchlist
+from core.data_quality import render_data_quality_strip, render_source_status
 from core.runtime import load_market_bundle
 from core.ui import apply_style, configure_page, dependency_version, footer, page_header, sidebar_context
 from core.utils import get_secret
@@ -28,6 +29,11 @@ m1.metric("Univers actif", current_universe().short_label)
 m2.metric("Constituants récupérés", len(constituents))
 m3.metric("Cotations disponibles", int(snapshot["Prix"].notna().sum()))
 m4.metric("Historiques techniques", int(features["CloseTech"].notna().sum()))
+
+render_data_quality_strip(snapshot, diagnostics)
+
+st.subheader("Statut des sources")
+render_source_status()
 
 st.subheader("Audit de composition")
 st.json(diagnostics)

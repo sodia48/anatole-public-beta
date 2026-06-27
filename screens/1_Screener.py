@@ -4,6 +4,9 @@ import streamlit as st
 
 from core.analytics import apply_screener_preset, technical_signal
 from core.data import fetch_fundamentals
+from core.data_quality import render_data_quality_strip
+from core.device import mobile_is_lite, mobile_page_limit
+from core.performance import load_timer, perf_caption
 from core.runtime import load_market_bundle
 from core.universe import current_universe
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
@@ -17,14 +20,23 @@ page_header(
     "🔎",
 )
 
-constituents, diagnostics, snapshot, features = load_market_bundle()
+with load_timer("screener"):
+    constituents, diagnostics, snapshot, features = load_market_bundle()
 features = features.copy()
+render_data_quality_strip(snapshot, diagnostics, compact=True)
+perf_caption("screener", threshold=2.5)
 features["Signal"] = features.apply(technical_signal, axis=1)
 
-st.info(
-    "Les critères techniques sont disponibles immédiatement. Les fondamentaux sont mis en cache 24 heures, "
-    "mais leur premier chargement peut prendre un peu plus de temps."
-)
+if mobile_is_lite():
+    st.info(
+        "Mode mobile allégé : garde les fondamentaux désactivés pour préserver la vitesse. "
+        "Tu peux toujours filtrer par tendance, variation, RSI et volume."
+    )
+else:
+    st.info(
+        "Les critères techniques sont disponibles immédiatement. Les fondamentaux sont mis en cache 24 heures, "
+        "mais leur premier chargement peut prendre un peu plus de temps."
+    )
 
 controls = st.columns([1.4, 1, 1, 1])
 with controls[0]:
@@ -134,8 +146,12 @@ if load_fundamentals:
     base_columns += ["PE", "ForwardPE", "DividendYield", "MarketCap", "Beta"]
 base_columns = [column for column in base_columns if column in result]
 
+display_result = result[base_columns].head(mobile_page_limit(220, 70))
+if len(result) > len(display_result):
+    st.caption(f"Affichage limité à {len(display_result)} titres pour préserver la fluidité. Télécharge le CSV pour obtenir tous les résultats.")
+
 st.dataframe(
-    result[base_columns],
+    display_result,
     hide_index=True,
     width="stretch",
     height=620,
@@ -156,7 +172,7 @@ st.dataframe(
 st.download_button(
     "Télécharger les résultats en CSV",
     data=result[base_columns].to_csv(index=False).encode("utf-8-sig"),
-    file_name="screener_tsx60.csv",
+    file_name=f"screener_{current_universe().short_label.lower().replace(' ', '_')}.csv",
     mime="text/csv",
 )
 
