@@ -27,16 +27,10 @@ render_data_quality_strip(snapshot, diagnostics, compact=True)
 perf_caption("screener", threshold=2.5)
 features["Signal"] = features.apply(technical_signal, axis=1)
 
-if mobile_is_lite():
-    st.info(
-        "Mode mobile allégé : garde les fondamentaux désactivés pour préserver la vitesse. "
-        "Tu peux toujours filtrer par tendance, variation, RSI et volume."
-    )
-else:
-    st.info(
-        "Les critères techniques sont disponibles immédiatement. Les fondamentaux sont mis en cache 24 heures, "
-        "mais leur premier chargement peut prendre un peu plus de temps."
-    )
+st.info(
+    "Les critères techniques sont disponibles immédiatement. Les fondamentaux sont mis en cache 24 heures, "
+    "mais leur premier chargement peut prendre un peu plus de temps."
+)
 
 controls = st.columns([1.4, 1, 1, 1])
 with controls[0]:

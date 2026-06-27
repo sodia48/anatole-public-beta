@@ -212,9 +212,6 @@ event_note = (
     if show_markers and markers
     else ""
 )
-if mobile_is_lite():
-    st.caption("Mode mobile : les données financières lourdes restent chargées seulement à la demande.")
-
 st.caption(
     "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
     "EMA 20 et bandes de Bollinger lorsque les données sont disponibles"
