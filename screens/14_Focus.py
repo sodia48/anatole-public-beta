@@ -19,6 +19,14 @@ from core.data import (
 )
 from core.database import add_watchlist
 from core.pro_chart import build_event_markers
+from core.strategy_lab import (
+    STRATEGIES,
+    run_strategy_backtest,
+    strategy_catalog_frame,
+    strategy_equity_chart,
+    strategy_options,
+    strategy_signal_overlay,
+)
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 from core.utils import format_compact, format_money, format_number, get_secret, safe_float
 
@@ -519,3 +527,97 @@ elif section == "Analyse":
         )
 
 footer()
+
+
+st.divider()
+st.subheader("Laboratoire de stratégies")
+
+st.caption(
+    "Teste des stratégies classiques sur le titre affiché. "
+    "Les résultats sont des simulations éducatives, pas des recommandations personnalisées."
+)
+
+with st.expander("Catalogue des 10 stratégies disponibles", expanded=False):
+    st.dataframe(strategy_catalog_frame(), width="stretch", hide_index=True)
+
+strategy_keys = strategy_options()
+selected_strategy = st.selectbox(
+    "Stratégie à tester",
+    strategy_keys,
+    index=0,
+    format_func=lambda key: STRATEGIES[key].name,
+    help="Les stratégies sont adaptées au backtest d'un titre individuel avec les données disponibles.",
+    key=f"focus_strategy_select_{ticker}",
+)
+
+cost_bps = st.slider(
+    "Coût de transaction estimé par changement d'exposition, en points de base",
+    min_value=0,
+    max_value=50,
+    value=5,
+    step=1,
+    help="5 bps = 0,05 %. Cette valeur est indicative et ne tient pas compte de tous les coûts réels.",
+    key=f"focus_strategy_cost_{ticker}",
+)
+
+strategy = STRATEGIES[selected_strategy]
+st.info(
+    f"**{strategy.name}** · {strategy.family} — {strategy.description} "
+    f"Données requises : {strategy.requirement}"
+)
+
+backtest = run_strategy_backtest(
+    history,
+    selected_strategy,
+    transaction_cost_bps=float(cost_bps),
+    initial_capital=10_000.0,
+)
+
+metrics = backtest.get("metrics", {})
+if not metrics:
+    st.warning(
+        "Historique insuffisant pour tester cette stratégie sur le titre et la période sélectionnés. "
+        "Essaie une période plus longue."
+    )
+else:
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Rendement stratégie", f"{metrics.get('Rendement total', 0):+.1f}%")
+    k2.metric("Buy & Hold", f"{metrics.get('Buy & Hold', 0):+.1f}%")
+    k3.metric("CAGR", f"{metrics.get('CAGR', 0):+.1f}%")
+    k4.metric("Drawdown max", f"{metrics.get('Drawdown max', 0):+.1f}%")
+
+    k5, k6, k7, k8 = st.columns(4)
+    k5.metric("Volatilité annualisée", f"{metrics.get('Volatilité annualisée', 0):.1f}%")
+    sharpe_value = metrics.get("Sharpe indicatif")
+    k6.metric(
+        "Sharpe indicatif",
+        "N/D" if pd.isna(sharpe_value) else f"{sharpe_value:.2f}",
+    )
+    k7.metric("Temps investi", f"{metrics.get('Temps investi', 0):.0f}%")
+    k8.metric("Transactions", f"{int(metrics.get('Transactions', 0))}")
+
+    st.plotly_chart(
+        strategy_equity_chart(backtest, ticker),
+        width="stretch",
+        key=f"strategy_equity_{ticker}_{selected_strategy}_{period}_{interval}_{cost_bps}",
+    )
+
+    st.plotly_chart(
+        strategy_signal_overlay(history, backtest, ticker),
+        width="stretch",
+        key=f"strategy_signals_{ticker}_{selected_strategy}_{period}_{interval}_{cost_bps}",
+    )
+
+    signals = backtest.get("signals")
+    if isinstance(signals, pd.DataFrame) and not signals.empty:
+        st.caption("Derniers signaux générés par la stratégie")
+        signal_view = signals.tail(12).reset_index().rename(columns={"index": "Date"})
+        keep_cols = [col for col in ["Date", "Type", "Close", "Signal", "Exposition"] if col in signal_view.columns]
+        st.dataframe(signal_view[keep_cols], width="stretch", hide_index=True)
+    else:
+        st.caption("Aucun signal d'entrée ou de sortie détecté sur la période sélectionnée.")
+
+st.caption(
+    "Limites : les backtests utilisent des données historiques, un modèle de coûts simplifié "
+    "et n'incluent pas les impôts, l'écart acheteur-vendeur, les délais d'exécution ni les contraintes personnelles."
+)
