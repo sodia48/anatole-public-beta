@@ -906,6 +906,69 @@ def apply_style() -> None:
         .sky-mobile-nav {{ display:none; }}
         @keyframes sky-shimmer {{ 100% {{ transform:translateX(100%); }} }}
 
+        /* Anatole V5 — mobile first refinements */
+        .sky-mobile-only {{ display:none; }}
+        .sky-quality-chip {{
+            display:inline-flex;align-items:center;gap:7px;padding:7px 10px;
+            border-radius:999px;background:var(--sky-surface-soft);
+            border:1px solid var(--sky-border);font-size:.78rem;font-weight:800;
+            color:var(--sky-muted);margin:2px 4px 2px 0;
+        }}
+        .sky-home-grid {{
+            display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:12px 0 18px;
+        }}
+        .sky-home-panel {{
+            border:1px solid var(--sky-border);background:var(--sky-surface);
+            border-radius:22px;padding:16px;box-shadow:var(--sky-shadow-soft);
+            min-height:124px;
+        }}
+        .sky-home-panel-title {{
+            color:var(--sky-muted);font-size:.74rem;text-transform:uppercase;
+            letter-spacing:.08em;font-weight:900;margin-bottom:8px;
+        }}
+        .sky-home-panel-value {{font-size:1.35rem;font-weight:900;color:var(--sky-text);line-height:1.15;}}
+        .sky-home-panel-text {{color:var(--sky-muted);font-size:.88rem;margin-top:6px;line-height:1.38;}}
+
+        @media (max-width: 650px) {{
+            .sky-mobile-only {{ display:block; }}
+            .sky-home-grid {{grid-template-columns:1fr;gap:10px;}}
+            .sky-home-panel {{min-height:auto;padding:14px;border-radius:18px;}}
+            .sky-home-panel-value {{font-size:1.15rem;}}
+            .sky-hero {{
+                padding:18px 16px !important;
+                border-radius:20px !important;
+                margin-bottom:12px !important;
+            }}
+            .sky-hero-title {{font-size:1.55rem !important;line-height:1.1 !important;}}
+            .sky-hero-subtitle {{font-size:.9rem !important;line-height:1.38 !important;}}
+            .sky-hero-chips {{gap:6px !important;}}
+            .sky-chip {{font-size:.68rem !important;padding:5px 8px !important;}}
+            div[data-testid="stMetric"] {{
+                min-height:auto !important;
+            }}
+            div[data-testid="stMetric"] label {{
+                font-size:.72rem !important;
+            }}
+            div[data-testid="stMetricValue"] {{
+                font-size:1.05rem !important;
+            }}
+            .stPlotlyChart {{
+                overflow-x:auto;
+            }}
+            [data-testid="stDataFrame"] {{
+                max-width:100%;
+                overflow-x:auto;
+            }}
+            div[data-testid="stHorizontalBlock"] {{
+                gap:.7rem !important;
+            }}
+            button, div[role="button"], .stButton button {{
+                min-height:42px !important;
+            }}
+        }}
+
+
+
         @media (prefers-reduced-motion: reduce) {{
             *, *::before, *::after {{
                 animation-duration: .01ms !important;
@@ -988,6 +1051,7 @@ def sidebar_context() -> str:
     from core.public_beta import current_context
     from core.search import render_universal_search
     from core.notifications import unread_count
+    from core.device import render_mobile_mode_toggle
 
     # Le profil et ses préférences doivent être chargés AVANT la création
     # des widgets qui utilisent les mêmes clés de session.
@@ -1032,6 +1096,7 @@ def sidebar_context() -> str:
         key="compact_toggle",
         help="Réduit légèrement l'espacement et la hauteur des cartes.",
     )
+    render_mobile_mode_toggle()
 
     sidebar_pref_signature = (
         profile,
@@ -1167,6 +1232,9 @@ def page_header(title: str, subtitle: str, icon: str = "📈") -> None:
         unsafe_allow_html=True,
     )
 
+    if bool(st.session_state.get("show_mobile_nav", True)):
+        mobile_navigation()
+
 
 def summary_card(text: str, label: str = "Résumé du marché") -> None:
     st.markdown(
@@ -1224,12 +1292,12 @@ def ticker_tape(items: Iterable[dict]) -> None:
 def mobile_navigation() -> None:
     st.markdown(
         """
-        <nav class="sky-mobile-nav">
+        <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
           <a href="/cockpit">🏠<br>Accueil</a>
-          <a href="/screener">🔎<br>Marchés</a>
+          <a href="/screener">🔎<br>Screener</a>
           <a href="/focus">🎯<br>Focus</a>
-          <a href="/portefeuille">💼<br>Portfolio</a>
-          <a href="/notifications">🔔<br>Alertes</a>
+          <a href="/actualites">📰<br>News</a>
+          <a href="/watchlist">⭐<br>Liste</a>
         </nav>
         """,
         unsafe_allow_html=True,
