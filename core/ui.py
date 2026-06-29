@@ -991,6 +991,20 @@ def apply_style() -> None:
         }}
         .sky-home-panel-value {{font-size:1.35rem;font-weight:900;color:var(--sky-text);line-height:1.15;}}
         .sky-home-panel-text {{color:var(--sky-muted);font-size:.88rem;margin-top:6px;line-height:1.38;}}
+        .sky-universe-strip {{
+            margin: -2px 0 18px 0;
+            padding: 11px 14px;
+            border-radius: 18px;
+            border: 1px solid var(--sky-border);
+            background: var(--sky-surface-soft);
+            box-shadow: var(--sky-shadow-soft);
+        }}
+        .sky-universe-strip [role="radiogroup"] {{
+            gap: 8px;
+        }}
+        .sky-universe-strip label {{
+            font-weight: 800;
+        }}
 
         @media (max-width: 650px) {{
             .sky-mobile-only {{ display:block; }}
@@ -1292,6 +1306,19 @@ def page_header(title: str, subtitle: str, icon: str = "📈") -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    try:
+        from core.universe import render_universe_selector_inline
+
+        st.markdown('<div class="sky-universe-strip">', unsafe_allow_html=True)
+        render_universe_selector_inline(
+            st.session_state.get("profile", DEFAULT_PROFILE),
+            key_suffix=str(title).lower().replace(" ", "_").replace("'", ""),
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+    except Exception:
+        # Le sélecteur d'univers ne doit jamais empêcher la page de s'afficher.
+        pass
 
     if bool(st.session_state.get("show_mobile_nav", True)):
         mobile_navigation()

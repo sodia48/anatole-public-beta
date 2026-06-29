@@ -222,6 +222,49 @@ def render_universe_selector(profile: str) -> str:
     return selected
 
 
+def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> str:
+    """Sélecteur d'univers accessible hors barre latérale.
+
+    Utile surtout sur mobile, où la sidebar est masquée pour préserver l'espace.
+    Le choix reste synchronisé avec st.session_state et les paramètres d'URL.
+    """
+    keys = universe_keys()
+    current_key = current_universe_key()
+
+    labels = {
+        "tsx60": "TSX 60",
+        "tsx_composite": "Composite",
+        "tsx_full": "TSX étendu",
+    }
+
+    selected = st.radio(
+        "Univers de marché",
+        keys,
+        index=keys.index(current_key),
+        format_func=lambda value: labels.get(value, UNIVERSES[value].short_label),
+        horizontal=True,
+        key=f"market_universe_inline_{key_suffix}",
+        help=(
+            "TSX 60 est le plus rapide. Composite élargit la couverture. "
+            "TSX étendu charge davantage de titres avec des limites anti-502."
+        ),
+    )
+
+    if selected != current_key:
+        set_current_universe(selected)
+        save_preferences(profile, {"market_universe": selected})
+        try:
+            from core.runtime import clear_live_market_caches
+
+            clear_live_market_caches()
+        except Exception:
+            pass
+        st.rerun()
+
+    return selected
+
+
+
 def normalise_tmx_symbol(value: Any) -> str:
     raw = str(value or "").strip().upper()
     raw = raw.replace(":TSX", "").replace(":XTSE", "").replace(".TO", "")
