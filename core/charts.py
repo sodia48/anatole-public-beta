@@ -27,6 +27,22 @@ DEFAULT_PLOTLY_OVERLAYS = [
 ]
 
 
+def _chart_height(default: int | None) -> int | None:
+    if default is None:
+        return None
+    try:
+        if bool(st.session_state.get("mobile_mode_auto", False)):
+            if default >= 680:
+                return 585
+            if default >= 560:
+                return 500
+            return max(390, min(default, 460))
+    except Exception:
+        pass
+    return default
+
+
+
 def _palette() -> dict[str, str]:
     dark = bool(st.session_state.get("theme_toggle", False))
     if dark:
@@ -82,7 +98,7 @@ def _modernize(fig: go.Figure, height: int | None = None) -> go.Figure:
         },
     }
     if height is not None:
-        layout["height"] = height
+        layout["height"] = _chart_height(height)
 
     fig.update_layout(**layout)
     fig.update_xaxes(
@@ -429,11 +445,27 @@ def price_chart(
     _add_plotly_price_lines(fig, price_lines)
 
     fig.update_layout(
-        margin={"t": 55, "l": 8, "r": 8, "b": 8},
+        margin={"t": 48, "l": 6, "r": 6, "b": 6},
         title=f"{ticker} · prix et indicateurs",
         xaxis_rangeslider_visible=False,
         hovermode="x unified",
+        dragmode="pan",
+        uirevision=f"{ticker}-focus-chart",
         legend={"orientation": "h", "y": 1.025, "x": 0},
+    )
+    fig.update_xaxes(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikecolor="rgba(37,99,235,.36)",
+        spikethickness=1,
+    )
+    fig.update_yaxes(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikecolor="rgba(37,99,235,.30)",
+        spikethickness=1,
     )
     return _modernize(fig, 690)
 

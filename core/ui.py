@@ -1046,6 +1046,175 @@ def apply_style() -> None:
 
 
 
+
+        /* Anatole V5.1 — mobile magic polish */
+        html {{ -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }}
+        body {{ overscroll-behavior-y: contain; }}
+        .sky-terminal-bar {{
+            position: sticky;
+            top: .6rem;
+            z-index: 900;
+        }}
+        .sky-command-link {{
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+        }}
+        @media (max-width: 760px) {{
+            .block-container {{
+                padding-left: .78rem !important;
+                padding-right: .78rem !important;
+                padding-top: .72rem !important;
+                padding-bottom: calc(5.6rem + env(safe-area-inset-bottom, 0px)) !important;
+                max-width: 100% !important;
+            }}
+            header[data-testid="stHeader"] {{
+                height: 0 !important;
+                min-height: 0 !important;
+                visibility: hidden !important;
+            }}
+            .sky-terminal-bar {{
+                top: .35rem;
+                border-radius: 18px;
+                padding: 8px 9px !important;
+                margin-bottom: .72rem !important;
+                box-shadow: 0 16px 42px rgba(15,39,66,.13);
+            }}
+            .sky-terminal-left {{
+                gap: 8px !important;
+                min-width: 0;
+            }}
+            .sky-terminal-logo {{
+                width: 34px !important;
+                height: 34px !important;
+                border-radius: 12px !important;
+                flex: 0 0 auto;
+            }}
+            .sky-command-hint {{
+                font-size: .72rem !important;
+                min-height: 34px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+            }}
+            .sky-live-pill {{
+                padding: 7px 9px !important;
+                font-size: .72rem !important;
+                white-space: nowrap;
+            }}
+            .sky-hero {{
+                padding: 16px 14px !important;
+                border-radius: 22px !important;
+                margin-bottom: 10px !important;
+                box-shadow: 0 18px 48px rgba(15,39,66,.10) !important;
+            }}
+            .sky-hero-kicker {{
+                font-size: .64rem !important;
+                letter-spacing: .09em !important;
+                padding: 6px 9px !important;
+            }}
+            .sky-hero-title {{
+                font-size: 1.72rem !important;
+                letter-spacing: -.04em !important;
+                line-height: 1.04 !important;
+            }}
+            .sky-hero-subtitle {{
+                font-size: .92rem !important;
+                line-height: 1.35 !important;
+                margin-top: 8px !important;
+            }}
+            .sky-hero-chips {{
+                overflow-x: auto;
+                flex-wrap: nowrap !important;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 3px;
+                scrollbar-width: none;
+            }}
+            .sky-hero-chips::-webkit-scrollbar {{ display:none; }}
+            .sky-chip {{
+                flex: 0 0 auto;
+                font-size: .68rem !important;
+            }}
+            .sky-universe-strip {{
+                position: sticky;
+                top: 4.65rem;
+                z-index: 750;
+                margin: 0 0 12px 0 !important;
+                padding: 9px 10px !important;
+                border-radius: 17px !important;
+                backdrop-filter: blur(22px);
+            }}
+            .sky-universe-strip [role="radiogroup"] {{
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 6px !important;
+            }}
+            .sky-universe-strip label {{
+                justify-content: center;
+                text-align: center;
+                min-height: 38px;
+                border-radius: 12px;
+            }}
+            div[data-testid="stMetric"] {{
+                border-radius: 16px !important;
+                padding: 10px 10px !important;
+            }}
+            div[data-testid="stMetricValue"] {{
+                font-size: 1.08rem !important;
+                line-height: 1.1 !important;
+            }}
+            div[data-testid="stHorizontalBlock"] {{
+                flex-wrap: wrap !important;
+            }}
+            [data-testid="stDataFrame"] {{
+                border-radius: 16px !important;
+                overflow: hidden !important;
+            }}
+            .stPlotlyChart {{
+                border-radius: 18px;
+                overflow: hidden;
+                touch-action: manipulation;
+            }}
+            div[data-testid="stSelectbox"], div[data-testid="stMultiSelect"] {{
+                min-width: 100%;
+            }}
+            div[data-testid="stSegmentedControl"] {{
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }}
+            div[data-testid="stSegmentedControl"] label {{
+                min-height: 39px;
+                white-space: nowrap;
+            }}
+            .sky-mobile-nav {{
+                bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+                left: 8px !important;
+                right: 8px !important;
+                padding: 7px !important;
+                border-radius: 22px !important;
+                background: color-mix(in srgb, var(--sky-surface-strong) 92%, transparent) !important;
+                box-shadow: 0 18px 46px rgba(15,39,66,.22) !important;
+            }}
+            .sky-mobile-nav a {{
+                min-height: 48px;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                justify-content:center;
+                gap:2px;
+                border-radius: 15px !important;
+                font-size: .66rem !important;
+            }}
+            .sky-mobile-nav a.active {{
+                color: #fff !important;
+                background: linear-gradient(135deg, #2563EB, #0EA5E9) !important;
+                box-shadow: 0 8px 20px rgba(37,99,235,.22);
+            }}
+            .sky-footer {{
+                margin-bottom: 88px;
+            }}
+        }}
+
         @media (prefers-reduced-motion: reduce) {{
             *, *::before, *::after {{
                 animation-duration: .01ms !important;
@@ -1106,6 +1275,12 @@ def apply_style() -> None:
     st.markdown(css, unsafe_allow_html=True)
     hide_streamlit_chrome()
     force_anatole_browser_brand(str(st.session_state.get("_anatole_page_title", "Anatole")))
+    enforce_same_tab_navigation()
+    try:
+        from core.mobile_experience import install_mobile_viewport_probe
+        install_mobile_viewport_probe()
+    except Exception:
+        pass
 
 
     if not bool(st.session_state.get("show_animations", True)):
@@ -1381,12 +1556,25 @@ def mobile_navigation() -> None:
     st.markdown(
         """
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a href="/cockpit" target="_self">🏠<br>Accueil</a>
-          <a href="/recherche" target="_self">🔍<br>Recherche</a>
-          <a href="/screener" target="_self">🔎<br>Screener</a>
-          <a href="/focus" target="_self">🎯<br>Focus</a>
-          <a href="/watchlist" target="_self">⭐<br>Liste</a>
+          <a data-path="/cockpit" href="/cockpit" target="_self">🏠<br>Accueil</a>
+          <a data-path="/recherche" href="/recherche" target="_self">🔍<br>Recherche</a>
+          <a data-path="/screener" href="/screener" target="_self">🔎<br>Screener</a>
+          <a data-path="/focus" href="/focus" target="_self">🎯<br>Focus</a>
+          <a data-path="/watchlist" href="/watchlist" target="_self">⭐<br>Liste</a>
         </nav>
+        <script>
+        (function() {
+          try {
+            const path = window.location.pathname.toLowerCase();
+            document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
+              const target = (node.getAttribute('data-path') || '').toLowerCase();
+              if (target && path.includes(target.replace('/', ''))) {
+                node.classList.add('active');
+              }
+            });
+          } catch (error) {}
+        })();
+        </script>
         """,
         unsafe_allow_html=True,
     )
