@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from core.analytics import apply_screener_preset, technical_signal
@@ -8,7 +9,7 @@ from core.data_quality import render_data_quality_strip
 from core.device import mobile_is_lite, mobile_page_limit
 from core.performance import load_timer, perf_caption
 from core.runtime import load_market_bundle
-from core.universe import current_universe
+from core.universe import current_universe, current_universe_key
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 
 configure_page("Screener", "🔎")
@@ -23,14 +24,38 @@ page_header(
 with load_timer("screener"):
     constituents, diagnostics, snapshot, features = load_market_bundle()
 features = features.copy()
+REQUIRED_TECHNICAL_COLUMNS = [
+    "Variation",
+    "RSI14",
+    "VolumeRelatif",
+    "Momentum1M",
+    "Momentum3M",
+    "Volatilite20",
+    "DistanceHigh52",
+    "AboveSMA50",
+    "AboveSMA200",
+    "AboveSMA20",
+    "MACD",
+    "SignalMACD",
+]
+for column in REQUIRED_TECHNICAL_COLUMNS:
+    if column not in features:
+        features[column] = pd.NA if column not in {"AboveSMA50", "AboveSMA200", "AboveSMA20"} else False
+
 render_data_quality_strip(snapshot, diagnostics, compact=True)
 perf_caption("screener", threshold=2.5)
 features["Signal"] = features.apply(technical_signal, axis=1)
 
-st.info(
-    "Les critères techniques sont disponibles immédiatement. Les fondamentaux sont mis en cache 24 heures, "
-    "mais leur premier chargement peut prendre un peu plus de temps."
-)
+if mobile_is_lite():
+    st.info(
+        "Mode mobile allégé : garde les fondamentaux désactivés pour préserver la vitesse. "
+        "Tu peux toujours filtrer par tendance, variation, RSI et volume."
+    )
+else:
+    st.info(
+        "Les critères techniques sont disponibles immédiatement. Les fondamentaux sont mis en cache 24 heures, "
+        "mais leur premier chargement peut prendre un peu plus de temps."
+    )
 
 controls = st.columns([1.4, 1, 1, 1])
 with controls[0]:

@@ -10,7 +10,7 @@ from streamlit_plotly_events2 import plotly_events
 from core.analytics import market_pulse
 from core.charts import heatmap_figure, market_breadth_chart, sector_performance_chart
 from core.config import TORONTO_TZ
-from core.universe import current_universe
+from core.universe import current_universe, current_universe_key
 from core.data import load_constituents
 from core.data_quality import render_data_quality_strip
 from core.database import get_watchlist
@@ -49,6 +49,19 @@ visible_modules = {
     if bool(item.get("visible", False))
 }
 st.caption(f"Espace actif : {workspace_name}")
+st.markdown(
+    """
+    <div class="sky-mobile-only">
+        <div class="sky-home-panel">
+            <div class="sky-home-panel-title">Version mobile V5</div>
+            <div class="sky-home-panel-text">
+                Navigation simplifiée, graphiques allégés et données lourdes chargées seulement sur demande.
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if bool(st.session_state.get("show_quick_links", False)):
     home_launchpad()
@@ -77,7 +90,14 @@ def live_cockpit() -> None:
         )
         return
 
+    universe_key = str(live_diagnostics.get("universe_key") or current_universe_key())
+    universe_label = str(live_diagnostics.get("universe_label") or current_universe().label)
     render_data_quality_strip(market, live_diagnostics, compact=True)
+    if live_diagnostics.get("status") in {"Univers partiel", "Technique partiel"}:
+        st.warning(
+            f"{universe_label} est affiché en mode partiel. "
+            "Anatole ne remplace plus automatiquement cette sélection par le TSX 60."
+        )
     perf_caption("cockpit", threshold=2.2)
 
     source_values = set(
@@ -162,7 +182,7 @@ def live_cockpit() -> None:
 
     overview_left, overview_right = st.columns([1.9, 1])
     with overview_left:
-        st.plotly_chart(sector_performance_chart(market), width="stretch", key="accueil_performance_secteurs")
+        st.plotly_chart(sector_performance_chart(market), width="stretch", key=f"accueil_performance_secteurs_{universe_key}")
     with overview_right:
         if "Watchlist" in visible_modules:
             st.subheader("Watchlist")
@@ -245,7 +265,7 @@ def live_cockpit() -> None:
             hover_event=False,
             select_event=False,
             override_height=height,
-            key="minimal_heatmap",
+            key=f"minimal_heatmap_{universe_key}",
             config={
                 "displaylogo": False,
                 "responsive": True,
@@ -293,7 +313,7 @@ with st.expander("Analyse technique du marché", expanded=show_advanced):
         cols[1].metric("Au-dessus SMA200", f"{pulse.get('above_sma200_pct', np.nan):.0f}%")
         cols[2].metric("Nouveaux sommets", pulse.get("new_highs", 0))
         cols[3].metric("Volume relatif", f"{pulse.get('relative_volume', np.nan):.2f}x")
-        st.plotly_chart(market_breadth_chart(features), width="stretch", key="accueil_largeur_marche")
+        st.plotly_chart(market_breadth_chart(features), width="stretch", key=f"accueil_largeur_marche_{current_universe_key()}")
 
 expected = diagnostics.get("expected")
 actual = int(diagnostics.get("actual", 0) or 0)
