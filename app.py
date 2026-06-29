@@ -28,12 +28,6 @@ pages = {
             url_path="recherche",
         ),
         st.Page(
-            "screens/23_Aujourd_hui.py",
-            title="Aujourd'hui",
-            icon="📱",
-            url_path="aujourdhui",
-        ),
-        st.Page(
             "screens/1_Screener.py",
             title="Screener",
             icon="🔎",
