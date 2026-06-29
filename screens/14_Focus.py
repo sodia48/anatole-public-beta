@@ -20,6 +20,7 @@ from core.data import (
 from core.database import add_watchlist
 from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
+from core.mobile_experience import plotly_config
 from core.pro_chart import build_event_markers
 from core.strategy_lab import (
     STRATEGIES,
@@ -230,9 +231,6 @@ event_note = (
     if show_markers and markers
     else ""
 )
-if mobile_is_lite():
-    st.caption("Mode mobile : les données financières lourdes restent chargées seulement à la demande.")
-
 st.caption(
     "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
     "EMA 20 et bandes de Bollinger lorsque les données sont disponibles"
@@ -253,11 +251,14 @@ st.plotly_chart(
         price_lines=price_lines,
     ),
     width="stretch",
+    config=plotly_config(),
     key=f"focus_plotly_auto_{ticker}_{period}_{interval}_{len(markers)}_{show_markers}",
 )
 
-insider_quick = fetch_insider_activity(ticker)
-ownership_quick = insider_quick.get("ownership", {}) if isinstance(insider_quick, dict) else {}
+ownership_quick = {
+    "held_percent_institutions": info.get("heldPercentInstitutions"),
+    "held_percent_insiders": info.get("heldPercentInsiders"),
+}
 institution_share = safe_float(ownership_quick.get("held_percent_institutions"))
 insider_share = safe_float(ownership_quick.get("held_percent_insiders"))
 retail_estimated_share = estimate_retail_share(ownership_quick)

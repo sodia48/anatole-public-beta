@@ -49,19 +49,6 @@ visible_modules = {
     if bool(item.get("visible", False))
 }
 st.caption(f"Espace actif : {workspace_name}")
-st.markdown(
-    """
-    <div class="sky-mobile-only">
-        <div class="sky-home-panel">
-            <div class="sky-home-panel-title">Version mobile V5</div>
-            <div class="sky-home-panel-text">
-                Navigation simplifiée, graphiques allégés et données lourdes chargées seulement sur demande.
-            </div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
 if bool(st.session_state.get("show_quick_links", False)):
     home_launchpad()
