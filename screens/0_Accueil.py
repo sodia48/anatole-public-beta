@@ -39,7 +39,7 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Anatole",
-    "Terminal canadien de marché — lecture claire du TSX, des secteurs, des nouvelles et des titres à surveiller.",
+    "Hey Bud, bienvenue sur Anatole.\\nJe suis en ce moment en mode bêta.",
 )
 
 workspace_name, workspace_layout = active_workspace(profile)
