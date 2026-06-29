@@ -1,6 +1,6 @@
 databases:
   - name: anatole-db
-    plan: free
+    plan: starter
     databaseName: anatole
     user: anatole
 
@@ -8,10 +8,12 @@ services:
   - type: web
     name: anatole-public-beta
     runtime: docker
-    plan: free
+    plan: starter
     autoDeploy: true
     healthCheckPath: /_stcore/health
     envVars:
+      - key: ANATOLE_HOSTING_PROFILE
+        value: starter
       - key: DATABASE_URL
         fromDatabase:
           name: anatole-db
@@ -24,3 +26,21 @@ services:
         value: "production"
       - key: ANATOLE_LOG_LEVEL
         value: "INFO"
+      - key: ANATOLE_NEWS_MAX_TICKERS
+        value: "4"
+      - key: ANATOLE_NEWS_WORKERS
+        value: "1"
+      - key: ANATOLE_NEWS_TIMEOUT
+        value: "12"
+      - key: ANATOLE_NEWS_PER_TICKER
+        value: "5"
+      - key: ANATOLE_NEWS_MAX_ARTICLES
+        value: "35"
+      - key: ANATOLE_TSX_COMPOSITE_SNAPSHOT_LIMIT
+        value: "100"
+      - key: ANATOLE_TSX_COMPOSITE_HISTORY_LIMIT
+        value: "50"
+      - key: ANATOLE_TSX_FULL_SNAPSHOT_LIMIT
+        value: "80"
+      - key: ANATOLE_TSX_FULL_HISTORY_LIMIT
+        value: "35"
