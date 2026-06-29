@@ -5,7 +5,8 @@ import streamlit as st
 
 from core.data import fetch_market_snapshot, load_constituents
 from core.database import add_watchlist, get_watchlist, remove_watchlist
-from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
+from core.device import mobile_is_lite
+from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, render_mobile_watchlist_cards
 from core.utils import normalise_symbol
 
 configure_page("Watchlist", "⭐")
@@ -49,18 +50,22 @@ table["Ticker"] = table["Ticker"].fillna(table["YahooTicker"])
 table["Nom"] = table["Nom"].fillna(table["YahooTicker"])
 table["Secteur"] = table["Secteur"].fillna("Hors univers actif")
 
-st.dataframe(
-    table[["Ticker", "Nom", "Secteur", "Prix", "Variation", "PlusHaut", "PlusBas", "Volume", "SourceCours"]],
-    hide_index=True,
-    width="stretch",
-    column_config={
-        "Prix": st.column_config.NumberColumn(format="$%.2f"),
-        "Variation": st.column_config.NumberColumn(format="%+.2f%%"),
-        "PlusHaut": st.column_config.NumberColumn(format="$%.2f"),
-        "PlusBas": st.column_config.NumberColumn(format="$%.2f"),
-        "Volume": st.column_config.NumberColumn(format="compact"),
-    },
-)
+if mobile_is_lite():
+    st.caption("Vue mobile en cartes — touche un titre dans le mode Focus pour aller plus loin.")
+    render_mobile_watchlist_cards(table[[column for column in ["Ticker", "Nom", "Secteur", "Prix", "Variation", "Volume", "YahooTicker"] if column in table]].to_dict(orient="records"))
+else:
+    st.dataframe(
+        table[["Ticker", "Nom", "Secteur", "Prix", "Variation", "PlusHaut", "PlusBas", "Volume", "SourceCours"]],
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Prix": st.column_config.NumberColumn(format="$%.2f"),
+            "Variation": st.column_config.NumberColumn(format="%+.2f%%"),
+            "PlusHaut": st.column_config.NumberColumn(format="$%.2f"),
+            "PlusBas": st.column_config.NumberColumn(format="$%.2f"),
+            "Volume": st.column_config.NumberColumn(format="compact"),
+        },
+    )
 
 remove = st.selectbox("Retirer un titre", watchlist)
 if st.button("Retirer de la watchlist"):

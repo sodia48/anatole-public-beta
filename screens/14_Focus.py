@@ -30,7 +30,7 @@ from core.strategy_lab import (
     strategy_options,
     strategy_signal_overlay,
 )
-from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
+from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, render_signal_badges, skeleton_cards
 from core.utils import format_compact, format_money, format_number, get_secret, safe_float
 
 
@@ -67,6 +67,53 @@ def volume_flow_label(last_open: object, last_close: object) -> str:
         return "N/D"
     return "Entrée dominante" if close_value >= open_value else "Sortie dominante"
 
+
+
+
+def signal_badges(price: float, last: pd.Series, info: dict, relative_volume: float) -> list[tuple[str, str]]:
+    badges: list[tuple[str, str]] = []
+    rsi = safe_float(last.get("RSI14"))
+    sma50 = safe_float(last.get("SMA50"))
+    if not np.isnan(sma50):
+        badges.append(("Tendance positive" if price >= sma50 else "Tendance fragile", "positive" if price >= sma50 else "negative"))
+    if not np.isnan(relative_volume):
+        if relative_volume >= 1.5:
+            badges.append((f"Volume fort {relative_volume:.1f}x", "positive"))
+        elif relative_volume <= 0.8:
+            badges.append((f"Volume calme {relative_volume:.1f}x", "neutral"))
+        else:
+            badges.append((f"Volume normal {relative_volume:.1f}x", "neutral"))
+    if not np.isnan(rsi):
+        if rsi >= 70:
+            badges.append((f"RSI élevé {rsi:.0f}", "negative"))
+        elif rsi <= 30:
+            badges.append((f"RSI bas {rsi:.0f}", "positive"))
+        else:
+            badges.append((f"RSI neutre {rsi:.0f}", "neutral"))
+    debt_equity = safe_float(info.get("debtToEquity"))
+    if not np.isnan(debt_equity):
+        badges.append(("Risque élevé" if debt_equity > 150 else "Risque modéré", "negative" if debt_equity > 150 else "neutral"))
+    return badges[:5]
+
+
+def quick_detail_sheet(price: float, last: pd.Series, info: dict, relative_volume: float) -> None:
+    rsi = safe_float(last.get("RSI14"))
+    pe = safe_float(info.get("trailingPE"))
+    text_parts: list[str] = []
+    if not np.isnan(rsi):
+        if rsi >= 70:
+            text_parts.append(f"RSI à {rsi:.1f}: momentum fort, mais risque de surachat.")
+        elif rsi <= 30:
+            text_parts.append(f"RSI à {rsi:.1f}: pression vendeuse importante et possible rebond technique.")
+        else:
+            text_parts.append(f"RSI à {rsi:.1f}: zone neutre.")
+    if not np.isnan(relative_volume):
+        direction = "entrée" if safe_float(last.get("Close")) >= safe_float(last.get("Open")) else "sortie"
+        text_parts.append(f"Volume relatif à {relative_volume:.2f}x avec une lecture de {direction} dominante.")
+    if not np.isnan(pe):
+        text_parts.append(f"P/E historique autour de {pe:.1f}x.")
+    if text_parts:
+        st.markdown('<div class="sky-quick-sheet"><div class="sky-quick-sheet-title">Détail rapide</div>' + " ".join(text_parts) + '</div>', unsafe_allow_html=True)
 
 def local_analysis_lines(
     price: float,
@@ -147,6 +194,11 @@ with controls[2]:
     interval = st.selectbox("Intervalle", ["1d", "1wk"], index=0)
 
 st.session_state.selected_ticker = ticker
+
+placeholder = st.empty()
+with placeholder.container():
+    skeleton_cards(4, 88)
+
 selected_row = constituents.loc[constituents["YahooTicker"] == ticker].head(1)
 fallback_name = (
     str(selected_row.iloc[0]["Nom"])
@@ -162,8 +214,9 @@ fallback_sector = (
 with st.spinner("Chargement du graphique…"):
     with load_timer("focus_history"):
         history = add_indicators(fetch_history(ticker, period, interval))
+    info = fetch_company_info(ticker)
+placeholder.empty()
 perf_caption("focus_history", threshold=2.0)
-info = fetch_company_info(ticker)
 name = info.get("longName") or info.get("shortName") or fallback_name
 currency = info.get("currency", "CAD")
 
@@ -194,18 +247,6 @@ metrics[2].metric("P/E", format_number(info.get("trailingPE")))
 metrics[3].metric("Rendement", percent_text(info.get("dividendYield")))
 metrics[4].metric("RSI 14", format_number(last.get("RSI14"), 1))
 metrics[5].metric("Volume", format_compact(last.get("Volume")))
-
-buttons = st.columns([1, 1, 4])
-with buttons[0]:
-    if st.button("Ajouter à la watchlist", width="stretch"):
-        add_watchlist(profile, ticker)
-        st.success("Titre ajouté à la watchlist.")
-with buttons[1]:
-    st.page_link(
-        "screens/4_Alertes.py",
-        label="Créer une alerte",
-        width="stretch",
-    )
 
 show_markers = st.toggle(
     "Afficher les événements sur le graphique",
@@ -264,6 +305,21 @@ insider_share = safe_float(ownership_quick.get("held_percent_insiders"))
 retail_estimated_share = estimate_retail_share(ownership_quick)
 last_volume = safe_float(last.get("Volume"))
 volume_avg20 = safe_float(history.get("Volume", pd.Series(dtype=float)).tail(20).mean())
+relative_volume = (last_volume / max(volume_avg20, 1.0)) if not np.isnan(last_volume) and not np.isnan(volume_avg20) else np.nan
+
+quick_actions = st.columns(3)
+if quick_actions[0].button("Ajouter à la watchlist", key="focus_watchlist_mobile", width="stretch"):
+    add_watchlist(profile, ticker)
+    st.success("Titre ajouté à la watchlist.")
+if quick_actions[1].button("Créer une alerte", key="focus_alert_mobile", width="stretch"):
+    st.switch_page("screens/4_Alertes.py")
+if quick_actions[2].button("Analyser ce titre", key="focus_analyze_mobile", type="primary", width="stretch"):
+    st.session_state["focus_section_picker"] = "Analyse"
+    st.rerun()
+
+render_signal_badges(signal_badges(price, last, info, relative_volume))
+quick_detail_sheet(price, last, info, relative_volume)
+
 flow_cols = st.columns(4)
 flow_cols[0].metric("Volume séance", format_compact(last_volume))
 flow_cols[1].metric("Flux dominant", volume_flow_label(last.get("Open"), last.get("Close")))
@@ -285,16 +341,29 @@ else:
     )
 st.caption(
     "Code couleur du volume : vert = entrée / pression acheteuse dominante, rouge = sortie / pression vendeuse dominante. "
-    f"Volume relatif actuel : {ratio_text(last_volume / max(volume_avg20, 1.0)) if not np.isnan(last_volume) and not np.isnan(volume_avg20) else 'N/D'}."
+    f"Volume relatif actuel : {ratio_text(relative_volume) if not np.isnan(relative_volume) else 'N/D'}."
 )
 
-section = st.segmented_control(
+sections = ["Aperçu", "Finances", "Actualités", "Données avancées", "Analyse"]
+current_section = st.session_state.get("focus_section_picker", "Aperçu")
+nav_cols = st.columns([1, 3, 1])
+current_index = sections.index(current_section) if current_section in sections else 0
+if nav_cols[0].button("←", key="focus_prev_section", disabled=current_index == 0, width="stretch"):
+    st.session_state["focus_section_picker"] = sections[max(0, current_index - 1)]
+    st.rerun()
+section = nav_cols[1].segmented_control(
     "Section",
-    ["Aperçu", "Finances", "Actualités", "Données avancées", "Analyse"],
-    default="Aperçu",
+    sections,
+    default=sections[current_index],
+    key="focus_section_picker",
     selection_mode="single",
     label_visibility="collapsed",
 )
+if nav_cols[2].button("→", key="focus_next_section", disabled=current_index == len(sections) - 1, width="stretch"):
+    st.session_state["focus_section_picker"] = sections[min(len(sections) - 1, current_index + 1)]
+    st.rerun()
+
+is_lite_mobile = mobile_is_lite()
 
 if section == "Aperçu":
     c1, c2, c3, c4 = st.columns(4)
@@ -419,7 +488,10 @@ elif section == "Actualités":
     else:
         sentiment = news["SentimentScore"].mean() * 100
         st.metric("Sentiment moyen", f"{sentiment:+.0f}/100")
-        for _, article in news.head(12).iterrows():
+        news_limit = 5 if is_lite_mobile else 12
+        if is_lite_mobile:
+            st.caption("Mode Lite mobile : seules les nouvelles les plus utiles sont chargées en priorité.")
+        for _, article in news.head(news_limit).iterrows():
             st.markdown(f"**[{article['Titre']}]({article['URL']})**")
             st.caption(
                 f"{article['Source']} · {article['Categorie']} · "
@@ -428,12 +500,26 @@ elif section == "Actualités":
             if article.get("Resume"):
                 st.write(article["Resume"])
             st.divider()
+        if is_lite_mobile and len(news) > news_limit:
+            st.caption(f"{len(news) - news_limit} nouvelles supplémentaires sont masquées pour garder la page rapide.")
 
 elif section == "Données avancées":
     st.caption(
         "Analystes, dividendes et initiés sont chargés uniquement dans cette section "
         "afin de préserver la rapidité du reste de l'application."
     )
+    load_heavy_details = True
+    if is_lite_mobile:
+        load_heavy_details = st.toggle(
+            "Charger les détails complets",
+            value=False,
+            help="Sur mobile, Anatole garde cette section légère par défaut pour aller plus vite.",
+            key=f"focus_heavy_details_{ticker}",
+        )
+    if not load_heavy_details:
+        st.info("Mode Lite actif : active le chargement complet pour voir dividendes, analystes et transactions d'initiés.")
+        footer()
+        st.stop()
     with st.spinner("Chargement des dividendes, analystes et initiés…"):
         dividends = fetch_dividend_history(ticker)
         analyst = fetch_analyst_consensus(ticker)
