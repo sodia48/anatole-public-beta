@@ -8,6 +8,8 @@ import streamlit as st
 from core.data import load_constituents
 from core.database import add_watchlist, set_preference
 
+RECENT_SEARCHES_KEY = "_anatole_recent_searches"
+
 
 PAGE_COMMANDS = [
     ("Vue d'ensemble", "screens/0_Accueil.py", "marché accueil cockpit dashboard"),
@@ -52,6 +54,32 @@ def install_command_shortcut() -> None:
         pass
 
 
+
+
+def _register_recent_search(query: str) -> None:
+    clean = str(query or "").strip()
+    if not clean:
+        return
+    history = list(st.session_state.get(RECENT_SEARCHES_KEY, []))
+    history = [item for item in history if str(item).strip().lower() != clean.lower()]
+    history.insert(0, clean)
+    st.session_state[RECENT_SEARCHES_KEY] = history[:8]
+
+
+def render_recent_searches(location: str = "page") -> None:
+    history = list(st.session_state.get(RECENT_SEARCHES_KEY, []))
+    if not history:
+        return
+    host = st.sidebar if location == "sidebar" else st
+    host.caption("Recherches récentes")
+    max_items = 5 if location == "sidebar" else 8
+    for index, item in enumerate(history[:max_items]):
+        label = item if len(item) <= 28 else item[:25] + "..."
+        if host.button(label, key=f"recent_search_{location}_{index}", width="stretch"):
+            st.session_state[f"universal_search_{location}"] = item
+            st.rerun()
+
+
 def _normalize_requested_ticker(raw: str, constituents) -> str:
     clean = raw.strip().upper()
     if not clean:
@@ -75,8 +103,10 @@ def render_universal_search(location: str = "sidebar", profile: str | None = Non
     ).strip()
 
     if not query:
+        render_recent_searches(location)
         return
 
+    _register_recent_search(query)
     constituents, _ = load_constituents()
     lowered = query.lower()
 
