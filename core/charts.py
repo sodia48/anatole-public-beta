@@ -403,8 +403,24 @@ def price_chart(
             col=1,
         )
     if "Volume" in history:
+        volume_colors = [
+            "rgba(16,185,129,0.55)" if float(close) >= float(open_) else "rgba(239,68,68,0.55)"
+            for open_, close in zip(history["Open"].fillna(0), history["Close"].fillna(0))
+        ]
+        volume_labels = [
+            "Volume d'entrée" if float(close) >= float(open_) else "Volume de sortie"
+            for open_, close in zip(history["Open"].fillna(0), history["Close"].fillna(0))
+        ]
         fig.add_trace(
-            go.Bar(x=history.index, y=history["Volume"], name="Volume", opacity=0.46, marker_color="#60A5FA"),
+            go.Bar(
+                x=history.index,
+                y=history["Volume"],
+                name="Volume",
+                opacity=0.60,
+                marker_color=volume_colors,
+                customdata=volume_labels,
+                hovertemplate="%{x}<br>%{customdata}: %{y:,.0f}<extra></extra>",
+            ),
             row=2,
             col=1,
         )
