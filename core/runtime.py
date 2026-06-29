@@ -18,6 +18,24 @@ def _active_constituents(constituents: pd.DataFrame, limit: int) -> pd.DataFrame
     return work.sort_values("PoidsIndice", ascending=False).head(limit).reset_index(drop=True)
 
 
+def _empty_market_frame(active: pd.DataFrame) -> pd.DataFrame:
+    market = active.copy()
+    for column in [
+        "Prix",
+        "CloturePrecedente",
+        "Variation",
+        "PlusHaut",
+        "PlusBas",
+        "Volume",
+        "SourceCours",
+        "Horodatage",
+    ]:
+        if column not in market.columns:
+            market[column] = pd.NA
+    return market
+
+
+
 @st.cache_data(ttl=60, max_entries=8, show_spinner=False)
 def _load_light_market_bundle_cached(
     universe_key: str,
@@ -36,24 +54,26 @@ def _load_light_market_bundle_cached(
 
 
 def load_light_market_bundle() -> tuple[pd.DataFrame, dict, pd.DataFrame]:
-    """API compatible avec les pages existantes, avec garde Render Free."""
+    """API compatible avec les pages existantes, sans retour silencieux au TSX 60."""
     key = current_universe_key()
     try:
         return _load_light_market_bundle_cached(key)
     except Exception as exc:
-        logging.exception("Échec de l'univers %s, retour TSX 60.", key)
-        if key != DEFAULT_UNIVERSE_KEY:
-            constituents, diagnostics, market = _load_light_market_bundle_cached(
-                DEFAULT_UNIVERSE_KEY
-            )
-            diagnostics = dict(diagnostics)
-            diagnostics["status"] = "Fallback TSX 60"
-            diagnostics["error"] = (
-                f"L'univers demandé ({key}) était temporairement trop lourd "
-                f"ou indisponible : {type(exc).__name__}."
-            )
-            return constituents, diagnostics, market
-        raise
+        logging.exception("Échec de l'univers %s.", key)
+        universe = get_universe(key)
+        constituents, diagnostics = load_constituents(key)
+        active = _active_constituents(constituents, universe.snapshot_limit)
+        market = _empty_market_frame(active)
+        diagnostics = dict(diagnostics)
+        diagnostics["status"] = "Univers partiel"
+        diagnostics["displayed"] = len(active)
+        diagnostics["universe_label"] = universe.label
+        diagnostics["universe_key"] = key
+        diagnostics["error"] = (
+            f"L'univers sélectionné ({universe.short_label}) est affiché en mode partiel : "
+            f"{type(exc).__name__}."
+        )
+        return constituents, diagnostics, market
 
 
 @st.cache_data(ttl=1_800, max_entries=8, show_spinner=False)
@@ -94,19 +114,17 @@ def load_technical_bundle() -> tuple[pd.DataFrame, dict, pd.DataFrame, pd.DataFr
     try:
         return _load_technical_bundle_cached(key)
     except Exception as exc:
-        logging.exception("Échec technique de l'univers %s, retour TSX 60.", key)
-        if key != DEFAULT_UNIVERSE_KEY:
-            constituents, diagnostics, market, features = _load_technical_bundle_cached(
-                DEFAULT_UNIVERSE_KEY
-            )
-            diagnostics = dict(diagnostics)
-            diagnostics["status"] = "Fallback TSX 60"
-            diagnostics["error"] = (
-                f"L'univers demandé ({key}) était temporairement trop lourd "
-                f"ou indisponible : {type(exc).__name__}."
-            )
-            return constituents, diagnostics, market, features
-        raise
+        logging.exception("Échec technique de l'univers %s.", key)
+        constituents, diagnostics, market = load_light_market_bundle()
+        features = market.copy()
+        diagnostics = dict(diagnostics)
+        diagnostics["status"] = "Technique partiel"
+        diagnostics["universe_key"] = key
+        diagnostics["error"] = (
+            f"Les indicateurs techniques de l'univers sélectionné sont temporairement partiels : "
+            f"{type(exc).__name__}."
+        )
+        return constituents, diagnostics, market, features
 
 
 # Compatibilité avec les pages existantes.
@@ -123,3 +141,17 @@ def clear_live_market_caches() -> None:
         clear = getattr(cached_function, "clear", None)
         if callable(clear):
             clear()
+
+
+
+def clear_universe_caches() -> None:
+    """Force le renouvellement complet des données liées à l'univers actif."""
+    clear_live_market_caches()
+    try:
+        from core.data import _load_constituents_cached
+
+        clear = getattr(_load_constituents_cached, "clear", None)
+        if callable(clear):
+            clear()
+    except Exception:
+        pass

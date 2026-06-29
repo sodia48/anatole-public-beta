@@ -37,14 +37,51 @@ from core.utils import (
 
 @st.cache_resource
 def _market_snapshot_store() -> dict[str, Any]:
-    return {"frame": pd.DataFrame(), "updated_at": None}
+    return {"frames": {}, "updated_at": None}
 
 
-def _last_good_snapshot() -> pd.DataFrame:
-    frame = _market_snapshot_store().get("frame")
-    if not isinstance(frame, pd.DataFrame) or frame.empty:
+def _snapshot_key(tickers: tuple[str, ...]) -> str:
+    return "|".join(sorted(str(ticker) for ticker in tickers))
+
+
+def _last_good_snapshot(tickers: tuple[str, ...] | None = None) -> pd.DataFrame:
+    store = _market_snapshot_store()
+    frames = store.get("frames", {})
+    if not isinstance(frames, dict):
         return pd.DataFrame()
-    result = frame.copy()
+
+    if tickers:
+        key = _snapshot_key(tickers)
+        frame = frames.get(key)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            result = frame.copy()
+            result["SourceCours"] = "Dernière donnée disponible"
+            return result
+
+        # Fallback strict : only keep rows matching the requested tickers.
+        wanted = set(tickers)
+        collected = []
+        for candidate in frames.values():
+            if isinstance(candidate, pd.DataFrame) and not candidate.empty and "YahooTicker" in candidate:
+                filtered = candidate[candidate["YahooTicker"].isin(wanted)].copy()
+                if not filtered.empty:
+                    collected.append(filtered)
+
+        if collected:
+            result = pd.concat(collected, ignore_index=True)
+            result = result.drop_duplicates(subset=["YahooTicker"], keep="last")
+            result["SourceCours"] = "Dernière donnée disponible"
+            return result
+
+        return pd.DataFrame()
+
+    latest = None
+    for candidate in frames.values():
+        if isinstance(candidate, pd.DataFrame) and not candidate.empty:
+            latest = candidate
+    if latest is None:
+        return pd.DataFrame()
+    result = latest.copy()
     result["SourceCours"] = "Dernière donnée disponible"
     return result
 
@@ -304,7 +341,7 @@ def fetch_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
             timeout=12,
         )
     except Exception:
-        return _last_good_snapshot()
+        return _last_good_snapshot(tickers)
 
     is_open, _ = market_status()
     if is_open:
@@ -408,10 +445,12 @@ def fetch_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
 
     result = pd.DataFrame(rows)
     if result.empty:
-        return _last_good_snapshot()
+        return _last_good_snapshot(tickers)
 
     store = _market_snapshot_store()
-    store["frame"] = result.copy()
+    frames = store.setdefault("frames", {})
+    if isinstance(frames, dict):
+        frames[_snapshot_key(tickers)] = result.copy()
     store["updated_at"] = timestamp
     return result
 
@@ -597,7 +636,7 @@ def _fetch_stock_news_uncached(ticker: str) -> list[dict[str, str]]:
 
     # Yahoo peut retourner beaucoup d'éléments ou répondre lentement.
     # On limite volontairement le volume par titre pour éviter les 502.
-    max_per_ticker = int(os.getenv("ANATOLE_NEWS_PER_TICKER", "8"))
+    max_per_ticker = int(os.getenv("ANATOLE_NEWS_PER_TICKER", "5"))
     articles: list[dict[str, str]] = []
     for item in raw_news[:max_per_ticker]:
         if not isinstance(item, dict):
@@ -661,10 +700,10 @@ def fetch_news_bundle(tickers: tuple[str, ...]) -> list[dict[str, str]]:
     if not tickers:
         return []
 
-    max_tickers = int(os.getenv("ANATOLE_NEWS_MAX_TICKERS", "6"))
-    max_workers = int(os.getenv("ANATOLE_NEWS_WORKERS", "2"))
-    timeout_seconds = int(os.getenv("ANATOLE_NEWS_TIMEOUT", "18"))
-    max_articles = int(os.getenv("ANATOLE_NEWS_MAX_ARTICLES", "60"))
+    max_tickers = int(os.getenv("ANATOLE_NEWS_MAX_TICKERS", "4"))
+    max_workers = int(os.getenv("ANATOLE_NEWS_WORKERS", "1"))
+    timeout_seconds = int(os.getenv("ANATOLE_NEWS_TIMEOUT", "12"))
+    max_articles = int(os.getenv("ANATOLE_NEWS_MAX_ARTICLES", "35"))
 
     selected = tuple(dict.fromkeys(tickers))[:max_tickers]
     articles: list[dict[str, str]] = []

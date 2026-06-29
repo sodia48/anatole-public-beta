@@ -183,11 +183,22 @@ def current_universe() -> MarketUniverse:
 
 def set_current_universe(key: str) -> None:
     safe_key = key if key in UNIVERSES else DEFAULT_UNIVERSE_KEY
+    previous = st.session_state.get("market_universe")
     st.session_state["market_universe"] = safe_key
+    st.session_state["_market_universe_nonce"] = int(st.session_state.get("_market_universe_nonce", 0) or 0) + 1
     try:
         st.query_params["universe"] = safe_key
     except Exception:
         pass
+    if previous != safe_key:
+        # Drop page-local derived state that can make the UI look like the old universe.
+        for key_name in [
+            "_perf_cockpit",
+            "_perf_screener",
+            "_perf_actualites",
+            "_perf_focus_history",
+        ]:
+            st.session_state.pop(key_name, None)
 
 
 def render_universe_selector(profile: str) -> str:
@@ -203,16 +214,16 @@ def render_universe_selector(profile: str) -> str:
             "TSX 60 reste le mode le plus rapide. Composite et TSX étendu "
             "chargent plus de titres avec des limites intelligentes."
         ),
-        key="market_universe_selector",
+        key=f"market_universe_selector_{current_key}",
     )
 
     if selected != current_key:
         set_current_universe(selected)
         save_preferences(profile, {"market_universe": selected})
         try:
-            from core.runtime import clear_live_market_caches
+            from core.runtime import clear_universe_caches
 
-            clear_live_market_caches()
+            clear_universe_caches()
         except Exception:
             pass
         st.rerun()
@@ -243,7 +254,7 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
         index=keys.index(current_key),
         format_func=lambda value: labels.get(value, UNIVERSES[value].short_label),
         horizontal=True,
-        key=f"market_universe_inline_{key_suffix}",
+        key=f"market_universe_inline_{key_suffix}_{current_key}",
         help=(
             "TSX 60 est le plus rapide. Composite élargit la couverture. "
             "TSX étendu charge davantage de titres avec des limites anti-502."
@@ -254,9 +265,9 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
         set_current_universe(selected)
         save_preferences(profile, {"market_universe": selected})
         try:
-            from core.runtime import clear_live_market_caches
+            from core.runtime import clear_universe_caches
 
-            clear_live_market_caches()
+            clear_universe_caches()
         except Exception:
             pass
         st.rerun()
