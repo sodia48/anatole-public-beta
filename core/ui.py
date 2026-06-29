@@ -967,6 +967,7 @@ def apply_style() -> None:
             animation:sky-shimmer 1.4s infinite;
         }}
         .sky-mobile-nav {{ display:none; }}
+        .sky-mobile-fab, .sky-top-fab {{ display:none !important; }}
         @keyframes sky-shimmer {{ 100% {{ transform:translateX(100%); }} }}
 
         /* Anatole V5 — mobile first refinements */
@@ -1261,6 +1262,7 @@ def apply_style() -> None:
             }}
             .sky-mobile-nav a:hover {{ background:rgba(37,99,235,.12);color:var(--sky-text); }}
             .sky-mobile-fab, .sky-top-fab {{
+                display: flex !important;
                 position: fixed;
                 z-index: 9998;
                 width: 52px;
