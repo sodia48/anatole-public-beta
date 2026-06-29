@@ -15,12 +15,10 @@ page_header(
     "🔍",
 )
 
-st.caption("Tape un symbole, un nom d'entreprise, un secteur ou une fonction. Anatole mémorise aussi tes recherches récentes sur mobile.")
+st.caption("Tape un symbole, un nom d'entreprise, un secteur ou une fonction. Tes recherches récentes apparaîtront ici.")
 render_universal_search("page", profile=profile)
 
 st.divider()
-links = st.columns(2)
-links[0].page_link("screens/0_Accueil.py", label="Retour au cockpit", icon="🏠", width="stretch")
-links[1].page_link("screens/23_Aujourd_hui.py", label="Vue Aujourd'hui", icon="📱", width="stretch")
+st.page_link("screens/0_Accueil.py", label="Retour au cockpit", icon="🏠", width="stretch")
 
 footer()

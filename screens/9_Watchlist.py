@@ -3,9 +3,9 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from core.device import mobile_is_lite
 from core.data import fetch_market_snapshot, load_constituents
 from core.database import add_watchlist, get_watchlist, remove_watchlist
-from core.device import mobile_is_lite
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, render_mobile_watchlist_cards
 from core.utils import normalise_symbol
 
@@ -51,8 +51,10 @@ table["Nom"] = table["Nom"].fillna(table["YahooTicker"])
 table["Secteur"] = table["Secteur"].fillna("Hors univers actif")
 
 if mobile_is_lite():
-    st.caption("Vue mobile en cartes — touche un titre dans le mode Focus pour aller plus loin.")
-    render_mobile_watchlist_cards(table[[column for column in ["Ticker", "Nom", "Secteur", "Prix", "Variation", "Volume", "YahooTicker"] if column in table]].to_dict(orient="records"))
+    render_mobile_watchlist_cards(
+        table[[column for column in ["Ticker", "Nom", "Secteur", "Prix", "Variation", "Volume", "YahooTicker"] if column in table]]
+        .to_dict(orient="records")
+    )
 else:
     st.dataframe(
         table[["Ticker", "Nom", "Secteur", "Prix", "Variation", "PlusHaut", "PlusBas", "Volume", "SourceCours"]],
