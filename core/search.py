@@ -92,12 +92,17 @@ def _normalize_requested_ticker(raw: str, constituents) -> str:
     return clean
 
 
-def render_universal_search(location: str = "sidebar", profile: str | None = None) -> None:
+def render_universal_search(
+    location: str = "sidebar",
+    profile: str | None = None,
+    label: str = "Recherche universelle",
+    placeholder: str = "Rechercher un titre, une page ou une commande…",
+) -> None:
     install_command_shortcut()
     host = st.sidebar if location == "sidebar" else st
     query = host.text_input(
-        "Recherche universelle",
-        placeholder="Rechercher un titre, une page ou une commande…",
+        label,
+        placeholder=placeholder,
         key=f"universal_search_{location}",
         label_visibility="collapsed",
     ).strip()

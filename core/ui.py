@@ -749,6 +749,31 @@ def apply_style() -> None:
         .sky-up {{ color: #059669; }}
         .sky-down {{ color: #DC2626; }}
 
+
+        .sky-hero-search-card {
+            margin: -4px 0 18px;
+            padding: 16px 18px 10px;
+            border-radius: 22px;
+            background: var(--sky-surface);
+            border: 1px solid var(--sky-border);
+            box-shadow: var(--sky-shadow-soft);
+            backdrop-filter: blur(18px);
+            animation: sky-fade .4s ease both;
+        }
+
+        .sky-hero-search-title {
+            color: var(--sky-text);
+            font-size: .86rem;
+            font-weight: 850;
+            margin-bottom: 4px;
+            letter-spacing: -.01em;
+        }
+
+        .sky-hero-search-note {
+            color: var(--sky-muted);
+            font-size: .78rem;
+            margin-bottom: 10px;
+        }
         h1, h2, h3, h4, h5, h6 {{
             color: var(--sky-text) !important;
             letter-spacing: -.028em;
@@ -1444,7 +1469,6 @@ def terminal_topbar() -> None:
             <div class="sky-terminal-left">
                 <div class="sky-terminal-logo">S</div>
                 <div class="sky-terminal-nav">Marchés&nbsp;&nbsp;•&nbsp;&nbsp;Screener&nbsp;&nbsp;•&nbsp;&nbsp;Portefeuille&nbsp;&nbsp;•&nbsp;&nbsp;Actualités</div>
-                <a class="sky-command-hint sky-command-link" href="/recherche" target="_self">Recherche <span class="sky-kbd sky-desktop-kbd">Ctrl K</span></a>
             </div>
             <div class="sky-terminal-right">
                 <div class="sky-live-pill"><span class="sky-live-dot"></span>{html.escape(live_label)}</div>
@@ -1456,7 +1480,13 @@ def terminal_topbar() -> None:
     )
 
 
-def page_header(title: str, subtitle: str, icon: str = "📈") -> None:
+def page_header(
+    title: str,
+    subtitle: str,
+    icon: str = "📈",
+    show_hero_search: bool = False,
+    hero_search_profile: str | None = None,
+) -> None:
     terminal_topbar()
     safe_title = html.escape(title)
     safe_subtitle = html.escape(subtitle)
@@ -1481,6 +1511,28 @@ def page_header(title: str, subtitle: str, icon: str = "📈") -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    if show_hero_search:
+        try:
+            from core.search import render_universal_search
+
+            st.markdown('<div class="sky-hero-search-card">', unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div class="sky-hero-search-title">Recherche rapide</div>
+                <div class="sky-hero-search-note">Clique puis entre un symbole ou le nom d'un titre spécifique.</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            render_universal_search(
+                location="page",
+                profile=hero_search_profile,
+                label="Recherche rapide",
+                placeholder="Symbole ou nom du titre…",
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+        except Exception:
+            pass
 
     try:
         from core.universe import render_universe_selector_inline
