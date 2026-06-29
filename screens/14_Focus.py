@@ -49,6 +49,24 @@ def financial_value(bundle: dict, key: str) -> float:
     return safe_float(bundle.get("metrics", {}).get(key, {}).get("value"))
 
 
+def estimate_retail_share(ownership: dict[str, object]) -> float:
+    institutions = safe_float(ownership.get("held_percent_institutions"))
+    insiders = safe_float(ownership.get("held_percent_insiders"))
+    if np.isnan(institutions) and np.isnan(insiders):
+        return np.nan
+    institutions = 0.0 if np.isnan(institutions) else institutions
+    insiders = 0.0 if np.isnan(insiders) else insiders
+    return max(0.0, min(1.0, 1.0 - institutions - insiders))
+
+
+def volume_flow_label(last_open: object, last_close: object) -> str:
+    open_value = safe_float(last_open)
+    close_value = safe_float(last_close)
+    if np.isnan(open_value) or np.isnan(close_value):
+        return "N/D"
+    return "Entrée dominante" if close_value >= open_value else "Sortie dominante"
+
+
 def local_analysis_lines(
     price: float,
     last: pd.Series,
@@ -212,6 +230,9 @@ event_note = (
     if show_markers and markers
     else ""
 )
+if mobile_is_lite():
+    st.caption("Mode mobile : les données financières lourdes restent chargées seulement à la demande.")
+
 st.caption(
     "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
     "EMA 20 et bandes de Bollinger lorsque les données sont disponibles"
@@ -233,6 +254,37 @@ st.plotly_chart(
     ),
     width="stretch",
     key=f"focus_plotly_auto_{ticker}_{period}_{interval}_{len(markers)}_{show_markers}",
+)
+
+insider_quick = fetch_insider_activity(ticker)
+ownership_quick = insider_quick.get("ownership", {}) if isinstance(insider_quick, dict) else {}
+institution_share = safe_float(ownership_quick.get("held_percent_institutions"))
+insider_share = safe_float(ownership_quick.get("held_percent_insiders"))
+retail_estimated_share = estimate_retail_share(ownership_quick)
+last_volume = safe_float(last.get("Volume"))
+volume_avg20 = safe_float(history.get("Volume", pd.Series(dtype=float)).tail(20).mean())
+flow_cols = st.columns(4)
+flow_cols[0].metric("Volume séance", format_compact(last_volume))
+flow_cols[1].metric("Flux dominant", volume_flow_label(last.get("Open"), last.get("Close")))
+flow_cols[2].metric("Institutions", percent_text(institution_share))
+flow_cols[3].metric("Retail estimé", percent_text(retail_estimated_share))
+if not np.isnan(insider_share):
+    st.caption(
+        "Lecture actionnariale : "
+        f"institutions {percent_text(institution_share)}, "
+        f"initiés {percent_text(insider_share)}, "
+        f"retail estimé {percent_text(retail_estimated_share)}. "
+        "Le retail exact n'est pas publié en temps réel ; Anatole l'estime comme la part restante hors institutions et initiés."
+    )
+else:
+    st.caption(
+        "Lecture actionnariale : "
+        f"institutions {percent_text(institution_share)} et retail estimé {percent_text(retail_estimated_share)}. "
+        "Le retail exact n'est pas publié en temps réel ; Anatole affiche donc une estimation."
+    )
+st.caption(
+    "Code couleur du volume : vert = entrée / pression acheteuse dominante, rouge = sortie / pression vendeuse dominante. "
+    f"Volume relatif actuel : {ratio_text(last_volume / max(volume_avg20, 1.0)) if not np.isnan(last_volume) and not np.isnan(volume_avg20) else 'N/D'}."
 )
 
 section = st.segmented_control(
