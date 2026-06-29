@@ -6,6 +6,8 @@ import streamlit as st
 from core.ai import summarize_news_in_french
 from core.analytics import enrich_news
 from core.data import fetch_news_bundle, load_constituents
+from core.device import mobile_is_lite, mobile_page_limit
+from core.performance import load_timer, perf_caption
 from core.universe import current_universe
 from core.database import get_watchlist
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
@@ -23,12 +25,12 @@ page_header(
 constituents, diagnostics = load_constituents()
 lookup = dict(zip(constituents["YahooTicker"], constituents["Ticker"] + " — " + constituents["Nom"]))
 watchlist = [ticker for ticker in get_watchlist(profile) if ticker in lookup]
-defaults = watchlist[:4] or constituents["YahooTicker"].head(4).tolist()
+defaults = watchlist[:3] or constituents["YahooTicker"].head(3 if mobile_is_lite() else 4).tolist()
 selected = st.multiselect(
-    "Titres à surveiller (maximum 6)",
+    "Titres à surveiller (maximum 4)",
     constituents["YahooTicker"].tolist(),
     default=defaults,
-    max_selections=6,
+    max_selections=4,
     format_func=lambda value: lookup.get(value, value),
     help="Limité volontairement pour éviter les délais réseau et les erreurs 502.",
 )
@@ -44,7 +46,8 @@ if not selected:
 
 try:
     with st.spinner("Collecte des nouvelles..."):
-        articles = fetch_news_bundle(tuple(selected))
+        with load_timer("actualites"):
+            articles = fetch_news_bundle(tuple(selected))
 except Exception:
     articles = []
     st.warning(
@@ -52,6 +55,7 @@ except Exception:
         "Réessaie dans quelques minutes ou réduis la sélection de titres."
     )
 
+perf_caption("actualites", threshold=2.5)
 news = enrich_news(articles)
 
 if news.empty:
@@ -95,7 +99,7 @@ category_table = filtered.groupby(["Categorie", "Sentiment"]).size().unstack(fil
 st.bar_chart(category_table)
 
 st.subheader("Fil d'actualité")
-for _, article in filtered.head(40).iterrows():
+for _, article in filtered.head(mobile_page_limit(40, 18)).iterrows():
     with st.container(border=True):
         st.markdown(f"**[{article['Titre']}]({article['URL']})**")
         st.caption(
