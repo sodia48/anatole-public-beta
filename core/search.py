@@ -13,7 +13,6 @@ RECENT_SEARCHES_KEY = "_anatole_recent_searches"
 
 PAGE_COMMANDS = [
     ("Vue d'ensemble", "screens/0_Accueil.py", "marché accueil cockpit dashboard"),
-    ("Aujourd'hui", "screens/23_Aujourd_hui.py", "mobile aujourd'hui résumé top gagnants perdants"),
     ("Screener", "screens/1_Screener.py", "filtre actions rsi dividende"),
     ("Actualités", "screens/5_Actualites.py", "news sentiment manchettes"),
     ("Calendrier", "screens/6_Calendrier.py", "résultats dividendes macro"),
@@ -73,11 +72,9 @@ def render_recent_searches(location: str = "page") -> None:
         return
     host = st.sidebar if location == "sidebar" else st
     host.caption("Recherches récentes")
-    cols = host.columns(2) if location != "sidebar" else None
-    for index, item in enumerate(history[:6]):
+    for index, item in enumerate(history[:5]):
         label = item if len(item) <= 22 else item[:19] + "..."
-        target = cols[index % 2] if cols else host
-        if target.button(label, key=f"recent_search_{location}_{index}", width="stretch"):
+        if host.button(label, key=f"recent_search_{location}_{index}", width="stretch"):
             st.session_state[f"universal_search_{location}"] = item
             st.rerun()
 
@@ -109,7 +106,6 @@ def render_universal_search(location: str = "sidebar", profile: str | None = Non
         return
 
     _register_recent_search(query)
-
     constituents, _ = load_constituents()
     lowered = query.lower()
 

@@ -967,7 +967,6 @@ def apply_style() -> None:
             animation:sky-shimmer 1.4s infinite;
         }}
         .sky-mobile-nav {{ display:none; }}
-        .sky-mobile-fab, .sky-top-fab {{ display:none !important; }}
         @keyframes sky-shimmer {{ 100% {{ transform:translateX(100%); }} }}
 
         /* Anatole V5 — mobile first refinements */
@@ -1261,59 +1260,17 @@ def apply_style() -> None:
                 font-size:.68rem;font-weight:800;padding:8px 3px;border-radius:11px;
             }}
             .sky-mobile-nav a:hover {{ background:rgba(37,99,235,.12);color:var(--sky-text); }}
-            .sky-mobile-fab, .sky-top-fab {{
-                display: flex !important;
-                position: fixed;
-                z-index: 9998;
-                width: 52px;
-                height: 52px;
-                border-radius: 999px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                text-decoration: none;
-                font-size: 1.1rem;
-                font-weight: 900;
-                color: #fff;
-                background: linear-gradient(135deg, #2563EB, #0EA5E9);
-                box-shadow: 0 16px 40px rgba(37,99,235,.28);
-                border: 1px solid rgba(255,255,255,.18);
-            }}
-            .sky-mobile-fab {{
-                right: 14px;
-                bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-            }}
-            .sky-top-fab {{
-                left: 14px;
-                bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-                background: color-mix(in srgb, var(--sky-surface-strong) 88%, #2563EB 12%);
-                color: var(--sky-text);
-            }}
-            .sky-signal-wrap {{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 14px; }}
-            .sky-signal-badge {{
-                display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border-radius:999px;
-                border:1px solid var(--sky-border); background:var(--sky-surface-soft); color:var(--sky-text);
-                font-size:.78rem; font-weight:800;
-            }}
-            .sky-signal-badge.positive {{ background:rgba(16,185,129,.12); border-color:rgba(16,185,129,.24); }}
-            .sky-signal-badge.negative {{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.24); }}
-            .sky-signal-badge.neutral {{ background:rgba(59,130,246,.10); border-color:rgba(59,130,246,.18); }}
-            .sky-quick-sheet {{
-                border:1px solid var(--sky-border); background:var(--sky-surface-soft); border-radius:18px; padding:14px;
-                box-shadow:var(--sky-shadow-soft); margin:10px 0 14px;
-            }}
-            .sky-quick-sheet-title {{ font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--sky-muted); font-weight:900; margin-bottom:8px; }}
-            .sky-mobile-card {{
+
+            .sky-mobile-card {
                 border:1px solid var(--sky-border); background:var(--sky-surface); border-radius:18px; padding:14px; margin-bottom:10px;
                 box-shadow:var(--sky-shadow-soft);
-            }}
-            .sky-mobile-card-title {{ font-weight:900; font-size:1rem; color:var(--sky-text); }}
-            .sky-mobile-card-sub {{ color:var(--sky-muted); font-size:.82rem; margin-top:3px; }}
-            .sky-mobile-card-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:10px; }}
-            .sky-mobile-stat {{ background:var(--sky-surface-soft); border:1px solid var(--sky-border); border-radius:14px; padding:10px; }}
-            .sky-mobile-stat-label {{ color:var(--sky-muted); font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }}
-            .sky-mobile-stat-value {{ color:var(--sky-text); font-size:.96rem; font-weight:900; margin-top:4px; }}
-            .sky-one-hand-bar {{ position:sticky; bottom:84px; z-index:400; margin:8px 0 12px; }}
+            }
+            .sky-mobile-card-title { font-weight:900; font-size:1rem; color:var(--sky-text); }
+            .sky-mobile-card-sub { color:var(--sky-muted); font-size:.82rem; margin-top:3px; }
+            .sky-mobile-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:10px; }
+            .sky-mobile-stat { background:var(--sky-surface-soft); border:1px solid var(--sky-border); border-radius:14px; padding:10px; }
+            .sky-mobile-stat-label { color:var(--sky-muted); font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+            .sky-mobile-stat-value { color:var(--sky-text); font-size:.96rem; font-weight:900; margin-top:4px; }
             .sky-hero-icon {{
                 display: none;
             }}
@@ -1485,7 +1442,6 @@ def sidebar_context() -> str:
 
     if bool(st.session_state.get("show_mobile_nav", True)):
         mobile_navigation()
-    floating_mobile_actions()
 
     return profile
 
@@ -1495,7 +1451,6 @@ def terminal_topbar() -> None:
     live_label = "Marché ouvert" if is_open else "Marché fermé"
     st.markdown(
         f"""
-        <div id="top"></div>
         <div class="sky-terminal-bar">
             <div class="sky-terminal-left">
                 <div class="sky-terminal-logo">S</div>
@@ -1553,7 +1508,6 @@ def page_header(title: str, subtitle: str, icon: str = "📈") -> None:
 
     if bool(st.session_state.get("show_mobile_nav", True)):
         mobile_navigation()
-    floating_mobile_actions()
 
 
 def summary_card(text: str, label: str = "Résumé du marché") -> None:
@@ -1570,16 +1524,14 @@ def summary_card(text: str, label: str = "Résumé du marché") -> None:
 
 def home_launchpad() -> None:
     st.markdown('<div class="sky-launchpad-title">Accès rapide</div>', unsafe_allow_html=True)
-    columns = st.columns(5)
+    columns = st.columns(4)
     with columns[0]:
-        st.page_link("screens/23_Aujourd_hui.py", label="Aujourd'hui", icon="📱", width="stretch")
-    with columns[1]:
         st.page_link("screens/1_Screener.py", label="Screener avancé", icon="🔎", width="stretch")
-    with columns[2]:
+    with columns[1]:
         st.page_link("screens/2_Comparateur.py", label="Comparer des titres", icon="⚖️", width="stretch")
-    with columns[3]:
+    with columns[2]:
         st.page_link("screens/3_Portefeuille.py", label="Mon portefeuille", icon="💼", width="stretch")
-    with columns[4]:
+    with columns[3]:
         st.page_link("screens/5_Actualites.py", label="Flux d'actualités", icon="📰", width="stretch")
 
 
@@ -1611,53 +1563,6 @@ def ticker_tape(items: Iterable[dict]) -> None:
     )
 
 
-def mobile_navigation() -> None:
-    st.markdown(
-        """
-        <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a data-path="/cockpit" href="/cockpit" target="_self">🏠<br>Accueil</a>
-          <a data-path="/recherche" href="/recherche" target="_self">🔍<br>Recherche</a>
-          <a data-path="/screener" href="/screener" target="_self">🔎<br>Screener</a>
-          <a data-path="/focus" href="/focus" target="_self">🎯<br>Focus</a>
-          <a data-path="/watchlist" href="/watchlist" target="_self">⭐<br>Liste</a>
-        </nav>
-        <script>
-        (function() {
-          try {
-            const path = window.location.pathname.toLowerCase();
-            document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
-              const target = (node.getAttribute('data-path') || '').toLowerCase();
-              if (target && path.includes(target.replace('/', ''))) {
-                node.classList.add('active');
-              }
-            });
-          } catch (error) {}
-        })();
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-
-
-def floating_mobile_actions() -> None:
-    st.markdown(
-        """
-        <a class="sky-mobile-fab" href="/recherche" target="_self" aria-label="Ouvrir la recherche">🔍</a>
-        <a class="sky-top-fab" href="#top" aria-label="Retour en haut">↑</a>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_signal_badges(items: list[tuple[str, str]]) -> None:
-    chunks = []
-    for label, tone in items:
-        css = tone if tone in {"positive", "negative", "neutral"} else "neutral"
-        chunks.append(f'<span class="sky-signal-badge {css}">{html.escape(label)}</span>')
-    if chunks:
-        st.markdown('<div class="sky-signal-wrap">' + ''.join(chunks) + '</div>', unsafe_allow_html=True)
 
 
 def render_mobile_watchlist_cards(rows: Iterable[dict]) -> None:
@@ -1693,6 +1598,33 @@ def render_mobile_watchlist_cards(rows: Iterable[dict]) -> None:
             """,
             unsafe_allow_html=True,
         )
+
+def mobile_navigation() -> None:
+    st.markdown(
+        """
+        <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
+          <a data-path="/cockpit" href="/cockpit" target="_self">🏠<br>Accueil</a>
+          <a data-path="/recherche" href="/recherche" target="_self">🔍<br>Recherche</a>
+          <a data-path="/screener" href="/screener" target="_self">🔎<br>Screener</a>
+          <a data-path="/focus" href="/focus" target="_self">🎯<br>Focus</a>
+          <a data-path="/watchlist" href="/watchlist" target="_self">⭐<br>Liste</a>
+        </nav>
+        <script>
+        (function() {
+          try {
+            const path = window.location.pathname.toLowerCase();
+            document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
+              const target = (node.getAttribute('data-path') || '').toLowerCase();
+              if (target && path.includes(target.replace('/', ''))) {
+                node.classList.add('active');
+              }
+            });
+          } catch (error) {}
+        })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def skeleton_cards(count: int = 4, height: int = 110) -> None:
