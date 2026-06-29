@@ -50,17 +50,17 @@ def default_limits(universe_key: str) -> tuple[int, int]:
     matrix = {
         "tsx60": {
             "conservative": (70, 60),
-            "starter": (70, 60),
+            "starter": (60, 45),
             "performance": (70, 70),
         },
         "tsx_composite": {
             "conservative": (100, 60),
-            "starter": (160, 80),
+            "starter": (100, 50),
             "performance": (240, 140),
         },
         "tsx_full": {
             "conservative": (80, 40),
-            "starter": (150, 60),
+            "starter": (80, 35),
             "performance": (300, 120),
         },
     }

@@ -200,6 +200,64 @@ def configure_page(title: str, icon: str = "📈") -> None:
 
 
 
+def enforce_same_tab_navigation() -> None:
+    """Force les liens internes à rester dans le même onglet/fenêtre.
+
+    Certains navigateurs mobiles ou vues intégrées peuvent interpréter des liens
+    Streamlit comme une nouvelle fenêtre. Ce garde enlève target=_blank pour les
+    liens internes et intercepte les clics same-origin.
+    """
+    components.html(
+        """
+        <script>
+        (function() {
+          try {
+            const win = window.parent || window;
+            const doc = win.document;
+            if (!doc || doc.__anatoleSameTabInstalled) return;
+            doc.__anatoleSameTabInstalled = true;
+
+            function isInternalLink(anchor) {
+              if (!anchor || !anchor.href) return false;
+              try {
+                const url = new URL(anchor.href, win.location.href);
+                return url.origin === win.location.origin;
+              } catch (error) {
+                return false;
+              }
+            }
+
+            function patchLinks() {
+              doc.querySelectorAll('a').forEach((anchor) => {
+                if (isInternalLink(anchor)) {
+                  anchor.setAttribute('target', '_self');
+                  anchor.removeAttribute('rel');
+                }
+              });
+            }
+
+            doc.addEventListener('click', function(event) {
+              const anchor = event.target && event.target.closest ? event.target.closest('a') : null;
+              if (!isInternalLink(anchor)) return;
+              if (anchor.target && anchor.target !== '_self') {
+                event.preventDefault();
+                win.location.href = anchor.href;
+              }
+            }, true);
+
+            patchLinks();
+            setTimeout(patchLinks, 200);
+            setTimeout(patchLinks, 900);
+            setInterval(patchLinks, 2500);
+          } catch (error) {}
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
 def hide_streamlit_chrome() -> None:
     """Masque les éléments natifs qui nuisent au rendu produit."""
     st.markdown(
@@ -238,9 +296,7 @@ def apply_style() -> None:
         from core.device import bootstrap_mobile_mode
         bootstrap_mobile_mode()
     except Exception:
-        # Mobile detection is progressive enhancement; it must never block startup.
         pass
-
     dark = is_dark_mode()
     compact = bool(st.session_state.get("compact_toggle", False))
 
@@ -1199,7 +1255,7 @@ def terminal_topbar() -> None:
             <div class="sky-terminal-left">
                 <div class="sky-terminal-logo">S</div>
                 <div class="sky-terminal-nav">Marchés&nbsp;&nbsp;•&nbsp;&nbsp;Screener&nbsp;&nbsp;•&nbsp;&nbsp;Portefeuille&nbsp;&nbsp;•&nbsp;&nbsp;Actualités</div>
-                <div class="sky-command-hint">Recherche <span class="sky-kbd">Ctrl K</span></div>
+                <a class="sky-command-hint sky-command-link" href="/recherche" target="_self">Recherche <span class="sky-kbd sky-desktop-kbd">Ctrl K</span></a>
             </div>
             <div class="sky-terminal-right">
                 <div class="sky-live-pill"><span class="sky-live-dot"></span>{html.escape(live_label)}</div>
@@ -1298,11 +1354,11 @@ def mobile_navigation() -> None:
     st.markdown(
         """
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a href="/cockpit">🏠<br>Accueil</a>
-          <a href="/screener">🔎<br>Screener</a>
-          <a href="/focus">🎯<br>Focus</a>
-          <a href="/actualites">📰<br>News</a>
-          <a href="/watchlist">⭐<br>Liste</a>
+          <a href="/cockpit" target="_self">🏠<br>Accueil</a>
+          <a href="/recherche" target="_self">🔍<br>Recherche</a>
+          <a href="/screener" target="_self">🔎<br>Screener</a>
+          <a href="/focus" target="_self">🎯<br>Focus</a>
+          <a href="/watchlist" target="_self">⭐<br>Liste</a>
         </nav>
         """,
         unsafe_allow_html=True,

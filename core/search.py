@@ -69,7 +69,7 @@ def render_universal_search(location: str = "sidebar", profile: str | None = Non
     host = st.sidebar if location == "sidebar" else st
     query = host.text_input(
         "Recherche universelle",
-        placeholder="Rechercher un titre ou une fonction…  Ctrl + K",
+        placeholder="Rechercher un titre, une page ou une commande…",
         key=f"universal_search_{location}",
         label_visibility="collapsed",
     ).strip()
