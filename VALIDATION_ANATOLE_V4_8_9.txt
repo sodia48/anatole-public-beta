@@ -1,0 +1,11 @@
+Anatole V4.8.9 — Validation
+
+Résultat : SUCCÈS
+
+Correctifs :
+- branding navigateur renforcé ;
+- favicon et manifest forcés ;
+- mutation observer anti-branding ajouté ;
+- CSS de masquage renforcé ;
+- config Streamlit renforcée ;
+- aucune migration requise.

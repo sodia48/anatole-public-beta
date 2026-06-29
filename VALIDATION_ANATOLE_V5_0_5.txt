@@ -1,0 +1,9 @@
+Anatole V5.0.5 — Validation
+
+Résultat : SUCCÈS
+
+- sélecteur d'univers inline ajouté ;
+- TSX 60, Composite et TSX étendu disponibles hors sidebar ;
+- page_header affiche le sélecteur dans l'interface principale ;
+- syntaxe Python validée ;
+- aucune migration requise.

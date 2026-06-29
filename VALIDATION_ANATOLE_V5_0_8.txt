@@ -1,0 +1,7 @@
+Anatole V5.0.8 — Validation
+
+Résultat : SUCCÈS
+
+- message d'accueil restauré ;
+- syntaxe Python validée ;
+- aucune migration requise.

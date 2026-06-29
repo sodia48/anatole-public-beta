@@ -1,0 +1,10 @@
+Anatole V4.8.1 — Validation
+
+Résultat : SUCCÈS
+
+Correctifs :
+- limites TSX complet réduites ;
+- fallback automatique vers TSX 60 ;
+- garde anti-crash Render Free ;
+- timeouts raccourcis ;
+- aucune migration requise.

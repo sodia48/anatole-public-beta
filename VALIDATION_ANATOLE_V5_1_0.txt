@@ -1,0 +1,10 @@
+Anatole V5.1.0 — Validation
+
+Résultat : SUCCÈS
+
+- syntaxe Python validée ;
+- module mobile_experience ajouté ;
+- navigation mobile premium ajoutée ;
+- graphique Focus mobile amélioré ;
+- messages mobiles visibles retirés ;
+- aucune migration requise.

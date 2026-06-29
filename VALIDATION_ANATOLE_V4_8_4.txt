@@ -1,0 +1,11 @@
+Anatole V4.8.4 — Validation
+
+Résultat : SUCCÈS
+
+Correctifs :
+- Actualités bornées en nombre de tickers ;
+- appels Yahoo News limités ;
+- timeout global ajouté ;
+- arrêt non bloquant des workers ;
+- message utilisateur propre ;
+- aucune migration requise.

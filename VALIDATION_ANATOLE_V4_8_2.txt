@@ -1,0 +1,10 @@
+Anatole V4.8.2 — Validation
+
+Résultat : SUCCÈS
+
+Correctifs :
+- profil Render Starter ajouté ;
+- limites multi-univers configurables ;
+- fallback TSX 60 conservé ;
+- messages Render Free retirés ;
+- aucune migration requise.

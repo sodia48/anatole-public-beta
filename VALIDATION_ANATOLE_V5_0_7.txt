@@ -1,0 +1,9 @@
+Anatole V5.0.7 — Validation
+
+Résultat : SUCCÈS
+
+- les barres de volume Plotly sont maintenant colorées vert/rouge selon la séance ;
+- le Focus affiche un résumé rapide institutions / retail estimé sous le graphique ;
+- le retail exact est signalé comme estimation ;
+- syntaxe Python validée ;
+- aucune migration requise.

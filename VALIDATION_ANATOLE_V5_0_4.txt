@@ -1,0 +1,11 @@
+Anatole V5.0.4 — Validation
+
+Résultat : SUCCÈS
+
+- app.py inclut la page Recherche ;
+- screen Recherche ajouté ;
+- navigation mobile same-tab ;
+- garde anti-nouvelle-fenêtre ajouté ;
+- limites anti-502 renforcées ;
+- syntaxe Python validée ;
+- aucune migration requise.

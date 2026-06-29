@@ -1,0 +1,8 @@
+Anatole V5.2.3 — Validation
+
+Résultat : SUCCÈS
+
+- retour complet sur base stable V5.1.0 ;
+- screens/23_Aujourd_hui.py absent ;
+- syntaxe Python validée ;
+- aucune migration requise.

@@ -1,0 +1,11 @@
+Anatole V4.8.6 — Validation
+
+Résultat : SUCCÈS
+
+Correctifs :
+- Plotly activé automatiquement dans Mode Focus ;
+- bouton d'activation retiré ;
+- expander d'indicateurs avancés retiré ;
+- overlays Plotly par défaut centralisés ;
+- Bollinger sécurisé si données absentes ;
+- aucune migration requise.

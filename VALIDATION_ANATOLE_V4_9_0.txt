@@ -1,0 +1,11 @@
+Anatole V4.9.0 — Validation
+
+Résultat : SUCCÈS
+
+Ajouts :
+- module core/strategy_lab.py ;
+- 10 stratégies de backtest ;
+- intégration dans Mode Focus ;
+- métriques et graphiques Plotly ;
+- tests de régression ;
+- aucune migration requise.

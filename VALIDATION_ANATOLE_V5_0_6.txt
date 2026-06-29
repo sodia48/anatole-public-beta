@@ -1,0 +1,10 @@
+Anatole V5.0.6 — Validation
+
+Résultat : SUCCÈS
+
+- le fallback silencieux vers TSX 60 est retiré ;
+- les snapshots de secours sont filtrés par univers/tickers ;
+- les caches univers sont vidés au changement de sélection ;
+- les clés de graphiques du cockpit incluent l'univers ;
+- syntaxe Python validée ;
+- aucune migration requise.

@@ -1,0 +1,13 @@
+Anatole V5.0 — Validation
+
+Résultat : SUCCÈS
+
+Validation effectuée :
+- tous les fichiers Python validés syntaxiquement ;
+- modules mobile/performance/qualité ajoutés ;
+- accueil professionnel intégré ;
+- screener adapté à l'affichage mobile ;
+- actualités allégées sur mobile ;
+- diagnostics enrichis ;
+- aucune migration PostgreSQL ;
+- aucune nouvelle dépendance.
