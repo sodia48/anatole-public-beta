@@ -15,7 +15,7 @@ page_header(
     "🔍",
 )
 
-st.caption("Tape un symbole, un nom d'entreprise, un secteur ou une fonction.")
+st.caption("Tape un symbole, un nom d'entreprise, un secteur ou une fonction. Tes recherches récentes apparaîtront ici.")
 render_universal_search("page", profile=profile)
 
 st.divider()
