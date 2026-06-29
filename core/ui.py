@@ -1552,6 +1552,51 @@ def ticker_tape(items: Iterable[dict]) -> None:
     )
 
 
+
+
+def render_mobile_watchlist_card(
+    ticker: str,
+    name: str,
+    sector: str,
+    price: str,
+    change: str,
+    volume: str,
+) -> None:
+    """Carte mobile pure HTML/CSS, sans JavaScript, pour la watchlist."""
+    st.markdown(
+        f"""
+        <div class="sky-mobile-card">
+            <div class="sky-mobile-card-top">
+                <div>
+                    <div class="sky-mobile-card-title">{html.escape(str(ticker))}</div>
+                    <div class="sky-mobile-card-sub">{html.escape(str(name))}</div>
+                </div>
+                <div class="sky-mobile-card-sector">{html.escape(str(sector))}</div>
+            </div>
+            <div class="sky-mobile-card-grid">
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Prix</div>
+                    <div class="sky-mobile-stat-value">{html.escape(str(price))}</div>
+                </div>
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Variation</div>
+                    <div class="sky-mobile-stat-value">{html.escape(str(change))}</div>
+                </div>
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Volume</div>
+                    <div class="sky-mobile-stat-value">{html.escape(str(volume))}</div>
+                </div>
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Lecture</div>
+                    <div class="sky-mobile-stat-value">Suivi</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def mobile_navigation() -> None:
     st.markdown(
         """
