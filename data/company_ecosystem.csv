@@ -1,0 +1,200 @@
+ticker,layer,relation,entity,category,sector,confidence,note
+RY.TO,Intrants,Infrastructure financière,Réseaux de paiement et compensation,Infrastructure,Finance,Indicatif,"Services et réseaux qui rendent possible les paiements, virements et règlements."
+TD.TO,Intrants,Infrastructure financière,Réseaux de paiement et compensation,Infrastructure,Finance,Indicatif,"Services et réseaux qui rendent possible les paiements, virements et règlements."
+BNS.TO,Intrants,Infrastructure financière,Réseaux de paiement et compensation,Infrastructure,Finance,Indicatif,"Services et réseaux qui rendent possible les paiements, virements et règlements."
+BMO.TO,Intrants,Infrastructure financière,Réseaux de paiement et compensation,Infrastructure,Finance,Indicatif,"Services et réseaux qui rendent possible les paiements, virements et règlements."
+CM.TO,Intrants,Infrastructure financière,Réseaux de paiement et compensation,Infrastructure,Finance,Indicatif,"Services et réseaux qui rendent possible les paiements, virements et règlements."
+NA.TO,Intrants,Infrastructure financière,Réseaux de paiement et compensation,Infrastructure,Finance,Indicatif,"Services et réseaux qui rendent possible les paiements, virements et règlements."
+RY.TO,Intrants,Technologie bancaire,"Cloud, cybersécurité et logiciels bancaires",Fournisseurs,Technologie,Indicatif,Base technologique nécessaire aux services numériques et à la conformité.
+TD.TO,Intrants,Technologie bancaire,"Cloud, cybersécurité et logiciels bancaires",Fournisseurs,Technologie,Indicatif,Base technologique nécessaire aux services numériques et à la conformité.
+BNS.TO,Intrants,Technologie bancaire,"Cloud, cybersécurité et logiciels bancaires",Fournisseurs,Technologie,Indicatif,Base technologique nécessaire aux services numériques et à la conformité.
+BMO.TO,Intrants,Technologie bancaire,"Cloud, cybersécurité et logiciels bancaires",Fournisseurs,Technologie,Indicatif,Base technologique nécessaire aux services numériques et à la conformité.
+CM.TO,Intrants,Technologie bancaire,"Cloud, cybersécurité et logiciels bancaires",Fournisseurs,Technologie,Indicatif,Base technologique nécessaire aux services numériques et à la conformité.
+NA.TO,Intrants,Technologie bancaire,"Cloud, cybersécurité et logiciels bancaires",Fournisseurs,Technologie,Indicatif,Base technologique nécessaire aux services numériques et à la conformité.
+RY.TO,Intrants,Données et conformité,"Agences de crédit, conformité et gestion du risque",Fournisseurs,Services professionnels,Indicatif,Intrants utilisés pour l’octroi de crédit et la gestion des risques.
+TD.TO,Intrants,Données et conformité,"Agences de crédit, conformité et gestion du risque",Fournisseurs,Services professionnels,Indicatif,Intrants utilisés pour l’octroi de crédit et la gestion des risques.
+BNS.TO,Intrants,Données et conformité,"Agences de crédit, conformité et gestion du risque",Fournisseurs,Services professionnels,Indicatif,Intrants utilisés pour l’octroi de crédit et la gestion des risques.
+BMO.TO,Intrants,Données et conformité,"Agences de crédit, conformité et gestion du risque",Fournisseurs,Services professionnels,Indicatif,Intrants utilisés pour l’octroi de crédit et la gestion des risques.
+CM.TO,Intrants,Données et conformité,"Agences de crédit, conformité et gestion du risque",Fournisseurs,Services professionnels,Indicatif,Intrants utilisés pour l’octroi de crédit et la gestion des risques.
+NA.TO,Intrants,Données et conformité,"Agences de crédit, conformité et gestion du risque",Fournisseurs,Services professionnels,Indicatif,Intrants utilisés pour l’octroi de crédit et la gestion des risques.
+RY.TO,Clients servis,Services aux ménages,Clients particuliers,Clients,Consommation,Indicatif,"Comptes, cartes, hypothèques, prêts, épargne et placements."
+TD.TO,Clients servis,Services aux ménages,Clients particuliers,Clients,Consommation,Indicatif,"Comptes, cartes, hypothèques, prêts, épargne et placements."
+BNS.TO,Clients servis,Services aux ménages,Clients particuliers,Clients,Consommation,Indicatif,"Comptes, cartes, hypothèques, prêts, épargne et placements."
+BMO.TO,Clients servis,Services aux ménages,Clients particuliers,Clients,Consommation,Indicatif,"Comptes, cartes, hypothèques, prêts, épargne et placements."
+CM.TO,Clients servis,Services aux ménages,Clients particuliers,Clients,Consommation,Indicatif,"Comptes, cartes, hypothèques, prêts, épargne et placements."
+NA.TO,Clients servis,Services aux ménages,Clients particuliers,Clients,Consommation,Indicatif,"Comptes, cartes, hypothèques, prêts, épargne et placements."
+RY.TO,Clients servis,Services aux entreprises,PME et grandes entreprises,Clients,Industrie,Indicatif,"Crédit, trésorerie, change, marchés financiers et services transactionnels."
+TD.TO,Clients servis,Services aux entreprises,PME et grandes entreprises,Clients,Industrie,Indicatif,"Crédit, trésorerie, change, marchés financiers et services transactionnels."
+BNS.TO,Clients servis,Services aux entreprises,PME et grandes entreprises,Clients,Industrie,Indicatif,"Crédit, trésorerie, change, marchés financiers et services transactionnels."
+BMO.TO,Clients servis,Services aux entreprises,PME et grandes entreprises,Clients,Industrie,Indicatif,"Crédit, trésorerie, change, marchés financiers et services transactionnels."
+CM.TO,Clients servis,Services aux entreprises,PME et grandes entreprises,Clients,Industrie,Indicatif,"Crédit, trésorerie, change, marchés financiers et services transactionnels."
+NA.TO,Clients servis,Services aux entreprises,PME et grandes entreprises,Clients,Industrie,Indicatif,"Crédit, trésorerie, change, marchés financiers et services transactionnels."
+RY.TO,Clients servis,Marchés financiers,Investisseurs institutionnels et gestion de patrimoine,Clients,Finance,Indicatif,"Courtages, placements, gestion d’actifs et services de marchés."
+TD.TO,Clients servis,Marchés financiers,Investisseurs institutionnels et gestion de patrimoine,Clients,Finance,Indicatif,"Courtages, placements, gestion d’actifs et services de marchés."
+BNS.TO,Clients servis,Marchés financiers,Investisseurs institutionnels et gestion de patrimoine,Clients,Finance,Indicatif,"Courtages, placements, gestion d’actifs et services de marchés."
+BMO.TO,Clients servis,Marchés financiers,Investisseurs institutionnels et gestion de patrimoine,Clients,Finance,Indicatif,"Courtages, placements, gestion d’actifs et services de marchés."
+CM.TO,Clients servis,Marchés financiers,Investisseurs institutionnels et gestion de patrimoine,Clients,Finance,Indicatif,"Courtages, placements, gestion d’actifs et services de marchés."
+NA.TO,Clients servis,Marchés financiers,Investisseurs institutionnels et gestion de patrimoine,Clients,Finance,Indicatif,"Courtages, placements, gestion d’actifs et services de marchés."
+RY.TO,Secteurs impactés,Financement,Immobilier résidentiel et commercial,Secteur,Immobilier,Indicatif,"Exposition par prêts hypothécaires, financement de projets et crédit immobilier."
+TD.TO,Secteurs impactés,Financement,Immobilier résidentiel et commercial,Secteur,Immobilier,Indicatif,"Exposition par prêts hypothécaires, financement de projets et crédit immobilier."
+BNS.TO,Secteurs impactés,Financement,Immobilier résidentiel et commercial,Secteur,Immobilier,Indicatif,"Exposition par prêts hypothécaires, financement de projets et crédit immobilier."
+BMO.TO,Secteurs impactés,Financement,Immobilier résidentiel et commercial,Secteur,Immobilier,Indicatif,"Exposition par prêts hypothécaires, financement de projets et crédit immobilier."
+CM.TO,Secteurs impactés,Financement,Immobilier résidentiel et commercial,Secteur,Immobilier,Indicatif,"Exposition par prêts hypothécaires, financement de projets et crédit immobilier."
+NA.TO,Secteurs impactés,Financement,Immobilier résidentiel et commercial,Secteur,Immobilier,Indicatif,"Exposition par prêts hypothécaires, financement de projets et crédit immobilier."
+RY.TO,Secteurs impactés,Crédit aux entreprises,"Énergie, mines, industrie et technologies",Secteur,Marché canadien,Indicatif,Les banques financent plusieurs secteurs majeurs de l’économie canadienne.
+TD.TO,Secteurs impactés,Crédit aux entreprises,"Énergie, mines, industrie et technologies",Secteur,Marché canadien,Indicatif,Les banques financent plusieurs secteurs majeurs de l’économie canadienne.
+BNS.TO,Secteurs impactés,Crédit aux entreprises,"Énergie, mines, industrie et technologies",Secteur,Marché canadien,Indicatif,Les banques financent plusieurs secteurs majeurs de l’économie canadienne.
+BMO.TO,Secteurs impactés,Crédit aux entreprises,"Énergie, mines, industrie et technologies",Secteur,Marché canadien,Indicatif,Les banques financent plusieurs secteurs majeurs de l’économie canadienne.
+CM.TO,Secteurs impactés,Crédit aux entreprises,"Énergie, mines, industrie et technologies",Secteur,Marché canadien,Indicatif,Les banques financent plusieurs secteurs majeurs de l’économie canadienne.
+NA.TO,Secteurs impactés,Crédit aux entreprises,"Énergie, mines, industrie et technologies",Secteur,Marché canadien,Indicatif,Les banques financent plusieurs secteurs majeurs de l’économie canadienne.
+RY.TO,Secteurs impactés,Consommation,Ménages et commerce de détail,Secteur,Consommation,Indicatif,"Cartes, prêts, épargne et solutions de paiement soutiennent la consommation."
+TD.TO,Secteurs impactés,Consommation,Ménages et commerce de détail,Secteur,Consommation,Indicatif,"Cartes, prêts, épargne et solutions de paiement soutiennent la consommation."
+BNS.TO,Secteurs impactés,Consommation,Ménages et commerce de détail,Secteur,Consommation,Indicatif,"Cartes, prêts, épargne et solutions de paiement soutiennent la consommation."
+BMO.TO,Secteurs impactés,Consommation,Ménages et commerce de détail,Secteur,Consommation,Indicatif,"Cartes, prêts, épargne et solutions de paiement soutiennent la consommation."
+CM.TO,Secteurs impactés,Consommation,Ménages et commerce de détail,Secteur,Consommation,Indicatif,"Cartes, prêts, épargne et solutions de paiement soutiennent la consommation."
+NA.TO,Secteurs impactés,Consommation,Ménages et commerce de détail,Secteur,Consommation,Indicatif,"Cartes, prêts, épargne et solutions de paiement soutiennent la consommation."
+SHOP.TO,Intrants,Infrastructure numérique,"Cloud, cybersécurité et données",Fournisseurs,Technologie,Indicatif,Infrastructure nécessaire aux plateformes de commerce numérique.
+SHOP.TO,Intrants,Paiements,Passerelles de paiement et services financiers,Fournisseurs,Finance,Indicatif,Éléments nécessaires aux transactions en ligne et aux services marchands.
+SHOP.TO,Intrants,Écosystème applicatif,"Développeurs, agences et applications partenaires",Partenaires,Technologie,Indicatif,Écosystème d’outils qui enrichit la plateforme marchande.
+SHOP.TO,Clients servis,Commerce numérique,"Commerçants, PME et marques direct-to-consumer",Clients,Commerce de détail,Indicatif,Base économique des revenus de plateforme et d’abonnements.
+SHOP.TO,Clients servis,Vente omnicanale,"Retail, créateurs et e-commerce",Clients,Consommation,Indicatif,Utilisateurs qui vendent sur plusieurs canaux numériques et physiques.
+SHOP.TO,Secteurs impactés,Numérisation,Commerce de détail et entrepreneuriat,Secteur,Commerce de détail,Indicatif,Contribution à la numérisation des vendeurs et petites entreprises.
+SHOP.TO,Secteurs impactés,Transactions,"Paiements, marketing et logistique",Secteur,Services numériques,Indicatif,"Activité connectée aux paiements, au marketing et à l’exécution des commandes."
+ENB.TO,Intrants,Équipement énergétique,"Tuyauterie, compresseurs, turbines et capteurs",Fournisseurs,Industrie,Indicatif,Équipements nécessaires aux réseaux d’énergie.
+TRP.TO,Intrants,Équipement énergétique,"Tuyauterie, compresseurs, turbines et capteurs",Fournisseurs,Industrie,Indicatif,Équipements nécessaires aux réseaux d’énergie.
+PPL.TO,Intrants,Équipement énergétique,"Tuyauterie, compresseurs, turbines et capteurs",Fournisseurs,Industrie,Indicatif,Équipements nécessaires aux réseaux d’énergie.
+KEY.TO,Intrants,Équipement énergétique,"Tuyauterie, compresseurs, turbines et capteurs",Fournisseurs,Industrie,Indicatif,Équipements nécessaires aux réseaux d’énergie.
+ENB.TO,Intrants,Construction et ingénierie,"Services d’ingénierie, construction et maintenance",Fournisseurs,Industrie,Indicatif,"Services pour bâtir, maintenir et sécuriser les infrastructures."
+TRP.TO,Intrants,Construction et ingénierie,"Services d’ingénierie, construction et maintenance",Fournisseurs,Industrie,Indicatif,"Services pour bâtir, maintenir et sécuriser les infrastructures."
+PPL.TO,Intrants,Construction et ingénierie,"Services d’ingénierie, construction et maintenance",Fournisseurs,Industrie,Indicatif,"Services pour bâtir, maintenir et sécuriser les infrastructures."
+KEY.TO,Intrants,Construction et ingénierie,"Services d’ingénierie, construction et maintenance",Fournisseurs,Industrie,Indicatif,"Services pour bâtir, maintenir et sécuriser les infrastructures."
+ENB.TO,Clients servis,Transport énergétique,"Producteurs de pétrole, gaz et électricité",Clients,Énergie,Indicatif,Les producteurs utilisent les réseaux pour transporter et commercialiser l’énergie.
+TRP.TO,Clients servis,Transport énergétique,"Producteurs de pétrole, gaz et électricité",Clients,Énergie,Indicatif,Les producteurs utilisent les réseaux pour transporter et commercialiser l’énergie.
+PPL.TO,Clients servis,Transport énergétique,"Producteurs de pétrole, gaz et électricité",Clients,Énergie,Indicatif,Les producteurs utilisent les réseaux pour transporter et commercialiser l’énergie.
+KEY.TO,Clients servis,Transport énergétique,"Producteurs de pétrole, gaz et électricité",Clients,Énergie,Indicatif,Les producteurs utilisent les réseaux pour transporter et commercialiser l’énergie.
+ENB.TO,Clients servis,Distribution finale,"Raffineries, utilities, industrie et ménages",Clients,Énergie,Indicatif,L’énergie transportée sert ensuite les consommateurs industriels et finaux.
+TRP.TO,Clients servis,Distribution finale,"Raffineries, utilities, industrie et ménages",Clients,Énergie,Indicatif,L’énergie transportée sert ensuite les consommateurs industriels et finaux.
+PPL.TO,Clients servis,Distribution finale,"Raffineries, utilities, industrie et ménages",Clients,Énergie,Indicatif,L’énergie transportée sert ensuite les consommateurs industriels et finaux.
+KEY.TO,Clients servis,Distribution finale,"Raffineries, utilities, industrie et ménages",Clients,Énergie,Indicatif,L’énergie transportée sert ensuite les consommateurs industriels et finaux.
+ENB.TO,Secteurs impactés,Sécurité énergétique,"Industrie lourde, utilities et chauffage",Secteur,Énergie,Indicatif,Infrastructure qui soutient la disponibilité énergétique.
+TRP.TO,Secteurs impactés,Sécurité énergétique,"Industrie lourde, utilities et chauffage",Secteur,Énergie,Indicatif,Infrastructure qui soutient la disponibilité énergétique.
+PPL.TO,Secteurs impactés,Sécurité énergétique,"Industrie lourde, utilities et chauffage",Secteur,Énergie,Indicatif,Infrastructure qui soutient la disponibilité énergétique.
+KEY.TO,Secteurs impactés,Sécurité énergétique,"Industrie lourde, utilities et chauffage",Secteur,Énergie,Indicatif,Infrastructure qui soutient la disponibilité énergétique.
+ENB.TO,Secteurs impactés,Capex industriel,"Construction, acier, services industriels",Secteur,Industrie,Indicatif,Les grands réseaux stimulent des chaînes de services industriels.
+TRP.TO,Secteurs impactés,Capex industriel,"Construction, acier, services industriels",Secteur,Industrie,Indicatif,Les grands réseaux stimulent des chaînes de services industriels.
+PPL.TO,Secteurs impactés,Capex industriel,"Construction, acier, services industriels",Secteur,Industrie,Indicatif,Les grands réseaux stimulent des chaînes de services industriels.
+KEY.TO,Secteurs impactés,Capex industriel,"Construction, acier, services industriels",Secteur,Industrie,Indicatif,Les grands réseaux stimulent des chaînes de services industriels.
+CNQ.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+SU.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+CVE.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+IMO.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+ARX.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+TOU.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+WCP.TO,Intrants,Services pétroliers,"Forage, complétion, maintenance et équipement",Fournisseurs,Énergie,Indicatif,Services nécessaires à la production et à l’entretien des actifs.
+CNQ.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+SU.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+CVE.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+IMO.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+ARX.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+TOU.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+WCP.TO,Intrants,Transport et infrastructures,"Pipelines, terminaux, rail et stockage",Fournisseurs,Transport,Indicatif,Infrastructure utilisée pour déplacer la production vers les marchés.
+CNQ.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+SU.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+CVE.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+IMO.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+ARX.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+TOU.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+WCP.TO,Clients servis,Raffinage et distribution,"Raffineries, distributeurs et clients industriels",Clients,Énergie,Indicatif,"La production alimente les carburants, la pétrochimie et les usages industriels."
+CNQ.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+SU.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+CVE.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+IMO.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+ARX.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+TOU.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+WCP.TO,Secteurs impactés,Énergie finale,"Transport, industrie, chimie et ménages",Secteur,Économie réelle,Indicatif,Les hydrocarbures alimentent plusieurs secteurs d’activité.
+CNQ.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+SU.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+CVE.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+IMO.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+ARX.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+TOU.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+WCP.TO,Secteurs impactés,Revenus publics,"Redevances, taxes et emploi régional",Secteur,Gouvernement,Indicatif,Les producteurs contribuent aux recettes publiques et aux emplois régionaux.
+CNR.TO,Intrants,Matériel ferroviaire,"Locomotives, wagons, rails et signalisation",Fournisseurs,Industrie,Indicatif,Équipements physiques nécessaires à l’exploitation ferroviaire.
+CP.TO,Intrants,Matériel ferroviaire,"Locomotives, wagons, rails et signalisation",Fournisseurs,Industrie,Indicatif,Équipements physiques nécessaires à l’exploitation ferroviaire.
+CNR.TO,Intrants,Énergie et main-d’œuvre,"Carburant, ateliers, conducteurs et maintenance",Fournisseurs,Transport,Indicatif,Intrants opérationnels clés du réseau ferroviaire.
+CP.TO,Intrants,Énergie et main-d’œuvre,"Carburant, ateliers, conducteurs et maintenance",Fournisseurs,Transport,Indicatif,Intrants opérationnels clés du réseau ferroviaire.
+CNR.TO,Clients servis,Expéditeurs,"Agriculture, énergie, mines, autos et retail",Clients,Transport,Indicatif,Les expéditeurs utilisent le rail pour déplacer marchandises et intrants.
+CP.TO,Clients servis,Expéditeurs,"Agriculture, énergie, mines, autos et retail",Clients,Transport,Indicatif,Les expéditeurs utilisent le rail pour déplacer marchandises et intrants.
+CNR.TO,Secteurs impactés,Chaînes logistiques,"Commerce, agriculture, ressources et ports",Secteur,Logistique,Indicatif,"Le rail relie producteurs, ports, entrepôts et marchés."
+CP.TO,Secteurs impactés,Chaînes logistiques,"Commerce, agriculture, ressources et ports",Secteur,Logistique,Indicatif,"Le rail relie producteurs, ports, entrepôts et marchés."
+CNR.TO,Secteurs impactés,Compétitivité,Exportations canadiennes,Secteur,Commerce international,Indicatif,Le rail soutient les flux d’exportation et les échanges interprovinciaux.
+CP.TO,Secteurs impactés,Compétitivité,Exportations canadiennes,Secteur,Commerce international,Indicatif,Le rail soutient les flux d’exportation et les échanges interprovinciaux.
+WCN.TO,Intrants,Flotte et équipement,"Camions, conteneurs, centres de tri et sites d’enfouissement",Fournisseurs,Industrie,Indicatif,Actifs physiques nécessaires à la collecte et au traitement des déchets.
+WCN.TO,Clients servis,Municipalités et entreprises,"Villes, commerces, construction et industrie",Clients,Services essentiels,Indicatif,"Clients servis par contrats de collecte, recyclage et traitement."
+WCN.TO,Secteurs impactés,Hygiène urbaine,"Immobilier, construction, retail et municipalités",Secteur,Services environnementaux,Indicatif,Service essentiel au fonctionnement urbain et commercial.
+NTR.TO,Intrants,Extraction et énergie,"Mines, gaz naturel, rail et terminaux portuaires",Fournisseurs,Ressources,Indicatif,Intrants liés à la production et distribution d’engrais.
+NTR.TO,Clients servis,Agriculture,"Fermes, coopératives agricoles et distributeurs",Clients,Agriculture,Indicatif,Engrais utilisés pour les rendements agricoles.
+NTR.TO,Secteurs impactés,Chaîne alimentaire,"Production alimentaire, exportations agricoles",Secteur,Agroalimentaire,Indicatif,Contribution indirecte à la production alimentaire.
+ABX.TO,Intrants,Équipement minier,"Camions miniers, explosifs, énergie et services géologiques",Fournisseurs,Industrie,Indicatif,"Intrants nécessaires à l’exploration, l’extraction et la transformation."
+AEM.TO,Intrants,Équipement minier,"Camions miniers, explosifs, énergie et services géologiques",Fournisseurs,Industrie,Indicatif,"Intrants nécessaires à l’exploration, l’extraction et la transformation."
+TECK-B.TO,Intrants,Équipement minier,"Camions miniers, explosifs, énergie et services géologiques",Fournisseurs,Industrie,Indicatif,"Intrants nécessaires à l’exploration, l’extraction et la transformation."
+FM.TO,Intrants,Équipement minier,"Camions miniers, explosifs, énergie et services géologiques",Fournisseurs,Industrie,Indicatif,"Intrants nécessaires à l’exploration, l’extraction et la transformation."
+LUN.TO,Intrants,Équipement minier,"Camions miniers, explosifs, énergie et services géologiques",Fournisseurs,Industrie,Indicatif,"Intrants nécessaires à l’exploration, l’extraction et la transformation."
+ABX.TO,Clients servis,Transformateurs,"Fonderies, raffineurs, fabricants et négociants",Clients,Matériaux,Indicatif,La production minière alimente plusieurs chaînes industrielles.
+AEM.TO,Clients servis,Transformateurs,"Fonderies, raffineurs, fabricants et négociants",Clients,Matériaux,Indicatif,La production minière alimente plusieurs chaînes industrielles.
+TECK-B.TO,Clients servis,Transformateurs,"Fonderies, raffineurs, fabricants et négociants",Clients,Matériaux,Indicatif,La production minière alimente plusieurs chaînes industrielles.
+FM.TO,Clients servis,Transformateurs,"Fonderies, raffineurs, fabricants et négociants",Clients,Matériaux,Indicatif,La production minière alimente plusieurs chaînes industrielles.
+LUN.TO,Clients servis,Transformateurs,"Fonderies, raffineurs, fabricants et négociants",Clients,Matériaux,Indicatif,La production minière alimente plusieurs chaînes industrielles.
+ABX.TO,Secteurs impactés,Métaux et matériaux,"Construction, énergie, électronique et infrastructure",Secteur,Industrie,Indicatif,Les métaux servent plusieurs secteurs utilisateurs.
+AEM.TO,Secteurs impactés,Métaux et matériaux,"Construction, énergie, électronique et infrastructure",Secteur,Industrie,Indicatif,Les métaux servent plusieurs secteurs utilisateurs.
+TECK-B.TO,Secteurs impactés,Métaux et matériaux,"Construction, énergie, électronique et infrastructure",Secteur,Industrie,Indicatif,Les métaux servent plusieurs secteurs utilisateurs.
+FM.TO,Secteurs impactés,Métaux et matériaux,"Construction, énergie, électronique et infrastructure",Secteur,Industrie,Indicatif,Les métaux servent plusieurs secteurs utilisateurs.
+LUN.TO,Secteurs impactés,Métaux et matériaux,"Construction, énergie, électronique et infrastructure",Secteur,Industrie,Indicatif,Les métaux servent plusieurs secteurs utilisateurs.
+BCE.TO,Intrants,Réseau et spectre,"Tours, fibre, équipement réseau et licences de spectre",Fournisseurs,Télécommunications,Indicatif,Actifs essentiels pour connecter les clients.
+T.TO,Intrants,Réseau et spectre,"Tours, fibre, équipement réseau et licences de spectre",Fournisseurs,Télécommunications,Indicatif,Actifs essentiels pour connecter les clients.
+QBR-B.TO,Intrants,Réseau et spectre,"Tours, fibre, équipement réseau et licences de spectre",Fournisseurs,Télécommunications,Indicatif,Actifs essentiels pour connecter les clients.
+RCI-B.TO,Intrants,Réseau et spectre,"Tours, fibre, équipement réseau et licences de spectre",Fournisseurs,Télécommunications,Indicatif,Actifs essentiels pour connecter les clients.
+BCE.TO,Intrants,Technologie,"Cloud, cybersécurité, logiciels et centres de données",Fournisseurs,Technologie,Indicatif,Technologies nécessaires aux services numériques et de connectivité.
+T.TO,Intrants,Technologie,"Cloud, cybersécurité, logiciels et centres de données",Fournisseurs,Technologie,Indicatif,Technologies nécessaires aux services numériques et de connectivité.
+QBR-B.TO,Intrants,Technologie,"Cloud, cybersécurité, logiciels et centres de données",Fournisseurs,Technologie,Indicatif,Technologies nécessaires aux services numériques et de connectivité.
+RCI-B.TO,Intrants,Technologie,"Cloud, cybersécurité, logiciels et centres de données",Fournisseurs,Technologie,Indicatif,Technologies nécessaires aux services numériques et de connectivité.
+BCE.TO,Clients servis,Connectivité,"Ménages, entreprises, gouvernement et médias",Clients,Services de communication,Indicatif,"Clients qui utilisent réseau mobile, internet, téléphonie et services numériques."
+T.TO,Clients servis,Connectivité,"Ménages, entreprises, gouvernement et médias",Clients,Services de communication,Indicatif,"Clients qui utilisent réseau mobile, internet, téléphonie et services numériques."
+QBR-B.TO,Clients servis,Connectivité,"Ménages, entreprises, gouvernement et médias",Clients,Services de communication,Indicatif,"Clients qui utilisent réseau mobile, internet, téléphonie et services numériques."
+RCI-B.TO,Clients servis,Connectivité,"Ménages, entreprises, gouvernement et médias",Clients,Services de communication,Indicatif,"Clients qui utilisent réseau mobile, internet, téléphonie et services numériques."
+BCE.TO,Secteurs impactés,Économie numérique,"Commerce, médias, travail hybride et services publics",Secteur,Technologie,Indicatif,La connectivité soutient de nombreux secteurs d’activité.
+T.TO,Secteurs impactés,Économie numérique,"Commerce, médias, travail hybride et services publics",Secteur,Technologie,Indicatif,La connectivité soutient de nombreux secteurs d’activité.
+QBR-B.TO,Secteurs impactés,Économie numérique,"Commerce, médias, travail hybride et services publics",Secteur,Technologie,Indicatif,La connectivité soutient de nombreux secteurs d’activité.
+RCI-B.TO,Secteurs impactés,Économie numérique,"Commerce, médias, travail hybride et services publics",Secteur,Technologie,Indicatif,La connectivité soutient de nombreux secteurs d’activité.
+BAM.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+BN.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+BIP-UN.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+BEPC.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+CPX.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+FTS.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+EMA.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+AQN.TO,Intrants,Capital et ingénierie,"Financement, construction, exploitation et maintenance",Fournisseurs,Infrastructure,Indicatif,Intrants nécessaires aux actifs de long terme.
+BAM.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+BN.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+BIP-UN.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+BEPC.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+CPX.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+FTS.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+EMA.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+AQN.TO,Clients servis,Utilisateurs d’infrastructure,"Entreprises, gouvernements, ménages et utilities",Clients,Infrastructure,Indicatif,Clients finaux ou indirects des infrastructures exploitées.
+BAM.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+BN.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+BIP-UN.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+BEPC.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+CPX.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+FTS.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+EMA.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+AQN.TO,Secteurs impactés,Actifs réels,"Électricité, transport, immobilier et données",Secteur,Infrastructure,Indicatif,Exposition à plusieurs infrastructures essentielles.
+BAM.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+BN.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+BIP-UN.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+BEPC.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+CPX.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+FTS.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+EMA.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
+AQN.TO,Secteurs impactés,Transition énergétique,"Énergie renouvelable, réseaux et efficacité",Secteur,Énergie,Indicatif,Contribution potentielle aux infrastructures de transition.
