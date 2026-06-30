@@ -1326,7 +1326,6 @@ def sidebar_context() -> str:
     init_db()
 
     from core.public_beta import current_context
-    from core.search import render_universal_search
     from core.notifications import unread_count
 
     # Le profil et ses préférences doivent être chargés AVANT la création
@@ -1353,7 +1352,7 @@ def sidebar_context() -> str:
         unsafe_allow_html=True,
     )
 
-    render_universal_search("sidebar", profile=profile)
+    st.sidebar.caption("Recherche : disponible directement sur l'accueil.")
 
     from core.universe import render_universe_selector
 
