@@ -750,7 +750,7 @@ def apply_style() -> None:
         .sky-down {{ color: #DC2626; }}
 
 
-        .sky-hero-search-card {
+        .sky-hero-search-card {{
             margin: -4px 0 18px;
             padding: 16px 18px 10px;
             border-radius: 22px;
@@ -759,21 +759,21 @@ def apply_style() -> None:
             box-shadow: var(--sky-shadow-soft);
             backdrop-filter: blur(18px);
             animation: sky-fade .4s ease both;
-        }
+        }}
 
-        .sky-hero-search-title {
+        .sky-hero-search-title {{
             color: var(--sky-text);
             font-size: .86rem;
             font-weight: 850;
             margin-bottom: 4px;
             letter-spacing: -.01em;
-        }
+        }}
 
-        .sky-hero-search-note {
+        .sky-hero-search-note {{
             color: var(--sky-muted);
             font-size: .78rem;
             margin-bottom: 10px;
-        }
+        }}
         h1, h2, h3, h4, h5, h6 {{
             color: var(--sky-text) !important;
             letter-spacing: -.028em;
