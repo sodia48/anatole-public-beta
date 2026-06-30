@@ -22,12 +22,6 @@ pages = {
             url_path="cockpit",
         ),
         st.Page(
-            "screens/22_Recherche.py",
-            title="Recherche",
-            icon="🔍",
-            url_path="recherche",
-        ),
-        st.Page(
             "screens/1_Screener.py",
             title="Screener",
             icon="🔎",
