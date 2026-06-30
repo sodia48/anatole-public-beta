@@ -17,6 +17,8 @@ REQUIRED_COLUMNS = [
     "sector",
     "confidence",
     "note",
+    "source_name",
+    "source_url",
 ]
 
 SECTOR_TEMPLATES: dict[str, list[dict[str, str]]] = {
@@ -113,6 +115,8 @@ def ecosystem_for_ticker(
     fallback = pd.DataFrame(template)
     fallback.insert(0, "ticker", clean)
     fallback["confidence"] = "Indicatif"
+    fallback["source_name"] = ""
+    fallback["source_url"] = ""
     return fallback[REQUIRED_COLUMNS].reset_index(drop=True), f"Modèle indicatif par secteur : {key}"
 
 
@@ -128,12 +132,14 @@ def ecosystem_metrics(rows: pd.DataFrame) -> dict[str, int]:
 
 
 def contribution_table(rows: pd.DataFrame) -> pd.DataFrame:
+    columns = ["Secteur", "Contribution", "Acteurs ou activités concernés", "Confiance", "Lecture", "Source", "Lien source"]
     if rows.empty:
-        return pd.DataFrame(columns=["Secteur", "Contribution", "Lecture", "Confiance"])
+        return pd.DataFrame(columns=columns)
     sectors = rows[rows["layer"] == "Secteurs impactés"].copy()
     if sectors.empty:
         sectors = rows.copy()
-    output = sectors[["sector", "relation", "entity", "confidence", "note"]].copy()
+    keep = [col for col in ["sector", "relation", "entity", "confidence", "note", "source_name", "source_url"] if col in sectors.columns]
+    output = sectors[keep].copy()
     output = output.rename(
         columns={
             "sector": "Secteur",
@@ -141,16 +147,22 @@ def contribution_table(rows: pd.DataFrame) -> pd.DataFrame:
             "entity": "Acteurs ou activités concernés",
             "confidence": "Confiance",
             "note": "Lecture",
+            "source_name": "Source",
+            "source_url": "Lien source",
         }
     )
-    return output.reset_index(drop=True)
-
+    for column in columns:
+        if column not in output.columns:
+            output[column] = ""
+    return output[columns].reset_index(drop=True)
 
 def affiliation_table(rows: pd.DataFrame) -> pd.DataFrame:
+    columns = ["Niveau", "Relation", "Acteur", "Catégorie", "Secteur", "Confiance", "Source", "Lien source"]
     if rows.empty:
-        return pd.DataFrame(columns=["Niveau", "Relation", "Acteur", "Catégorie", "Secteur", "Confiance"])
-    table = rows[["layer", "relation", "entity", "category", "sector", "confidence"]].copy()
-    return table.rename(
+        return pd.DataFrame(columns=columns)
+    keep = [col for col in ["layer", "relation", "entity", "category", "sector", "confidence", "source_name", "source_url"] if col in rows.columns]
+    table = rows[keep].copy()
+    table = table.rename(
         columns={
             "layer": "Niveau",
             "relation": "Relation",
@@ -158,9 +170,14 @@ def affiliation_table(rows: pd.DataFrame) -> pd.DataFrame:
             "category": "Catégorie",
             "sector": "Secteur",
             "confidence": "Confiance",
+            "source_name": "Source",
+            "source_url": "Lien source",
         }
-    ).reset_index(drop=True)
-
+    )
+    for column in columns:
+        if column not in table.columns:
+            table[column] = ""
+    return table[columns].reset_index(drop=True)
 
 def _safe_text(value: object, max_len: int = 82) -> str:
     clean = str(value or "").strip()
