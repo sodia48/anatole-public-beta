@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core.ai import analyze_stock_in_french
 from core.analytics import add_indicators, enrich_news, explain_move
@@ -367,9 +368,16 @@ elif section == "Écosystème":
     for line in ecosystem_explainer(ecosystem_rows, str(name), coverage):
         st.write(f"- {line}")
 
-    st.markdown(
+    documented_count = int((ecosystem_rows.get("confidence", pd.Series(dtype=str)).astype(str) == "Documenté").sum())
+    if documented_count:
+        st.success(f"{documented_count} lien(s) documenté(s) avec source affichés pour ce titre.")
+    else:
+        st.info("Aucune source précise n'est encore intégrée pour ce titre; Anatole affiche une lecture indicative par secteur.")
+
+    components.html(
         ecosystem_value_chain_html(ecosystem_rows, ticker, str(name)),
-        unsafe_allow_html=True,
+        height=520,
+        scrolling=True,
     )
 
     with st.expander("Vue réseau expérimentale", expanded=False):
