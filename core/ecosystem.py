@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import html
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -161,6 +162,208 @@ def affiliation_table(rows: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def _safe_text(value: object, max_len: int = 82) -> str:
+    clean = str(value or "").strip()
+    if len(clean) > max_len:
+        return clean[: max_len - 1].rstrip() + "…"
+    return clean
+
+
+def _layer_items(rows: pd.DataFrame, layer: str, limit: int = 5) -> list[dict[str, str]]:
+    if rows.empty or "layer" not in rows:
+        return []
+    subset = rows[rows["layer"] == layer].head(limit).copy()
+    items: list[dict[str, str]] = []
+    for _, row in subset.iterrows():
+        items.append(
+            {
+                "relation": _safe_text(row.get("relation", "Relation"), 46),
+                "entity": _safe_text(row.get("entity", "Non documenté"), 72),
+                "sector": _safe_text(row.get("sector", ""), 34),
+                "confidence": _safe_text(row.get("confidence", ""), 22),
+            }
+        )
+    return items
+
+
+def _items_html(items: list[dict[str, str]], empty_label: str) -> str:
+    if not items:
+        return f'<div class="eco-mini-empty">{html.escape(empty_label)}</div>'
+    chunks: list[str] = []
+    for item in items:
+        relation = html.escape(item.get("relation", ""))
+        entity = html.escape(item.get("entity", ""))
+        sector = html.escape(item.get("sector", ""))
+        confidence = html.escape(item.get("confidence", ""))
+        meta = " · ".join(part for part in [sector, confidence] if part)
+        chunks.append(
+            f"""
+            <div class="eco-mini-card">
+                <div class="eco-mini-relation">{relation}</div>
+                <div class="eco-mini-entity">{entity}</div>
+                <div class="eco-mini-meta">{html.escape(meta)}</div>
+            </div>
+            """
+        )
+    return "".join(chunks)
+
+
+def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: str) -> str:
+    intrants = _layer_items(rows, "Intrants")
+    clients = _layer_items(rows, "Clients servis")
+    sectors = _layer_items(rows, "Secteurs impactés")
+    company = html.escape(_safe_text(company_name or ticker, 64))
+    ticker_clean = html.escape(_safe_text(ticker, 18))
+
+    style = """
+    <style>
+      .eco-readable-wrap {
+        border: 1px solid rgba(76,145,201,.22);
+        border-radius: 22px;
+        padding: 16px;
+        background: rgba(255,255,255,.62);
+        box-shadow: 0 10px 30px rgba(35, 92, 138, .08);
+        margin: 8px 0 18px;
+      }
+      .eco-readable-title {
+        font-size: .78rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        font-weight: 900;
+        color: #5B7088;
+        margin-bottom: 12px;
+      }
+      .eco-chain-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.18fr) 44px minmax(0, .92fr) 44px minmax(0, 1.18fr) 44px minmax(0, 1.18fr);
+        gap: 10px;
+        align-items: stretch;
+      }
+      .eco-column {
+        border: 1px solid rgba(76,145,201,.22);
+        border-radius: 18px;
+        background: rgba(255,255,255,.72);
+        padding: 12px;
+        min-height: 220px;
+      }
+      .eco-column-title {
+        font-size: .78rem;
+        font-weight: 900;
+        color: #0F2742;
+        margin-bottom: 10px;
+      }
+      .eco-company-card {
+        height: 100%;
+        min-height: 220px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(37,99,235,.96), rgba(14,165,233,.92));
+        color: white;
+        padding: 18px;
+        box-shadow: 0 16px 38px rgba(37,99,235,.22);
+      }
+      .eco-company-name {
+        font-size: 1.05rem;
+        line-height: 1.2;
+        font-weight: 950;
+        margin-bottom: 8px;
+      }
+      .eco-company-ticker {
+        font-size: .80rem;
+        font-weight: 850;
+        opacity: .88;
+      }
+      .eco-arrow {
+        display: grid;
+        place-items: center;
+        color: #2563EB;
+        font-size: 1.55rem;
+        font-weight: 950;
+      }
+      .eco-mini-card {
+        border: 1px solid rgba(76,145,201,.18);
+        border-radius: 14px;
+        padding: 9px 10px;
+        margin-bottom: 8px;
+        background: rgba(243,251,255,.86);
+      }
+      .eco-mini-relation {
+        font-size: .70rem;
+        color: #2563EB;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .045em;
+        margin-bottom: 3px;
+      }
+      .eco-mini-entity {
+        color: #0F2742;
+        font-size: .86rem;
+        font-weight: 850;
+        line-height: 1.25;
+      }
+      .eco-mini-meta {
+        color: #5B7088;
+        font-size: .72rem;
+        margin-top: 4px;
+        line-height: 1.25;
+      }
+      .eco-mini-empty {
+        color: #5B7088;
+        font-size: .84rem;
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(243,251,255,.75);
+      }
+      @media (max-width: 900px) {
+        .eco-chain-grid {
+          grid-template-columns: 1fr;
+        }
+        .eco-arrow {
+          transform: rotate(90deg);
+          min-height: 30px;
+        }
+        .eco-company-card, .eco-column {
+          min-height: auto;
+        }
+      }
+    </style>
+    """
+
+    return (
+        style
+        + f"""
+        <div class="eco-readable-wrap">
+          <div class="eco-readable-title">Chaîne de valeur lisible</div>
+          <div class="eco-chain-grid">
+            <div class="eco-column">
+              <div class="eco-column-title">1. Intrants / ressources</div>
+              {_items_html(intrants, "Intrants non encore documentés")}
+            </div>
+            <div class="eco-arrow">→</div>
+            <div class="eco-company-card">
+              <div class="eco-company-name">{company}</div>
+              <div class="eco-company-ticker">{ticker_clean}</div>
+            </div>
+            <div class="eco-arrow">→</div>
+            <div class="eco-column">
+              <div class="eco-column-title">2. Clients / usages servis</div>
+              {_items_html(clients, "Clients ou usages non encore documentés")}
+            </div>
+            <div class="eco-arrow">→</div>
+            <div class="eco-column">
+              <div class="eco-column-title">3. Secteurs impactés</div>
+              {_items_html(sectors, "Secteurs impactés non encore documentés")}
+            </div>
+          </div>
+        </div>
+        """
+    )
+
+
 def ecosystem_sankey(rows: pd.DataFrame, ticker: str, company_name: str) -> go.Figure:
     company_label = f"{company_name} ({ticker})"
     if rows.empty:
@@ -222,9 +425,9 @@ def ecosystem_sankey(rows: pd.DataFrame, ticker: str, company_name: str) -> go.F
         ]
     )
     fig.update_layout(
-        height=430,
+        height=560,
         margin={"l": 8, "r": 8, "t": 18, "b": 8},
-        font={"size": 12},
+        font={"size": 15, "family": "Arial, sans-serif", "color": "#0F2742"},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
