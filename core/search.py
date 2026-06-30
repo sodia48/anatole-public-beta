@@ -54,8 +54,6 @@ def install_command_shortcut() -> None:
         pass
 
 
-
-
 def _register_recent_search(query: str) -> None:
     clean = str(query or "").strip()
     if not clean:
@@ -97,6 +95,8 @@ def render_universal_search(
     profile: str | None = None,
     label: str = "Recherche universelle",
     placeholder: str = "Rechercher un titre, une page ou une commande…",
+    navigate_on_select: bool = True,
+    show_inline_results: bool = True,
 ) -> None:
     install_command_shortcut()
     host = st.sidebar if location == "sidebar" else st
@@ -111,14 +111,16 @@ def render_universal_search(
         render_recent_searches(location)
         return
 
-    _register_recent_search(query)
+    if len(query) >= 2:
+        _register_recent_search(query)
+
     constituents, _ = load_constituents()
     lowered = query.lower()
 
-    with host.container(border=True):
+    with host.container(border=(location == "sidebar")):
         # Commandes rapides sobres.
         if lowered in {"mode sombre", "thème sombre", "theme sombre"}:
-            if host.button("Activer le mode sombre", width="stretch"):
+            if st.button("Activer le mode sombre", key=f"search_dark_{location}", width="stretch"):
                 st.session_state.theme_toggle = True
                 if profile:
                     set_preference(profile, "theme", "dark")
@@ -126,7 +128,7 @@ def render_universal_search(
             return
 
         if lowered in {"mode clair", "thème clair", "theme clair"}:
-            if host.button("Activer le mode clair", width="stretch"):
+            if st.button("Activer le mode clair", key=f"search_light_{location}", width="stretch"):
                 st.session_state.theme_toggle = False
                 if profile:
                     set_preference(profile, "theme", "light")
@@ -136,43 +138,69 @@ def render_universal_search(
         watch_match = re.match(r"(?:ajouter|add)\s+([A-Za-z0-9.\-]+)\s+(?:à\s+la\s+)?watchlist", query, re.I)
         if watch_match and profile:
             symbol = _normalize_requested_ticker(watch_match.group(1), constituents)
-            if host.button(f"Ajouter {symbol} à la watchlist", width="stretch"):
+            if st.button(f"Ajouter {symbol} à la watchlist", key=f"search_add_watch_{location}", width="stretch"):
                 add_watchlist(profile, symbol)
-                host.success(f"{symbol} ajouté.")
+                st.success(f"{symbol} ajouté.")
             return
 
         compare_match = re.match(r"comparer\s+([A-Za-z0-9.\-]+)\s+(?:et|avec)\s+([A-Za-z0-9.\-]+)", query, re.I)
         if compare_match:
             first = _normalize_requested_ticker(compare_match.group(1), constituents)
             second = _normalize_requested_ticker(compare_match.group(2), constituents)
-            if host.button(f"Comparer {first} et {second}", width="stretch"):
+            if st.button(f"Comparer {first} et {second}", key=f"search_compare_{location}", width="stretch"):
                 st.session_state.comparison_tickers = [first, second]
                 st.switch_page("screens/2_Comparateur.py")
             return
 
         pages = [item for item in PAGE_COMMANDS if lowered in (item[0] + " " + item[2]).lower()]
         mask = (
-            constituents["Ticker"].str.lower().str.contains(lowered, regex=False)
-            | constituents["Nom"].str.lower().str.contains(lowered, regex=False)
-            | constituents["Secteur"].str.lower().str.contains(lowered, regex=False)
+            constituents["Ticker"].astype(str).str.lower().str.contains(lowered, regex=False)
+            | constituents["Nom"].astype(str).str.lower().str.contains(lowered, regex=False)
+            | constituents["Secteur"].astype(str).str.lower().str.contains(lowered, regex=False)
         )
-        stocks = constituents.loc[mask].head(6)
+        stocks = constituents.loc[mask].head(8).copy()
 
         if not stocks.empty:
-            host.caption("Titres")
-            for _, row in stocks.iterrows():
-                if host.button(
-                    f"{row['Ticker']} · {row['Nom']}",
-                    key=f"search_stock_{location}_{row['YahooTicker']}",
-                    width="stretch",
-                ):
-                    st.session_state.selected_ticker = row["YahooTicker"]
-                    st.switch_page("screens/14_Focus.py")
+            st.caption("Titres")
+            if show_inline_results:
+                display = stocks[[col for col in ["Ticker", "Nom", "Secteur"] if col in stocks.columns]].copy()
+                display = display.rename(columns={"Ticker": "Symbole"})
+                st.dataframe(display, hide_index=True, width="stretch")
+
+            if navigate_on_select:
+                for _, row in stocks.iterrows():
+                    if st.button(
+                        f"{row['Ticker']} · {row['Nom']}",
+                        key=f"search_stock_{location}_{row['YahooTicker']}",
+                        width="stretch",
+                    ):
+                        st.session_state.selected_ticker = row["YahooTicker"]
+                        st.switch_page("screens/14_Focus.py")
+            else:
+                first = stocks.iloc[0]
+                st.caption(f"Meilleure correspondance : {first['Ticker']} · {first['Nom']}")
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    if st.button(
+                        f"Ouvrir {first['Ticker']} dans Focus",
+                        key=f"search_focus_{location}_{first['YahooTicker']}",
+                        width="stretch",
+                    ):
+                        st.session_state.selected_ticker = first["YahooTicker"]
+                        st.switch_page("screens/14_Focus.py")
+                with c2:
+                    if profile and st.button(
+                        f"Ajouter {first['Ticker']} à la watchlist",
+                        key=f"search_watch_{location}_{first['YahooTicker']}",
+                        width="stretch",
+                    ):
+                        add_watchlist(profile, first["YahooTicker"])
+                        st.success(f"{first['Ticker']} ajouté à la watchlist.")
 
         if pages:
-            host.caption("Pages")
+            st.caption("Pages")
             for title, path, _ in pages[:5]:
-                host.page_link(path, label=title, width="stretch")
+                st.page_link(path, label=title, width="stretch")
 
         if stocks.empty and not pages:
-            host.caption(f"Aucun résultat pour « {html.escape(query)} ».")
+            st.caption(f"Aucun résultat pour « {html.escape(query)} ».")

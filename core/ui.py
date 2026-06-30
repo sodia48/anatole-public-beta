@@ -1520,7 +1520,7 @@ def page_header(
             st.markdown(
                 """
                 <div class="sky-hero-search-title">Recherche rapide</div>
-                <div class="sky-hero-search-note">Clique puis entre un symbole ou le nom d'un titre spécifique.</div>
+                <div class="sky-hero-search-note">Tape un symbole, un ISIN ou le nom d'un stock ici pour le retrouver instantanément, sans quitter l'accueil.</div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -1528,7 +1528,9 @@ def page_header(
                 location="page",
                 profile=hero_search_profile,
                 label="Recherche rapide",
-                placeholder="Symbole ou nom du titre…",
+                placeholder="Symbole, ISIN ou nom du titre…",
+                navigate_on_select=False,
+                show_inline_results=True,
             )
             st.markdown('</div>', unsafe_allow_html=True)
         except Exception:
