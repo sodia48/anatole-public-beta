@@ -18,6 +18,14 @@ from core.data import (
     load_constituents,
 )
 from core.database import add_watchlist
+from core.ecosystem import (
+    affiliation_table,
+    contribution_table,
+    ecosystem_explainer,
+    ecosystem_for_ticker,
+    ecosystem_metrics,
+    ecosystem_sankey,
+)
 from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
 from core.mobile_experience import plotly_config
@@ -290,7 +298,7 @@ st.caption(
 
 section = st.segmented_control(
     "Section",
-    ["Aperçu", "Finances", "Actualités", "Données avancées", "Analyse"],
+    ["Aperçu", "Écosystème", "Finances", "Actualités", "Données avancées", "Analyse"],
     default="Aperçu",
     selection_mode="single",
     label_visibility="collapsed",
@@ -333,6 +341,66 @@ if section == "Aperçu":
         "Les indicateurs Plotly sont intégrés automatiquement au graphique principal "
         "plus haut : SMA 20, SMA 50, SMA 200, EMA 20, volume, bandes de Bollinger "
         "et événements lorsque l'option est activée."
+    )
+
+elif section == "Écosystème":
+    st.subheader("Écosystème du titre")
+    st.caption(
+        "Cette section cartographie les intrants, acteurs économiques et secteurs qui gravitent autour du titre. "
+        "Elle est informative : elle ne prétend pas lister tous les contrats, fournisseurs ou clients réels."
+    )
+
+    ecosystem_rows, coverage = ecosystem_for_ticker(
+        ticker=ticker,
+        company_name=str(name),
+        sector=str(info.get("sector") or fallback_sector),
+        industry=str(info.get("industry") or ""),
+    )
+    metrics_map = ecosystem_metrics(ecosystem_rows)
+    eco_cols = st.columns(4)
+    eco_cols[0].metric("Intrants", metrics_map.get("intrants", 0))
+    eco_cols[1].metric("Clients / usages", metrics_map.get("clients", 0))
+    eco_cols[2].metric("Secteurs impactés", metrics_map.get("secteurs", 0))
+    eco_cols[3].metric("Couverture", coverage)
+
+    for line in ecosystem_explainer(ecosystem_rows, str(name), coverage):
+        st.write(f"- {line}")
+
+    st.plotly_chart(
+        ecosystem_sankey(ecosystem_rows, ticker, str(name)),
+        width="stretch",
+        config=plotly_config(),
+        key=f"ecosystem_sankey_{ticker}",
+    )
+
+    tab_chain, tab_affiliates, tab_sector = st.tabs(
+        ["Chaîne de valeur", "Acteurs affiliés", "Contribution sectorielle"]
+    )
+    with tab_chain:
+        chain = affiliation_table(ecosystem_rows)
+        st.dataframe(chain, hide_index=True, width="stretch")
+        st.caption(
+            "Chaîne de lecture : Intrants → entreprise sélectionnée → clients/usages → secteurs impactés. "
+            "La colonne Confiance distingue les éléments documentés localement des lectures indicatives."
+        )
+    with tab_affiliates:
+        affiliates = affiliation_table(
+            ecosystem_rows[ecosystem_rows["layer"].isin(["Intrants", "Clients servis"])]
+        )
+        if affiliates.empty:
+            st.info("Aucun acteur affilié n'est encore documenté pour ce titre.")
+        else:
+            st.dataframe(affiliates, hide_index=True, width="stretch")
+    with tab_sector:
+        contribution = contribution_table(ecosystem_rows)
+        if contribution.empty:
+            st.info("Aucune contribution sectorielle n'est encore documentée pour ce titre.")
+        else:
+            st.dataframe(contribution, hide_index=True, width="stretch")
+
+    st.warning(
+        "À vérifier avant décision : cette carte d'écosystème est une aide à la compréhension, "
+        "pas une recommandation d'investissement ni une preuve contractuelle."
     )
 
 elif section == "Finances":
