@@ -40,6 +40,8 @@ profile = sidebar_context()
 page_header(
     "Anatole",
     "Hey Bud, bienvenue sur Anatole.\\nJe suis en ce moment en mode bêta.",
+    show_hero_search=True,
+    hero_search_profile=profile,
 )
 
 workspace_name, workspace_layout = active_workspace(profile)
