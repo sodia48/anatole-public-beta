@@ -25,6 +25,7 @@ from core.ecosystem import (
     ecosystem_for_ticker,
     ecosystem_metrics,
     ecosystem_sankey,
+    ecosystem_value_chain_html,
 )
 from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
@@ -366,12 +367,22 @@ elif section == "Écosystème":
     for line in ecosystem_explainer(ecosystem_rows, str(name), coverage):
         st.write(f"- {line}")
 
-    st.plotly_chart(
-        ecosystem_sankey(ecosystem_rows, ticker, str(name)),
-        width="stretch",
-        config=plotly_config(),
-        key=f"ecosystem_sankey_{ticker}",
+    st.markdown(
+        ecosystem_value_chain_html(ecosystem_rows, ticker, str(name)),
+        unsafe_allow_html=True,
     )
+
+    with st.expander("Vue réseau expérimentale", expanded=False):
+        st.caption(
+            "Cette vue réseau est conservée comme complément visuel. "
+            "La chaîne de valeur lisible ci-dessus est prioritaire, car elle reste plus nette sur mobile et desktop."
+        )
+        st.plotly_chart(
+            ecosystem_sankey(ecosystem_rows, ticker, str(name)),
+            width="stretch",
+            config=plotly_config(),
+            key=f"ecosystem_sankey_{ticker}",
+        )
 
     tab_chain, tab_affiliates, tab_sector = st.tabs(
         ["Chaîne de valeur", "Acteurs affiliés", "Contribution sectorielle"]
