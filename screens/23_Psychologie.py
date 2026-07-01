@@ -87,7 +87,7 @@ with tab_stock:
         ),
     )
 
-    period = st.selectbox("Historique utilisé", ["6mo", "1y", "2y"], index=1, horizontal=True)
+    period = st.selectbox("Historique utilisé", ["6mo", "1y", "2y"], index=1)
 
     selected_row = all_constituents.loc[all_constituents["YahooTicker"] == ticker].head(1)
     stock_sector = selected_row["Secteur"].iloc[0] if not selected_row.empty and "Secteur" in selected_row else None
@@ -163,3 +163,4 @@ with tab_method:
 st.caption(f"Univers analysé : {current_universe().label} · {len(market)} titres suivis.")
 
 footer()
+
