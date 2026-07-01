@@ -45,6 +45,12 @@ pages = {
             icon="🧭",
             url_path="moteurs-marche",
         ),
+        st.Page(
+            "screens/23_Psychologie.py",
+            title="Psychologie",
+            icon="🧠",
+            url_path="psychologie",
+        ),
     ],
     "ANALYSE": [
         st.Page(
