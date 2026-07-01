@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import streamlit as st
 
+from core.analytics import add_indicators
+from core.data import fetch_history, fetch_stock_news, load_constituents
 from core.data_quality import render_data_quality_strip
 from core.market_psychology import (
     market_psychology_score,
     psychology_components_frame,
     psychology_gauge_figure,
     psychology_summary_text,
+    stock_psychology_score,
 )
+from core.news import enrich_news
 from core.performance import load_timer, perf_caption
 from core.runtime import load_light_market_bundle
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
@@ -19,7 +23,7 @@ apply_style()
 sidebar_context()
 page_header(
     "Psychologie du marché",
-    "Un indicateur psychologique interne, inspiré du principe Fear & Greed, calculé à partir des données Anatole.",
+    "Un indicateur psychologique interne inspiré du Fear & Greed, avec sources et mesure par titre.",
     "🧠",
 )
 
@@ -35,43 +39,125 @@ if market.empty:
 
 render_data_quality_strip(market, diagnostics, compact=True)
 
-result = market_psychology_score(market)
-score = float(result["score"])
-label = str(result["label"])
+tab_market, tab_stock, tab_method = st.tabs(["Marché", "Titre spécifique", "Méthodologie & sources"])
 
-left, right = st.columns([1.2, 1])
-with left:
-    st.plotly_chart(psychology_gauge_figure(score, label), width="stretch", key="market_psychology_gauge")
-with right:
-    st.metric("Indice psychologique", f"{score:.1f}/100", label)
-    st.write(psychology_summary_text(result))
-    st.caption(
-        "Ce n'est pas le CNN Fear & Greed Index officiel. "
-        "C'est une lecture propriétaire Anatole basée sur la largeur du marché, le momentum, les volumes, la tendance et la dispersion sectorielle."
+with tab_market:
+    result = market_psychology_score(market)
+    score = float(result["score"])
+    label = str(result["label"])
+
+    left, right = st.columns([1.2, 1])
+    with left:
+        st.plotly_chart(psychology_gauge_figure(score, label), width="stretch", key="market_psychology_gauge")
+    with right:
+        st.metric("Indice psychologique marché", f"{score:.1f}/100", label)
+        st.write(psychology_summary_text(result))
+        st.caption(
+            "Ce n'est pas le CNN Fear & Greed Index officiel. "
+            "C'est une lecture propriétaire Anatole basée sur les données disponibles dans l'application."
+        )
+
+    st.subheader("Composantes du marché")
+    components = psychology_components_frame(result)
+    st.dataframe(
+        components,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
+        },
     )
 
-st.subheader("Composantes")
-components = psychology_components_frame(result)
-st.dataframe(
-    components,
-    hide_index=True,
-    width="stretch",
-    column_config={
-        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
-    },
-)
+with tab_stock:
+    st.caption("Mesure la psychologie d'un titre précis à partir de son prix, volume, tendance, RSI, nouvelles et force relative.")
+    all_constituents, _ = load_constituents()
+    options = all_constituents["YahooTicker"].tolist()
+    default_ticker = st.session_state.get("selected_ticker", options[0] if options else "")
+    if default_ticker not in options and options:
+        default_ticker = options[0]
 
-st.subheader("Lecture rapide")
-if score < 40:
-    st.warning(
-        "La psychologie est défensive. Surveille les titres solides qui résistent mieux que le marché, "
-        "les secteurs refuges et les niveaux de support."
+    ticker = st.selectbox(
+        "Titre à analyser",
+        options,
+        index=options.index(default_ticker) if default_ticker in options else 0,
+        format_func=lambda value: (
+            all_constituents.loc[all_constituents["YahooTicker"] == value, "Ticker"].iloc[0]
+            + " — "
+            + all_constituents.loc[all_constituents["YahooTicker"] == value, "Nom"].iloc[0]
+            if value in set(all_constituents["YahooTicker"]) else value
+        ),
     )
-elif score > 80:
-    st.info("L'optimisme est très élevé. Le momentum peut rester fort, mais le risque d'excès augmente.")
-else:
-    st.success(
-        "La psychologie est constructive ou équilibrée. Compare le score avec la tendance technique et les moteurs sectoriels."
+
+    period = st.selectbox("Historique utilisé", ["6mo", "1y", "2y"], index=1, horizontal=True)
+
+    selected_row = all_constituents.loc[all_constituents["YahooTicker"] == ticker].head(1)
+    stock_sector = selected_row["Secteur"].iloc[0] if not selected_row.empty and "Secteur" in selected_row else None
+
+    with st.spinner(f"Calcul de la psychologie de {ticker}…"):
+        history = add_indicators(fetch_history(ticker, period, "1d"))
+        try:
+            news = enrich_news(fetch_stock_news(ticker))
+        except Exception:
+            news = None
+
+    if history.empty:
+        st.warning("Historique indisponible pour ce titre.")
+    else:
+        stock_result = stock_psychology_score(ticker, history, market, news=news, stock_sector=stock_sector)
+        stock_score = float(stock_result["score"])
+        stock_label = str(stock_result["label"])
+
+        left, right = st.columns([1.2, 1])
+        with left:
+            st.plotly_chart(psychology_gauge_figure(stock_score, stock_label), width="stretch", key=f"stock_psychology_gauge_{ticker}")
+        with right:
+            st.metric("Indice psychologique titre", f"{stock_score:.1f}/100", stock_label)
+            st.write(psychology_summary_text(stock_result))
+            st.caption(
+                "Ce score mesure le comportement psychologique autour du titre, pas sa valeur fondamentale."
+            )
+
+        st.subheader("Composantes du titre")
+        stock_components = psychology_components_frame(stock_result)
+        st.dataframe(
+            stock_components,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
+            },
+        )
+
+        with st.expander("Données utilisées pour ce titre"):
+            st.write(
+                "- Historique de prix et volume : données récupérées par Anatole via ses fournisseurs de marché existants."
+            )
+            st.write("- RSI, SMA50, SMA200 : calculs techniques locaux à partir de l'historique.")
+            st.write("- Force relative : comparaison à la moyenne du secteur dans l'univers actif.")
+            st.write("- Nouvelles : flux disponible dans Anatole, quand accessible.")
+
+with tab_method:
+    st.subheader("Méthodologie")
+    st.write(
+        "L'indice psychologique Anatole est un indicateur propriétaire. "
+        "Il ne copie pas le CNN Fear & Greed Index officiel. "
+        "Il mesure le même type d'idée — peur, neutralité ou appétit pour le risque — mais avec les données disponibles dans Anatole."
+    )
+
+    st.markdown(
+        """
+        **Sources internes utilisées :**
+        - snapshot marché Anatole : variations, secteurs, largeur du marché ;
+        - historique réel de prix et volumes ;
+        - indicateurs techniques calculés localement : SMA, RSI, volume relatif ;
+        - nouvelles disponibles dans Anatole lorsque le fournisseur les retourne ;
+        - comparaison sectorielle à partir de l'univers actif.
+        """
+    )
+
+    st.info(
+        "Chaque composante affiche maintenant sa source et le détail source. "
+        "Quand une donnée manque, Anatole ramène la composante vers 50/100 au lieu d'inventer un signal."
     )
 
 st.caption(f"Univers analysé : {current_universe().label} · {len(market)} titres suivis.")
