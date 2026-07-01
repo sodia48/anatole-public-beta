@@ -1574,7 +1574,8 @@ def home_launchpad() -> None:
     with columns[2]:
         st.page_link("screens/3_Portefeuille.py", label="Mon portefeuille", icon="💼", width="stretch")
     with columns[3]:
-        st.page_link("screens/5_Actualites.py", label="Flux d'actualités", icon="📰", width="stretch")
+        st.page_link("screens/23_Psychologie.py", label="Psychologie du marché", icon="🧠", width="stretch")
+    st.page_link("screens/5_Actualites.py", label="Flux d'actualités", icon="📰", width="stretch")
 
 
 def ticker_tape(items: Iterable[dict]) -> None:
