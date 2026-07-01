@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from core.analytics import add_indicators
+from core.analytics import add_indicators, enrich_news
 from core.data import fetch_history, fetch_stock_news, load_constituents
 from core.data_quality import render_data_quality_strip
 from core.market_psychology import (
@@ -12,7 +12,6 @@ from core.market_psychology import (
     psychology_summary_text,
     stock_psychology_score,
 )
-from core.news import enrich_news
 from core.performance import load_timer, perf_caption
 from core.runtime import load_light_market_bundle
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
@@ -96,7 +95,8 @@ with tab_stock:
     with st.spinner(f"Calcul de la psychologie de {ticker}…"):
         history = add_indicators(fetch_history(ticker, period, "1d"))
         try:
-            news = enrich_news(fetch_stock_news(ticker))
+            raw_news = fetch_stock_news(ticker)
+            news = enrich_news(raw_news) if raw_news is not None else None
         except Exception:
             news = None
 
