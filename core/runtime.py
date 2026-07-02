@@ -18,6 +18,21 @@ def _active_constituents(constituents: pd.DataFrame, limit: int) -> pd.DataFrame
     return work.sort_values("PoidsIndice", ascending=False).head(limit).reset_index(drop=True)
 
 
+
+def _market_data_status(market: pd.DataFrame) -> str:
+    if market.empty or "StatutDonnee" not in market:
+        return "Non précisé"
+    values = (
+        market["StatutDonnee"]
+        .dropna()
+        .astype(str)
+        .value_counts()
+        .head(3)
+    )
+    if values.empty:
+        return "Non précisé"
+    return " · ".join(f"{name} ({count})" for name, count in values.items())
+
 def _empty_market_frame(active: pd.DataFrame) -> pd.DataFrame:
     market = active.copy()
     for column in [
@@ -50,6 +65,7 @@ def _load_light_market_bundle_cached(
     diagnostics = dict(diagnostics)
     diagnostics["displayed"] = len(active)
     diagnostics["universe_label"] = universe.label
+    diagnostics["data_status"] = _market_data_status(market)
     return constituents, diagnostics, market
 
 
@@ -68,6 +84,7 @@ def load_light_market_bundle() -> tuple[pd.DataFrame, dict, pd.DataFrame]:
         diagnostics["status"] = "Univers partiel"
         diagnostics["displayed"] = len(active)
         diagnostics["universe_label"] = universe.label
+        diagnostics["data_status"] = _market_data_status(market)
         diagnostics["universe_key"] = key
         diagnostics["error"] = (
             f"L'univers sélectionné ({universe.short_label}) est affiché en mode partiel : "

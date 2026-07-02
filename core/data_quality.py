@@ -44,6 +44,27 @@ def source_summary(frame: pd.DataFrame) -> str:
     return " · ".join(f"{name} ({count})" for name, count in sources.items())
 
 
+
+def status_summary(frame: pd.DataFrame) -> str:
+    if frame.empty:
+        return "Indisponible"
+    if "StatutDonnee" in frame:
+        statuses = (
+            frame["StatutDonnee"]
+            .dropna()
+            .astype(str)
+            .value_counts()
+            .head(3)
+        )
+        if not statuses.empty:
+            return " · ".join(f"{name} ({count})" for name, count in statuses.items())
+    source = frame.get("SourceCours", pd.Series(dtype=str)).dropna().astype(str)
+    if source.str.contains("Cache|Dernière|Derni", case=False, regex=True).any():
+        return "Cache"
+    if not source.empty:
+        return "Live"
+    return "Non précisé"
+
 def last_update_text(frame: pd.DataFrame) -> str:
     if frame.empty or "Horodatage" not in frame:
         return datetime.now(TORONTO_TZ).strftime("%H:%M ET")
@@ -63,6 +84,7 @@ def render_data_quality_strip(
     label, icon = quality_label(frame, ["Prix", "Variation", "Volume"])
     source = source_summary(frame)
     update = last_update_text(frame)
+    status = diagnostics.get("data_status") or status_summary(frame)
     universe = diagnostics.get("universe_label") or diagnostics.get("Univers") or "Univers actif"
     displayed = diagnostics.get("displayed")
     actual = diagnostics.get("actual")
@@ -72,7 +94,7 @@ def render_data_quality_strip(
 
     message = (
         f"{icon} Qualité des données : **{label}** · "
-        f"{universe} · {size} · Mise à jour : {update} · Source : {source}"
+        f"{universe} · {size} · Statut : {status} · Mise à jour : {update} · Source : {source}"
     )
 
     if compact:
