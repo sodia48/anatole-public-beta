@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import numpy as np
 import streamlit as st
 
 from core.analytics import evaluate_alert
@@ -16,9 +17,16 @@ from core.database import (
     update_alert_value,
 )
 from core.rate_limit import consume
-from core.runtime import load_market_bundle
+from core.runtime import load_light_market_bundle, load_technical_bundle
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 from core.utils import get_secret, safe_float
+
+TECHNICAL_ALERT_TYPES = {"rsi", "relative_volume", "sma_cross"}
+
+
+def _needs_technical_features(alerts) -> bool:
+    return not alerts.empty and alerts["alert_type"].astype(str).isin(TECHNICAL_ALERT_TYPES).any()
+
 
 configure_page("Alertes", "🔔")
 apply_style()
@@ -29,8 +37,8 @@ page_header(
     "🔔",
 )
 
-constituents, diagnostics, snapshot, features = load_market_bundle()
-feature_map = features.set_index("YahooTicker").to_dict(orient="index")
+constituents, diagnostics, snapshot = load_light_market_bundle()
+feature_map = snapshot.set_index("YahooTicker").to_dict(orient="index") if "YahooTicker" in snapshot else {}
 lookup = dict(zip(constituents["YahooTicker"], constituents["Ticker"] + " — " + constituents["Nom"]))
 
 with st.expander("➕ Créer une alerte", expanded=True):
@@ -101,6 +109,18 @@ if alerts.empty:
     st.stop()
 
 label_by_type = {value: key for key, value in ALERT_TYPES.items()}
+needs_technical = _needs_technical_features(alerts)
+show_live_technical = False
+if needs_technical:
+    show_live_technical = st.toggle(
+        "Afficher les valeurs techniques en direct",
+        value=False,
+        help="Charge les historiques de l'univers seulement si tu veux voir RSI, volume relatif ou croisements SMA avant l'évaluation.",
+    )
+    if show_live_technical:
+        with st.spinner("Chargement des indicateurs techniques des alertes…"):
+            _, _, _, technical_features = load_technical_bundle()
+        feature_map = technical_features.set_index("YahooTicker").to_dict(orient="index")
 
 if st.button("▶️ Évaluer maintenant et enregistrer les déclenchements"):
     allowed, wait_seconds = consume(
@@ -115,9 +135,16 @@ if st.button("▶️ Évaluer maintenant et enregistrer les déclenchements"):
         footer()
         st.stop()
 
+    evaluation_features = feature_map
+    active_alerts = alerts[alerts["active"] == 1]
+    if _needs_technical_features(active_alerts):
+        with st.spinner("Chargement technique pour l'évaluation des alertes…"):
+            _, _, _, technical_features = load_technical_bundle()
+        evaluation_features = technical_features.set_index("YahooTicker").to_dict(orient="index")
+
     triggered_count = 0
-    for _, alert in alerts[alerts["active"] == 1].iterrows():
-        feature = feature_map.get(alert["ticker"])
+    for _, alert in active_alerts.iterrows():
+        feature = evaluation_features.get(alert["ticker"])
         if not feature:
             continue
         triggered, value, message = evaluate_alert(alert, feature)
@@ -147,7 +174,12 @@ if st.button("▶️ Évaluer maintenant et enregistrer les déclenchements"):
 st.subheader("Alertes actives et inactives")
 for _, alert in alerts.iterrows():
     feature = feature_map.get(alert["ticker"], {})
-    triggered, value, message = evaluate_alert(alert, feature) if feature else (False, None, "Donnée indisponible")
+    alert_type = str(alert.get("alert_type", ""))
+    if alert_type in TECHNICAL_ALERT_TYPES and not show_live_technical:
+        value_raw = safe_float(alert.get("last_value"))
+        triggered, value, message = False, None if np.isnan(value_raw) else value_raw, "Valeur technique chargée seulement à l'évaluation."
+    else:
+        triggered, value, message = evaluate_alert(alert, feature) if feature else (False, None, "Donnée indisponible")
     with st.container(border=True):
         cols = st.columns([2.2, 1.2, 1.2, 1.2, 0.8, 0.8])
         cols[0].markdown(f"**{alert['ticker']}** · {label_by_type.get(alert['alert_type'], alert['alert_type'])}")
@@ -163,6 +195,8 @@ for _, alert in alerts.iterrows():
             delete_alert(int(alert["id"]))
             st.rerun()
         st.caption(f"Canal : {alert['channel']} · cooldown : {alert['cooldown_minutes']} min · dernier déclenchement : {alert['last_triggered_at'] or 'jamais'}")
+        if message and alert_type in TECHNICAL_ALERT_TYPES and not show_live_technical:
+            st.caption(message)
 
 st.subheader("Historique des déclenchements")
 events = get_alert_events(profile)

@@ -9,7 +9,7 @@ import streamlit as st
 from core.universe import current_universe
 from core.database import database_backend, database_location, get_alerts, get_positions, get_watchlist
 from core.data_quality import render_data_quality_strip, render_source_status
-from core.runtime import load_market_bundle
+from core.runtime import load_light_market_bundle, load_technical_bundle
 from core.ui import apply_style, configure_page, dependency_version, footer, page_header, sidebar_context
 from core.utils import get_secret
 
@@ -22,13 +22,25 @@ page_header(
     "🛠️",
 )
 
-constituents, diagnostics, snapshot, features = load_market_bundle()
+constituents, diagnostics, snapshot = load_light_market_bundle()
+load_technical_audit = st.toggle(
+    "Charger l'audit technique complet",
+    value=False,
+    help="Télécharge les historiques de l'univers actif seulement quand tu veux vérifier la couverture technique.",
+)
+features = pd.DataFrame()
+if load_technical_audit:
+    with st.spinner("Chargement de l'audit technique complet…"):
+        constituents, diagnostics, snapshot, features = load_technical_bundle()
+
+quote_count = int(snapshot.get("Prix", pd.Series(dtype=float)).notna().sum()) if not snapshot.empty else 0
+technical_count = int(features.get("CloseTech", pd.Series(dtype=float)).notna().sum()) if not features.empty else 0
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Univers actif", current_universe().short_label)
 m2.metric("Constituants récupérés", len(constituents))
-m3.metric("Cotations disponibles", int(snapshot["Prix"].notna().sum()))
-m4.metric("Historiques techniques", int(features["CloseTech"].notna().sum()))
+m3.metric("Cotations disponibles", quote_count)
+m4.metric("Historiques techniques", technical_count if load_technical_audit else "Non chargé")
 
 render_data_quality_strip(snapshot, diagnostics)
 
@@ -39,10 +51,19 @@ st.subheader("Audit de composition")
 st.json(diagnostics)
 st.dataframe(constituents, hide_index=True, width="stretch")
 
-missing_quotes = snapshot[snapshot["Prix"].isna()][["Ticker", "Nom", "YahooTicker"]]
+if "Prix" in snapshot:
+    missing_quotes = snapshot[snapshot["Prix"].isna()][["Ticker", "Nom", "YahooTicker"]]
+else:
+    missing_quotes = pd.DataFrame()
 if not missing_quotes.empty:
     st.warning("Cotations manquantes")
     st.dataframe(missing_quotes, hide_index=True, width="stretch")
+
+if load_technical_audit and not features.empty:
+    missing_technical = features[features.get("CloseTech", pd.Series(dtype=float)).isna()][["Ticker", "Nom", "YahooTicker"]]
+    if not missing_technical.empty:
+        st.warning("Historiques techniques manquants")
+        st.dataframe(missing_technical, hide_index=True, width="stretch")
 
 st.subheader("Environnement")
 environment = pd.DataFrame(

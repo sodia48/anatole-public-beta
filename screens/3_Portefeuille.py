@@ -54,10 +54,8 @@ if positions.empty:
     st.stop()
 
 position_tickers = tuple(sorted(positions["ticker"].str.upper().unique().tolist()))
-with st.spinner("Mise à jour des cotations et du risque..."):
+with st.spinner("Mise à jour des cotations..."):
     quotes = fetch_market_snapshot(position_tickers)
-    history_tickers = tuple(sorted(set(position_tickers) | {"XIU.TO"}))
-    histories = fetch_batch_history(history_tickers, "2y", "1d")
 portfolio = portfolio_table(positions, quotes, constituents)
 
 if portfolio.empty:
@@ -98,29 +96,40 @@ with allocation_col1:
 with allocation_col2:
     st.plotly_chart(portfolio_allocation_chart(portfolio, "Secteur"), width="stretch", key="portefeuille_allocation_secteur")
 
-risk_free = st.number_input("Taux sans risque annuel (%)", min_value=0.0, max_value=20.0, value=3.0, step=0.25) / 100
-risk = portfolio_risk_metrics(portfolio, histories, risk_free)
-if risk:
-    st.subheader("Risque du portefeuille")
-    r1, r2, r3, r4, r5, r6 = st.columns(6)
-    r1.metric("Rendement annualisé", f"{risk['annual_return']:+.2f}%")
-    r2.metric("Volatilité annualisée", f"{risk['annual_volatility']:.2f}%")
-    r3.metric("Ratio de Sharpe", f"{risk['sharpe']:.2f}")
-    r4.metric("Bêta vs XIU", f"{risk['beta']:.2f}" if not np.isnan(risk['beta']) else "N/D")
-    r5.metric("Drawdown maximal", f"{risk['max_drawdown']:.2f}%")
-    r6.metric("VaR 95 % quotidienne", f"{risk['var95_daily']:.2f}%")
-    curve = pd.DataFrame({"Equity": risk["equity_curve"] * total_value})
-    st.plotly_chart(equity_curve_chart(curve, "Évolution historique estimée du portefeuille"), width="stretch", key="portefeuille_equity_curve")
-    st.subheader("Contribution de chaque position au risque")
-    st.dataframe(
-        risk["risk_contribution"].sort_values("Contribution au risque %", ascending=False),
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "Poids %": st.column_config.NumberColumn(format="%.2f%%"),
-            "Contribution au risque %": st.column_config.NumberColumn(format="%.2f%%"),
-        },
-    )
+calculate_risk = st.toggle(
+    "Calculer le risque historique du portefeuille",
+    value=False,
+    help="Charge deux ans d'historique pour tes positions et XIU seulement lorsque tu veux les métriques de risque.",
+)
+if calculate_risk:
+    risk_free = st.number_input("Taux sans risque annuel (%)", min_value=0.0, max_value=20.0, value=3.0, step=0.25) / 100
+    history_tickers = tuple(sorted(set(position_tickers) | {"XIU.TO"}))
+    with st.spinner("Chargement des historiques de risque..."):
+        histories = fetch_batch_history(history_tickers, "2y", "1d")
+    risk = portfolio_risk_metrics(portfolio, histories, risk_free)
+    if risk:
+        st.subheader("Risque du portefeuille")
+        r1, r2, r3, r4, r5, r6 = st.columns(6)
+        r1.metric("Rendement annualisé", f"{risk['annual_return']:+.2f}%")
+        r2.metric("Volatilité annualisée", f"{risk['annual_volatility']:.2f}%")
+        r3.metric("Ratio de Sharpe", f"{risk['sharpe']:.2f}")
+        r4.metric("Bêta vs XIU", f"{risk['beta']:.2f}" if not np.isnan(risk['beta']) else "N/D")
+        r5.metric("Drawdown maximal", f"{risk['max_drawdown']:.2f}%")
+        r6.metric("VaR 95 % quotidienne", f"{risk['var95_daily']:.2f}%")
+        curve = pd.DataFrame({"Equity": risk["equity_curve"] * total_value})
+        st.plotly_chart(equity_curve_chart(curve, "Évolution historique estimée du portefeuille"), width="stretch", key="portefeuille_equity_curve")
+        st.subheader("Contribution de chaque position au risque")
+        st.dataframe(
+            risk["risk_contribution"].sort_values("Contribution au risque %", ascending=False),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Poids %": st.column_config.NumberColumn(format="%.2f%%"),
+                "Contribution au risque %": st.column_config.NumberColumn(format="%.2f%%"),
+            },
+        )
+else:
+    st.caption("Le risque historique est disponible sur demande afin de garder le portefeuille rapide à l'ouverture.")
 
 st.download_button(
     "Télécharger le portefeuille en CSV",

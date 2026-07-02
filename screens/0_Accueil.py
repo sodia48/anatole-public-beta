@@ -216,6 +216,16 @@ def live_cockpit() -> None:
     if "Heatmap" not in visible_modules and visible_modules:
         return
 
+    show_heatmap = st.toggle(
+        "Afficher la carte du marché",
+        value=bool(st.session_state.get("show_home_heatmap", False)),
+        help="La heatmap interactive est chargée seulement sur demande pour accélérer l'accueil.",
+        key="show_home_heatmap",
+    )
+    if not show_heatmap:
+        st.caption("Carte du marché désactivée au démarrage pour garder l'accueil rapide.")
+        return
+
     st.subheader("Carte du marché")
     with st.expander("Filtres de la carte", expanded=False):
         all_sectors = sorted(market["Secteur"].dropna().unique().tolist())

@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from core.ai import analyze_stock_in_french
 from core.analytics import add_indicators, enrich_news, explain_move
@@ -26,7 +25,6 @@ from core.ecosystem import (
     ecosystem_for_ticker,
     ecosystem_metrics,
     ecosystem_sankey,
-    ecosystem_value_chain_html,
 )
 from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
@@ -76,6 +74,72 @@ def volume_flow_label(last_open: object, last_close: object) -> str:
     if np.isnan(open_value) or np.isnan(close_value):
         return "N/D"
     return "Entrée dominante" if close_value >= open_value else "Sortie dominante"
+
+
+
+def _ecosystem_layer(rows: pd.DataFrame, layer: str, limit: int = 5) -> pd.DataFrame:
+    if rows.empty or "layer" not in rows.columns:
+        return pd.DataFrame()
+    return rows[rows["layer"].astype(str) == layer].head(limit).copy()
+
+
+def _render_ecosystem_card(title: str, rows: pd.DataFrame, empty: str) -> None:
+    with st.container(border=True):
+        st.markdown(f"**{title}**")
+        if rows.empty:
+            st.caption(empty)
+            return
+        for _, row in rows.iterrows():
+            confidence = str(row.get("confidence", "")).strip()
+            source_name = str(row.get("source_name", "")).strip()
+            source_url = str(row.get("source_url", "")).strip()
+            badge = "Documenté" if confidence == "Documenté" else "Indicatif"
+            st.markdown(f"**{row.get('relation', 'Relation')}**")
+            st.write(str(row.get("entity", "Non documenté")))
+            st.caption(f"{row.get('sector', 'Secteur non précisé')} · {badge}")
+            if source_url:
+                st.link_button(source_name or "Source", source_url, width="stretch")
+            st.divider()
+
+
+def render_ecosystem_native(rows: pd.DataFrame, ticker: str, company_name: str) -> None:
+    st.markdown("#### Chaîne de valeur lisible")
+    intrants = _ecosystem_layer(rows, "Intrants")
+    clients = _ecosystem_layer(rows, "Clients servis")
+    secteurs = _ecosystem_layer(rows, "Secteurs impactés")
+
+    c1, c2, c3, c4 = st.columns([1.15, 0.85, 1.15, 1.15])
+    with c1:
+        _render_ecosystem_card("1. Intrants / ressources", intrants, "Aucun intrant documenté pour ce titre.")
+    with c2:
+        with st.container(border=True):
+            st.markdown("**2. Entreprise**")
+            st.markdown(f"### {company_name}")
+            st.caption(ticker)
+            documented = int((rows.get("confidence", pd.Series(dtype=str)).astype(str) == "Documenté").sum())
+            st.metric("Liens documentés", documented)
+    with c3:
+        _render_ecosystem_card("3. Clients / usages servis", clients, "Aucun client ou usage documenté pour ce titre.")
+    with c4:
+        _render_ecosystem_card("4. Secteurs impactés", secteurs, "Aucun secteur documenté pour ce titre.")
+
+    sourced = rows[rows.get("source_url", pd.Series(dtype=str)).astype(str).str.strip() != ""].copy()
+    if not sourced.empty:
+        st.markdown("#### Sources publiques intégrées")
+        source_cols = [col for col in ["layer", "relation", "entity", "confidence", "source_name", "source_url"] if col in sourced.columns]
+        st.dataframe(
+            sourced[source_cols].rename(columns={
+                "layer": "Couche",
+                "relation": "Relation",
+                "entity": "Entité / usage",
+                "confidence": "Confiance",
+                "source_name": "Source",
+                "source_url": "Lien source",
+            }),
+            hide_index=True,
+            width="stretch",
+            column_config={"Lien source": st.column_config.LinkColumn("Lien source")},
+        )
 
 
 def local_analysis_lines(
@@ -374,11 +438,7 @@ elif section == "Écosystème":
     else:
         st.info("Aucune source précise n'est encore intégrée pour ce titre; Anatole affiche une lecture indicative par secteur.")
 
-    components.html(
-        ecosystem_value_chain_html(ecosystem_rows, ticker, str(name)),
-        height=520,
-        scrolling=True,
-    )
+    render_ecosystem_native(ecosystem_rows, ticker, str(name))
 
     with st.expander("Vue réseau expérimentale", expanded=False):
         st.caption(
@@ -672,96 +732,104 @@ elif section == "Analyse":
 
 footer()
 
-
 st.divider()
-st.subheader("Laboratoire de stratégies")
-
-st.caption(
-    "Teste des stratégies classiques sur le titre affiché. "
-    "Les résultats sont des simulations éducatives, pas des recommandations personnalisées."
+show_strategy_lab = st.toggle(
+    "Afficher le laboratoire de stratégies",
+    value=False,
+    help="Lance le backtest et les graphiques de stratégie seulement lorsque tu veux les consulter.",
+    key=f"focus_strategy_lab_{ticker}",
 )
+if show_strategy_lab:
+    st.subheader("Laboratoire de stratégies")
 
-with st.expander("Catalogue des 10 stratégies disponibles", expanded=False):
-    st.dataframe(strategy_catalog_frame(), width="stretch", hide_index=True)
+    st.caption(
+        "Teste des stratégies classiques sur le titre affiché. "
+        "Les résultats sont des simulations éducatives, pas des recommandations personnalisées."
+    )
 
-strategy_keys = strategy_options()
-selected_strategy = st.selectbox(
-    "Stratégie à tester",
-    strategy_keys,
-    index=0,
-    format_func=lambda key: STRATEGIES[key].name,
-    help="Les stratégies sont adaptées au backtest d'un titre individuel avec les données disponibles.",
-    key=f"focus_strategy_select_{ticker}",
-)
+    with st.expander("Catalogue des 10 stratégies disponibles", expanded=False):
+        st.dataframe(strategy_catalog_frame(), width="stretch", hide_index=True)
 
-cost_bps = st.slider(
-    "Coût de transaction estimé par changement d'exposition, en points de base",
-    min_value=0,
-    max_value=50,
-    value=5,
-    step=1,
-    help="5 bps = 0,05 %. Cette valeur est indicative et ne tient pas compte de tous les coûts réels.",
-    key=f"focus_strategy_cost_{ticker}",
-)
+    strategy_keys = strategy_options()
+    selected_strategy = st.selectbox(
+        "Stratégie à tester",
+        strategy_keys,
+        index=0,
+        format_func=lambda key: STRATEGIES[key].name,
+        help="Les stratégies sont adaptées au backtest d'un titre individuel avec les données disponibles.",
+        key=f"focus_strategy_select_{ticker}",
+    )
 
-strategy = STRATEGIES[selected_strategy]
-st.info(
-    f"**{strategy.name}** · {strategy.family} — {strategy.description} "
-    f"Données requises : {strategy.requirement}"
-)
+    cost_bps = st.slider(
+        "Coût de transaction estimé par changement d'exposition, en points de base",
+        min_value=0,
+        max_value=50,
+        value=5,
+        step=1,
+        help="5 bps = 0,05 %. Cette valeur est indicative et ne tient pas compte de tous les coûts réels.",
+        key=f"focus_strategy_cost_{ticker}",
+    )
 
-backtest = run_strategy_backtest(
-    history,
-    selected_strategy,
-    transaction_cost_bps=float(cost_bps),
-    initial_capital=10_000.0,
-)
+    strategy = STRATEGIES[selected_strategy]
+    st.info(
+        f"**{strategy.name}** · {strategy.family} — {strategy.description} "
+        f"Données requises : {strategy.requirement}"
+    )
 
-metrics = backtest.get("metrics", {})
-if not metrics:
-    st.warning(
-        "Historique insuffisant pour tester cette stratégie sur le titre et la période sélectionnés. "
-        "Essaie une période plus longue."
+    backtest = run_strategy_backtest(
+        history,
+        selected_strategy,
+        transaction_cost_bps=float(cost_bps),
+        initial_capital=10_000.0,
+    )
+
+    metrics = backtest.get("metrics", {})
+    if not metrics:
+        st.warning(
+            "Historique insuffisant pour tester cette stratégie sur le titre et la période sélectionnés. "
+            "Essaie une période plus longue."
+        )
+    else:
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Rendement stratégie", f"{metrics.get('Rendement total', 0):+.1f}%")
+        k2.metric("Buy & Hold", f"{metrics.get('Buy & Hold', 0):+.1f}%")
+        k3.metric("CAGR", f"{metrics.get('CAGR', 0):+.1f}%")
+        k4.metric("Drawdown max", f"{metrics.get('Drawdown max', 0):+.1f}%")
+
+        k5, k6, k7, k8 = st.columns(4)
+        k5.metric("Volatilité annualisée", f"{metrics.get('Volatilité annualisée', 0):.1f}%")
+        sharpe_value = metrics.get("Sharpe indicatif")
+        k6.metric(
+            "Sharpe indicatif",
+            "N/D" if pd.isna(sharpe_value) else f"{sharpe_value:.2f}",
+        )
+        k7.metric("Temps investi", f"{metrics.get('Temps investi', 0):.0f}%")
+        k8.metric("Transactions", f"{int(metrics.get('Transactions', 0))}")
+
+        st.plotly_chart(
+            strategy_equity_chart(backtest, ticker),
+            width="stretch",
+            key=f"strategy_equity_{ticker}_{selected_strategy}_{period}_{interval}_{cost_bps}",
+        )
+
+        st.plotly_chart(
+            strategy_signal_overlay(history, backtest, ticker),
+            width="stretch",
+            key=f"strategy_signals_{ticker}_{selected_strategy}_{period}_{interval}_{cost_bps}",
+        )
+
+        signals = backtest.get("signals")
+        if isinstance(signals, pd.DataFrame) and not signals.empty:
+            st.caption("Derniers signaux générés par la stratégie")
+            signal_view = signals.tail(12).reset_index().rename(columns={"index": "Date"})
+            keep_cols = [col for col in ["Date", "Type", "Close", "Signal", "Exposition"] if col in signal_view.columns]
+            st.dataframe(signal_view[keep_cols], width="stretch", hide_index=True)
+        else:
+            st.caption("Aucun signal d'entrée ou de sortie détecté sur la période sélectionnée.")
+
+    st.caption(
+        "Limites : les backtests utilisent des données historiques, un modèle de coûts simplifié "
+        "et n'incluent pas les impôts, l'écart acheteur-vendeur, les délais d'exécution ni les contraintes personnelles."
     )
 else:
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Rendement stratégie", f"{metrics.get('Rendement total', 0):+.1f}%")
-    k2.metric("Buy & Hold", f"{metrics.get('Buy & Hold', 0):+.1f}%")
-    k3.metric("CAGR", f"{metrics.get('CAGR', 0):+.1f}%")
-    k4.metric("Drawdown max", f"{metrics.get('Drawdown max', 0):+.1f}%")
-
-    k5, k6, k7, k8 = st.columns(4)
-    k5.metric("Volatilité annualisée", f"{metrics.get('Volatilité annualisée', 0):.1f}%")
-    sharpe_value = metrics.get("Sharpe indicatif")
-    k6.metric(
-        "Sharpe indicatif",
-        "N/D" if pd.isna(sharpe_value) else f"{sharpe_value:.2f}",
-    )
-    k7.metric("Temps investi", f"{metrics.get('Temps investi', 0):.0f}%")
-    k8.metric("Transactions", f"{int(metrics.get('Transactions', 0))}")
-
-    st.plotly_chart(
-        strategy_equity_chart(backtest, ticker),
-        width="stretch",
-        key=f"strategy_equity_{ticker}_{selected_strategy}_{period}_{interval}_{cost_bps}",
-    )
-
-    st.plotly_chart(
-        strategy_signal_overlay(history, backtest, ticker),
-        width="stretch",
-        key=f"strategy_signals_{ticker}_{selected_strategy}_{period}_{interval}_{cost_bps}",
-    )
-
-    signals = backtest.get("signals")
-    if isinstance(signals, pd.DataFrame) and not signals.empty:
-        st.caption("Derniers signaux générés par la stratégie")
-        signal_view = signals.tail(12).reset_index().rename(columns={"index": "Date"})
-        keep_cols = [col for col in ["Date", "Type", "Close", "Signal", "Exposition"] if col in signal_view.columns]
-        st.dataframe(signal_view[keep_cols], width="stretch", hide_index=True)
-    else:
-        st.caption("Aucun signal d'entrée ou de sortie détecté sur la période sélectionnée.")
-
-st.caption(
-    "Limites : les backtests utilisent des données historiques, un modèle de coûts simplifié "
-    "et n'incluent pas les impôts, l'écart acheteur-vendeur, les délais d'exécution ni les contraintes personnelles."
-)
+    st.caption("Laboratoire de stratégies désactivé pour accélérer l'ouverture de la fiche action.")

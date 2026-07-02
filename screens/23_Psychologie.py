@@ -26,21 +26,30 @@ page_header(
     "🧠",
 )
 
-with st.spinner("Lecture du pouls psychologique du marché…"):
-    with load_timer("market_psychology"):
-        constituents, diagnostics, market = load_light_market_bundle()
-perf_caption("market_psychology", threshold=2.0)
+section = st.segmented_control(
+    "Vue",
+    ["Marché", "Titre spécifique", "Méthodologie & sources"],
+    default="Marché",
+    selection_mode="single",
+)
 
-if market.empty:
-    st.warning("Les données de marché sont temporairement indisponibles.")
-    footer()
-    st.stop()
+needs_market_data = section in {"Marché", "Titre spécifique"}
+market = None
+diagnostics = {}
+if needs_market_data:
+    with st.spinner("Lecture du pouls psychologique du marché…"):
+        with load_timer("market_psychology"):
+            constituents, diagnostics, market = load_light_market_bundle()
+    perf_caption("market_psychology", threshold=2.0)
 
-render_data_quality_strip(market, diagnostics, compact=True)
+    if market.empty:
+        st.warning("Les données de marché sont temporairement indisponibles.")
+        footer()
+        st.stop()
 
-tab_market, tab_stock, tab_method = st.tabs(["Marché", "Titre spécifique", "Méthodologie & sources"])
+    render_data_quality_strip(market, diagnostics, compact=True)
 
-with tab_market:
+if section == "Marché":
     result = market_psychology_score(market)
     score = float(result["score"])
     label = str(result["label"])
@@ -67,7 +76,7 @@ with tab_market:
         },
     )
 
-with tab_stock:
+elif section == "Titre spécifique":
     st.caption("Mesure la psychologie d'un titre précis à partir de son prix, volume, tendance, RSI, nouvelles et force relative.")
     all_constituents, _ = load_constituents()
     options = all_constituents["YahooTicker"].tolist()
@@ -88,17 +97,24 @@ with tab_stock:
     )
 
     period = st.selectbox("Historique utilisé", ["6mo", "1y", "2y"], index=1)
+    include_news = st.toggle(
+        "Inclure les nouvelles dans le score",
+        value=False,
+        help="Les nouvelles peuvent ralentir le chargement. Active cette option seulement si tu veux les intégrer au score du titre.",
+    )
 
     selected_row = all_constituents.loc[all_constituents["YahooTicker"] == ticker].head(1)
     stock_sector = selected_row["Secteur"].iloc[0] if not selected_row.empty and "Secteur" in selected_row else None
 
     with st.spinner(f"Calcul de la psychologie de {ticker}…"):
         history = add_indicators(fetch_history(ticker, period, "1d"))
-        try:
-            raw_news = fetch_stock_news(ticker)
-            news = enrich_news(raw_news) if raw_news is not None else None
-        except Exception:
-            news = None
+        news = None
+        if include_news:
+            try:
+                raw_news = fetch_stock_news(ticker)
+                news = enrich_news(raw_news) if raw_news is not None else None
+            except Exception:
+                news = None
 
     if history.empty:
         st.warning("Historique indisponible pour ce titre.")
@@ -134,9 +150,9 @@ with tab_stock:
             )
             st.write("- RSI, SMA50, SMA200 : calculs techniques locaux à partir de l'historique.")
             st.write("- Force relative : comparaison à la moyenne du secteur dans l'univers actif.")
-            st.write("- Nouvelles : flux disponible dans Anatole, quand accessible.")
+            st.write("- Nouvelles : flux disponible dans Anatole, quand l'option est activée et que le fournisseur les retourne.")
 
-with tab_method:
+else:
     st.subheader("Méthodologie")
     st.write(
         "L'indice psychologique Anatole est un indicateur propriétaire. "
@@ -160,7 +176,9 @@ with tab_method:
         "Quand une donnée manque, Anatole ramène la composante vers 50/100 au lieu d'inventer un signal."
     )
 
-st.caption(f"Univers analysé : {current_universe().label} · {len(market)} titres suivis.")
+if market is not None:
+    st.caption(f"Univers analysé : {current_universe().label} · {len(market)} titres suivis.")
+else:
+    st.caption(f"Univers actif : {current_universe().label}")
 
 footer()
-
