@@ -882,10 +882,17 @@ def apply_style() -> None:
             min-height: 42px;
             border: 1px solid rgba(37,99,235,.22) !important;
             background: linear-gradient(135deg, #2563EB, #0EA5E9) !important;
-            color: white !important;
+            color: #FFFFFF !important;
             font-weight: 820 !important;
             box-shadow: 0 9px 22px rgba(37,99,235,.22);
             transition: all .18s ease;
+        }}
+
+        .stButton > button *,
+        .stDownloadButton > button *,
+        [data-testid="stFormSubmitButton"] button * {{
+            color: #FFFFFF !important;
+            opacity: 1 !important;
         }}
 
         .stButton > button:hover,
