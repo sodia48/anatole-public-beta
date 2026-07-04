@@ -33,7 +33,7 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Alertes persistantes",
-    "Crée des conditions enregistrées dans SQLite et utilise le worker fourni pour recevoir des notifications hors session.",
+    "Surveille tes titres, tes seuils et tes signaux importants.",
     "🔔",
 )
 
@@ -66,12 +66,32 @@ with st.expander("➕ Créer une alerte", expanded=True):
                 )
             else:
                 operator = st.selectbox("Condition", [">", "<"], format_func=lambda value: "Au-dessus de" if value == ">" else "En-dessous de")
+        current_feature = feature_map.get(ticker, {})
+        current_price = safe_float(current_feature.get("Prix"))
+
+        default_thresholds = {
+            "price": 0.0 if np.isnan(current_price) else round(float(current_price), 2),
+            "daily_change": 0.0,
+            "rsi": 70.0 if operator == ">" else 30.0,
+            "relative_volume": 1.5 if operator == ">" else 0.7,
+            "sma_cross": 0.0,
+        }
+
+        threshold_help = (
+            "Prérempli avec le dernier prix disponible pour éviter une alerte de prix à 0,00."
+            if alert_type == "price"
+            else None
+        )
+
         with d2:
             threshold = st.number_input(
                 "Seuil",
-                value=0.0,
+                value=float(default_thresholds.get(alert_type, 0.0)),
                 step=0.1,
+                format="%.2f",
                 disabled=alert_type == "sma_cross",
+                help=threshold_help,
+                key=f"new_alert_threshold_{ticker}_{alert_type}_{operator}",
             )
         with d3:
             cooldown = st.number_input("Délai minimum entre notifications (min)", min_value=5, max_value=10_080, value=60, step=5)
@@ -97,10 +117,6 @@ status_cols[0].metric("Notifications dans l'app", "Prêtes")
 status_cols[1].metric("Telegram", "Configuré" if telegram_ready else "Non configuré")
 status_cols[2].metric("Courriel", "Configuré" if email_ready else "Non configuré")
 
-st.caption(
-    "Pour les notifications lorsque l'application est fermée, lance séparément : "
-    "`python alert_worker.py --interval 60`. Le worker lit les mêmes alertes SQLite."
-)
 
 alerts = get_alerts(profile)
 if alerts.empty:
