@@ -33,8 +33,8 @@ configure_page("Watchlist", "⭐")
 apply_style()
 profile = sidebar_context()
 page_header(
-    "Watchlist persistante",
-    "Gère une liste enregistrée dans SQLite, retrouvée après fermeture du navigateur.",
+    "Watchlist",
+    "Suivez vos titres favoris, leurs signaux clés et les mouvements importants du marché.",
     "⭐",
 )
 
