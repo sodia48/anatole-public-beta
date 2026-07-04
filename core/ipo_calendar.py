@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from io import StringIO
+from html import unescape
 from pathlib import Path
 from typing import Any
+import re
 
 import pandas as pd
 import requests
@@ -25,14 +26,16 @@ IPO_COLUMNS = [
 ]
 
 LOCAL_IPO_FILE = DATA_DIR / "ipo_calendar.csv"
-REQUEST_TIMEOUT = 10
+REQUEST_TIMEOUT = 12
 
 PUBLIC_HEADERS = {
     "Accept": "application/json, text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "fr-CA,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
     ),
 }
 
@@ -44,15 +47,9 @@ def load_upcoming_ipos(
 ) -> tuple[pd.DataFrame, dict[str, str]]:
     """Charge un calendrier IPO consolidé.
 
-    Priorité des sources :
-    1. fichier local data/ipo_calendar.csv, utile pour une bêta publique contrôlée ;
-    2. Finnhub si FINNHUB_API_KEY est configurée ;
-    3. Financial Modeling Prep si FMP_API_KEY est configurée ;
-    4. sources publiques sans clé API, en meilleur effort : Yahoo Finance,
-       StockAnalysis et Nasdaq public.
-
-    Note : les sources publiques ne garantissent pas une couverture exhaustive.
-    Elles peuvent être différées, incomplètes, bloquées ou modifiées par les sites.
+    Anatole essaie d'abord les sources contrôlées, puis plusieurs sources
+    publiques sans clé API. Les sources publiques restent en meilleur effort :
+    elles peuvent être incomplètes, différées, bloquées ou changer de structure.
     """
     today = pd.Timestamp.now(tz=TORONTO_TZ).date()
     start_date = _parse_date(start) or today
@@ -64,27 +61,27 @@ def load_upcoming_ipos(
     local = _load_local_ipo_calendar(LOCAL_IPO_FILE)
     if not local.empty:
         frames.append(local)
-        statuses["Fichier local"] = "OK"
+        statuses["Fichier local"] = f"OK — {len(local)} ligne(s)"
     else:
-        statuses["Fichier local"] = "Non configuré"
+        statuses["Fichier local"] = "Optionnel — non configuré"
 
     finnhub_key = str(get_secret("FINNHUB_API_KEY", "") or "").strip()
     if finnhub_key:
         frame, status = _fetch_finnhub_ipo_calendar(start_date, end_date, finnhub_key)
-        statuses["Finnhub"] = status
+        statuses["Finnhub"] = _status_with_count(status, frame)
         if not frame.empty:
             frames.append(frame)
     else:
-        statuses["Finnhub"] = "Clé absente"
+        statuses["Finnhub"] = "Optionnel — clé absente"
 
     fmp_key = str(get_secret("FMP_API_KEY", "") or "").strip()
     if fmp_key:
         frame, status = _fetch_fmp_ipo_calendar(start_date, end_date, fmp_key)
-        statuses["Financial Modeling Prep"] = status
+        statuses["Financial Modeling Prep"] = _status_with_count(status, frame)
         if not frame.empty:
             frames.append(frame)
     else:
-        statuses["Financial Modeling Prep"] = "Clé absente"
+        statuses["Financial Modeling Prep"] = "Optionnel — clé absente"
 
     public_enabled = str(get_secret("ANATOLE_ENABLE_PUBLIC_IPO_SOURCES", "true") or "true").lower() in {
         "1",
@@ -94,19 +91,22 @@ def load_upcoming_ipos(
     }
 
     if public_enabled:
-        for source_name, loader in (
-            ("Yahoo Finance public", lambda: _fetch_yahoo_ipo_calendar(start_date, end_date)),
+        public_loaders = (
             ("StockAnalysis public", lambda: _fetch_stockanalysis_ipo_calendar()),
+            ("IPO Scoop public", lambda: _fetch_iposcoop_ipo_calendar()),
             ("Nasdaq public", lambda: _fetch_nasdaq_ipo_calendar()),
-        ):
+            ("Yahoo Finance public", lambda: _fetch_yahoo_ipo_calendar(start_date, end_date)),
+        )
+        for source_name, loader in public_loaders:
             frame, status = loader()
-            statuses[source_name] = status
+            statuses[source_name] = _status_with_count(status, frame)
             if not frame.empty:
                 frames.append(frame)
     else:
-        statuses["Yahoo Finance public"] = "Désactivé"
         statuses["StockAnalysis public"] = "Désactivé"
+        statuses["IPO Scoop public"] = "Désactivé"
         statuses["Nasdaq public"] = "Désactivé"
+        statuses["Yahoo Finance public"] = "Désactivé"
 
     if not frames:
         return _empty_frame(), statuses
@@ -133,13 +133,21 @@ def _parse_date(value: str | int | float | date | None) -> date | None:
         if isinstance(value, date):
             return value
         if isinstance(value, (int, float)) and not pd.isna(value):
-            # Certains endpoints Yahoo retournent des timestamps UNIX.
             if value > 10_000_000_000:
-                return pd.to_datetime(value, unit="ms", errors="coerce").date()
+                parsed = pd.to_datetime(value, unit="ms", errors="coerce")
+                return None if pd.isna(parsed) else parsed.date()
             if value > 1_000_000_000:
-                return pd.to_datetime(value, unit="s", errors="coerce").date()
+                parsed = pd.to_datetime(value, unit="s", errors="coerce")
+                return None if pd.isna(parsed) else parsed.date()
         text = str(value).strip()
-        if not text or text.lower() in {"tba", "tbd", "to be announced", "à confirmer"}:
+        if not text or text.lower() in {
+            "tba",
+            "tbd",
+            "to be announced",
+            "à confirmer",
+            "date à confirmer",
+            "expected",
+        }:
             return None
         parsed = pd.to_datetime(text, errors="coerce")
         if pd.isna(parsed):
@@ -213,7 +221,7 @@ def _fetch_finnhub_ipo_calendar(
         frame = _normalise_records(records, source="Finnhub")
         return frame, "OK" if not frame.empty else "Aucune donnée"
     except Exception as exc:
-        return _empty_frame(), f"Indisponible : {type(exc).__name__}"
+        return _empty_frame(), _friendly_error(exc)
 
 
 def _fetch_fmp_ipo_calendar(
@@ -241,16 +249,15 @@ def _fetch_fmp_ipo_calendar(
             if not frame.empty:
                 return frame, "OK"
         except Exception as exc:
-            errors.append(type(exc).__name__)
-    if errors:
-        return _empty_frame(), f"Indisponible : {', '.join(sorted(set(errors)))}"
-    return _empty_frame(), "Aucune donnée"
+            errors.append(_friendly_error(exc))
+    return _empty_frame(), _combine_errors(errors)
 
 
 def _fetch_yahoo_ipo_calendar(start_date: date, end_date: date) -> tuple[pd.DataFrame, str]:
-    """Charge le calendrier IPO Yahoo Finance sans clé API.
+    """Source publique Yahoo, conservée en complément.
 
-    L'endpoint public peut changer ou retourner une couverture partielle.
+    Dans certains environnements, Yahoo retourne une erreur HTTP ou demande des
+    cookies. On ne l'utilise donc jamais comme source principale.
     """
     endpoints = [
         "https://query1.finance.yahoo.com/v1/finance/calendar/ipo",
@@ -276,39 +283,37 @@ def _fetch_yahoo_ipo_calendar(start_date: date, end_date: date) -> tuple[pd.Data
             if not frame.empty:
                 return frame, "OK"
         except Exception as exc:
-            errors.append(type(exc).__name__)
-    if errors:
-        return _empty_frame(), f"Indisponible : {', '.join(sorted(set(errors)))}"
-    return _empty_frame(), "Aucune donnée"
+            errors.append(_friendly_error(exc))
+    return _empty_frame(), _combine_errors(errors)
 
 
 def _fetch_stockanalysis_ipo_calendar() -> tuple[pd.DataFrame, str]:
-    """Charge la table publique StockAnalysis sans clé API.
+    """Charge StockAnalysis sans dépendre de pandas.read_html/lxml.
 
-    Cette source est utile pour compléter Nasdaq/Yahoo, mais reste du scraping HTML
-    en meilleur effort.
+    La version précédente utilisait pd.read_html, ce qui provoquait parfois
+    ImportError si lxml/html5lib n'était pas installé. Ici, on parse les tables
+    HTML avec la bibliothèque standard pour éviter cette dépendance.
     """
     url = "https://stockanalysis.com/ipos/calendar/"
     try:
         html = _request_text(url, headers={"Referer": "https://stockanalysis.com/ipos/"})
-        tables = pd.read_html(StringIO(html))
+        records = _extract_html_table_records(html, base_url="https://stockanalysis.com")
+        frame = _normalise_records(records, source="StockAnalysis")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
     except Exception as exc:
-        return _empty_frame(), f"Indisponible : {type(exc).__name__}"
+        return _empty_frame(), _friendly_error(exc)
 
-    frames: list[pd.DataFrame] = []
-    for table in tables:
-        if table.empty:
-            continue
-        columns = {str(column).lower(): column for column in table.columns}
-        has_company = any(token in column for column in columns for token in ("company", "name"))
-        has_date_or_symbol = any(token in column for column in columns for token in ("date", "symbol", "ticker"))
-        if has_company and has_date_or_symbol:
-            frames.append(_normalise_records(table.to_dict("records"), source="StockAnalysis"))
 
-    frames = [frame for frame in frames if not frame.empty]
-    if not frames:
-        return _empty_frame(), "Aucune donnée"
-    return pd.concat(frames, ignore_index=True), "OK"
+def _fetch_iposcoop_ipo_calendar() -> tuple[pd.DataFrame, str]:
+    """Complément public sans API pour élargir la couverture."""
+    url = "https://www.iposcoop.com/ipo-calendar/"
+    try:
+        html = _request_text(url, headers={"Referer": "https://www.iposcoop.com/"})
+        records = _extract_html_table_records(html, base_url="https://www.iposcoop.com")
+        frame = _normalise_records(records, source="IPO Scoop")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
+    except Exception as exc:
+        return _empty_frame(), _friendly_error(exc)
 
 
 def _fetch_nasdaq_ipo_calendar() -> tuple[pd.DataFrame, str]:
@@ -322,18 +327,113 @@ def _fetch_nasdaq_ipo_calendar() -> tuple[pd.DataFrame, str]:
         "https://api.nasdaq.com/api/ipo/calendar",
     ]
     errors: list[str] = []
+    collected: list[pd.DataFrame] = []
     for url in urls:
         try:
             payload = _request_json(url, headers=headers)
             records = _extract_records(payload)
             frame = _normalise_records(records, source="Nasdaq")
             if not frame.empty:
-                return frame, "OK"
+                collected.append(frame)
         except Exception as exc:
-            errors.append(type(exc).__name__)
-    if errors:
-        return _empty_frame(), f"Indisponible : {', '.join(sorted(set(errors)))}"
-    return _empty_frame(), "Aucune donnée"
+            errors.append(_friendly_error(exc))
+    if collected:
+        return pd.concat(collected, ignore_index=True), "OK"
+    return _empty_frame(), _combine_errors(errors) if errors else "Aucune donnée"
+
+
+def _extract_html_table_records(html: str, base_url: str = "") -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    tables = re.findall(r"<table\b[^>]*>(.*?)</table>", html, flags=re.IGNORECASE | re.DOTALL)
+    for table in tables:
+        rows = re.findall(r"<tr\b[^>]*>(.*?)</tr>", table, flags=re.IGNORECASE | re.DOTALL)
+        if len(rows) < 2:
+            continue
+
+        header_cells = _extract_cells(rows[0], base_url=base_url)
+        if not header_cells or len(header_cells) < 2:
+            continue
+
+        headers = [_normalise_header(cell) for cell in header_cells]
+        useful_header = " ".join(headers).lower()
+        if not any(token in useful_header for token in ("company", "société", "symbol", "ticker", "date", "ipo")):
+            continue
+
+        for row_html in rows[1:]:
+            cells = _extract_cells(row_html, base_url=base_url)
+            if len(cells) < 2:
+                continue
+            if len(cells) < len(headers):
+                cells += [""] * (len(headers) - len(cells))
+            record = {headers[index]: cells[index] for index in range(min(len(headers), len(cells)))}
+            # Préserver un lien de prospectus/page société lorsqu'un href est présent dans la ligne.
+            row_link = _extract_first_href(row_html, base_url=base_url)
+            if row_link and not record.get("Lien"):
+                record["Lien"] = row_link
+            records.append(record)
+    return records
+
+
+def _extract_cells(row_html: str, base_url: str = "") -> list[str]:
+    cells = re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", row_html, flags=re.IGNORECASE | re.DOTALL)
+    return [_strip_html(cell, base_url=base_url) for cell in cells]
+
+
+def _extract_first_href(html: str, base_url: str = "") -> str:
+    match = re.search(r"href=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE)
+    if not match:
+        return ""
+    href = unescape(match.group(1)).strip()
+    if href.startswith("/") and base_url:
+        return base_url.rstrip("/") + href
+    if href.startswith("http"):
+        return href
+    return ""
+
+
+def _strip_html(value: str, base_url: str = "") -> str:
+    text = re.sub(r"<br\s*/?>", " ", value, flags=re.IGNORECASE)
+    text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _normalise_header(value: Any) -> str:
+    text = _clean_text(value)
+    lower = text.lower().replace("\n", " ").strip()
+    aliases = {
+        "company": "Société",
+        "company name": "Société",
+        "name": "Société",
+        "issuer": "Société",
+        "issuer name": "Société",
+        "symbol": "Symbole",
+        "ticker": "Symbole",
+        "proposed symbol": "Symbole",
+        "proposed ticker": "Symbole",
+        "stock": "Symbole",
+        "date": "Date",
+        "ipo date": "Date",
+        "expected date": "Date",
+        "offer date": "Date",
+        "pricing date": "Date",
+        "exchange": "Bourse",
+        "market": "Bourse",
+        "price": "Prix indicatif",
+        "price range": "Prix indicatif",
+        "range": "Prix indicatif",
+        "shares": "Actions offertes",
+        "shares offered": "Actions offertes",
+        "offer amount": "Actions offertes",
+        "status": "Statut",
+        "type": "Statut",
+        "url": "Lien",
+        "link": "Lien",
+    }
+    return aliases.get(lower, text)
 
 
 def _extract_records(payload: Any) -> list[dict[str, Any]]:
@@ -403,6 +503,8 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "date",
                 "IPO Date",
                 "ipoDate",
+                "Offer Date",
+                "offerDate",
                 "pricedDate",
                 "pricingDate",
                 "expectedDate",
@@ -438,6 +540,7 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "Ticker",
                 "proposedTicker",
                 "proposedTickerSymbol",
+                "Proposed Symbol",
                 "stock",
                 "Stock",
             ),
@@ -448,6 +551,8 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "Bourse",
                 "exchange",
                 "Exchange",
+                "market",
+                "Market",
                 "proposedExchange",
                 "stockExchange",
                 "listingExchange",
@@ -461,6 +566,8 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "Price",
                 "priceRange",
                 "Price Range",
+                "range",
+                "Range",
                 "proposedSharePrice",
                 "offerPrice",
                 "ipoPrice",
@@ -479,6 +586,7 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "sharesOffered",
                 "offeredShares",
                 "offerShares",
+                "Offer Amount",
             ),
         )
         status = _first_value(record, ("Statut", "status", "Status", "dealStatus", "eventType", "type"))
@@ -527,8 +635,6 @@ def _filter_dates(frame: pd.DataFrame, start_date: date, end_date: date) -> pd.D
     end_ts = pd.Timestamp(end_date)
     dated = work["DateTri"].notna()
     in_range = (work["DateTri"] >= start_ts) & (work["DateTri"] <= end_ts)
-    # Conserver les lignes sans date si elles contiennent une société utile :
-    # certaines IPO sont annoncées avant que la date de cotation soit fixée.
     return work.loc[(dated & in_range) | (~dated & work["Société"].ne(""))].copy()
 
 
@@ -608,6 +714,35 @@ def _normalise_status(value: Any) -> str:
     return status
 
 
+def _friendly_error(exc: Exception) -> str:
+    name = type(exc).__name__
+    if isinstance(exc, requests.exceptions.HTTPError):
+        return "Non disponible aujourd'hui — accès public refusé ou modifié"
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "Non disponible aujourd'hui — délai d'attente dépassé"
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return "Non disponible aujourd'hui — connexion impossible"
+    if name == "ImportError":
+        return "Non disponible aujourd'hui — dépendance de lecture HTML absente"
+    return "Non disponible aujourd'hui — source publique instable"
+
+
+def _combine_errors(errors: list[str]) -> str:
+    if not errors:
+        return "Aucune donnée"
+    unique = []
+    for error in errors:
+        if error not in unique:
+            unique.append(error)
+    return unique[0] if len(unique) == 1 else "Non disponible aujourd'hui — plusieurs essais infructueux"
+
+
+def _status_with_count(status: str, frame: pd.DataFrame) -> str:
+    if str(status).startswith("OK"):
+        return f"OK — {len(frame)} ligne(s)"
+    return status
+
+
 def source_summary(statuses: dict[str, str]) -> str:
     if not statuses:
         return "Aucune source configurée."
@@ -616,6 +751,6 @@ def source_summary(statuses: dict[str, str]) -> str:
         return (
             "Sources actives : "
             + ", ".join(ok)
-            + ". Couverture publique en meilleur effort : les IPO peuvent être modifiées, reportées ou absentes selon les sources."
+            + ". Les sources publiques sans API sont utiles pour la veille, mais ne garantissent pas une couverture complète."
         )
-    return "Aucune source IPO active pour l'instant."
+    return "Aucune source IPO active pour l'instant. Ajoute un fichier local ou une clé API pour fiabiliser la couverture."
