@@ -22,7 +22,7 @@ page_header(
 
 st.caption(
     "Les données IPO peuvent être modifiées, reportées ou annulées. "
-    "Sans API, Anatole consolide plusieurs sources publiques en meilleur effort ; la couverture n’est pas garantie exhaustive. "
+    "Sans API, Anatole consolide plusieurs sources publiques en meilleur effort. La couverture peut rester partielle si certains sites bloquent ou modifient leur accès public. "
     "Cette page sert au suivi informatif des événements de marché, pas à une recommandation d'achat."
 )
 
@@ -122,6 +122,14 @@ metric_4.metric(
     sum(1 for status in statuses.values() if str(status).startswith("OK")),
 )
 
+public_ok = [name for name, status in statuses.items() if name.endswith("public") and str(status).startswith("OK")]
+if count <= 1 and public_ok == ["Nasdaq public"]:
+    st.warning(
+        "Couverture publique limitée : seule la source Nasdaq a répondu pour l’instant. "
+        "Les autres sources sans API peuvent être bloquées ou vides selon le moment. "
+        "Pour une couverture plus fiable, utilise un fichier local `data/ipo_calendar.csv` ou une clé API."
+    )
+
 st.caption(source_summary(statuses))
 
 if work.empty:
@@ -136,9 +144,10 @@ if work.empty:
 
             Sources automatiques sans clé API :
 
-            - Yahoo Finance public ;
             - StockAnalysis public ;
-            - Nasdaq public.
+            - IPO Scoop public ;
+            - Nasdaq public ;
+            - Yahoo Finance public en complément.
 
             Sources renforcées possibles :
 
