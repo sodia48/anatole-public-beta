@@ -198,9 +198,29 @@ def _layer_items(rows: pd.DataFrame, layer: str, limit: int = 5) -> list[dict[st
                 "entity": _safe_text(row.get("entity", "Non documenté"), 72),
                 "sector": _safe_text(row.get("sector", ""), 34),
                 "confidence": _safe_text(row.get("confidence", ""), 22),
+                "source_name": _safe_text(row.get("source_name", ""), 34),
+                "source_url": str(row.get("source_url", "") or "").strip(),
             }
         )
     return items
+
+
+def _layer_total(rows: pd.DataFrame, layer: str) -> int:
+    if rows.empty or "layer" not in rows:
+        return 0
+    return int((rows["layer"] == layer).sum())
+
+
+def _confidence_total(rows: pd.DataFrame, confidence: str) -> int:
+    if rows.empty or "confidence" not in rows:
+        return 0
+    return int((rows["confidence"].astype(str).str.strip() == confidence).sum())
+
+
+def _source_total(rows: pd.DataFrame) -> int:
+    if rows.empty or "source_url" not in rows:
+        return 0
+    return int(rows["source_url"].astype(str).str.strip().ne("").sum())
 
 
 def _items_html(items: list[dict[str, str]], empty_label: str) -> str:
@@ -212,13 +232,21 @@ def _items_html(items: list[dict[str, str]], empty_label: str) -> str:
         entity = html.escape(item.get("entity", ""))
         sector = html.escape(item.get("sector", ""))
         confidence = html.escape(item.get("confidence", ""))
+        source_name = html.escape(item.get("source_name", "") or "Source publique")
+        source_url = html.escape(item.get("source_url", ""), quote=True)
         meta = " · ".join(part for part in [sector, confidence] if part)
+        source_html = (
+            f'<a class="eco-source-chip" href="{source_url}" target="_blank" rel="noreferrer">{source_name}</a>'
+            if source_url
+            else '<span class="eco-source-chip eco-source-muted">À documenter</span>'
+        )
         chunks.append(
             f"""
             <div class="eco-mini-card">
                 <div class="eco-mini-relation">{relation}</div>
                 <div class="eco-mini-entity">{entity}</div>
                 <div class="eco-mini-meta">{html.escape(meta)}</div>
+                {source_html}
             </div>
             """
         )
@@ -231,6 +259,12 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
     sectors = _layer_items(rows, "Secteurs impactés")
     company = html.escape(_safe_text(company_name or ticker, 64))
     ticker_clean = html.escape(_safe_text(ticker, 18))
+    intrants_total = _layer_total(rows, "Intrants")
+    clients_total = _layer_total(rows, "Clients servis")
+    sectors_total = _layer_total(rows, "Secteurs impactés")
+    documented_total = _confidence_total(rows, "Documenté")
+    sources_total = _source_total(rows)
+    proof_label = "Documenté" if documented_total else "Indicatif"
 
     style = """
     <style>
@@ -242,13 +276,54 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
         box-shadow: 0 10px 30px rgba(35, 92, 138, .08);
         margin: 8px 0 18px;
       }
+      .eco-readable-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
       .eco-readable-title {
         font-size: .78rem;
         letter-spacing: .08em;
         text-transform: uppercase;
         font-weight: 900;
         color: #5B7088;
+      }
+      .eco-readable-proof {
+        border: 1px solid rgba(22,163,74,.22);
+        border-radius: 999px;
+        padding: 5px 10px;
+        background: rgba(240,253,244,.88);
+        color: #166534;
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+      .eco-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
         margin-bottom: 12px;
+      }
+      .eco-summary-chip {
+        border: 1px solid rgba(76,145,201,.18);
+        border-radius: 14px;
+        background: rgba(248,252,255,.88);
+        padding: 9px 10px;
+      }
+      .eco-summary-value {
+        color: #0F2742;
+        font-size: 1rem;
+        line-height: 1.1;
+        font-weight: 950;
+      }
+      .eco-summary-label {
+        color: #5B7088;
+        font-size: .68rem;
+        line-height: 1.2;
+        font-weight: 800;
+        margin-top: 3px;
       }
       .eco-chain-grid {
         display: grid;
@@ -294,6 +369,15 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
         font-weight: 850;
         opacity: .88;
       }
+      .eco-company-proof {
+        margin-top: 13px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.42);
+        padding: 6px 10px;
+        font-size: .70rem;
+        font-weight: 900;
+        background: rgba(255,255,255,.16);
+      }
       .eco-arrow {
         display: grid;
         place-items: center;
@@ -328,6 +412,23 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
         margin-top: 4px;
         line-height: 1.25;
       }
+      .eco-source-chip {
+        display: inline-block;
+        margin-top: 7px;
+        border-radius: 999px;
+        border: 1px solid rgba(22,163,74,.22);
+        padding: 4px 8px;
+        background: rgba(240,253,244,.88);
+        color: #166534;
+        font-size: .68rem;
+        font-weight: 900;
+        text-decoration: none;
+      }
+      .eco-source-muted {
+        border-color: rgba(91,112,136,.22);
+        background: rgba(241,245,249,.82);
+        color: #5B7088;
+      }
       .eco-mini-empty {
         color: #5B7088;
         font-size: .84rem;
@@ -338,6 +439,13 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
       @media (max-width: 900px) {
         .eco-chain-grid {
           grid-template-columns: 1fr;
+        }
+        .eco-readable-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .eco-summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .eco-arrow {
           transform: rotate(90deg);
@@ -354,7 +462,32 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
         style
         + f"""
         <div class="eco-readable-wrap">
-          <div class="eco-readable-title">Chaîne de valeur lisible</div>
+          <div class="eco-readable-head">
+            <div class="eco-readable-title">Chaîne de valeur lisible</div>
+            <div class="eco-readable-proof">{html.escape(proof_label)}</div>
+          </div>
+          <div class="eco-summary-grid">
+            <div class="eco-summary-chip">
+              <div class="eco-summary-value">{intrants_total}</div>
+              <div class="eco-summary-label">Intrants</div>
+            </div>
+            <div class="eco-summary-chip">
+              <div class="eco-summary-value">{clients_total}</div>
+              <div class="eco-summary-label">Clients / usages</div>
+            </div>
+            <div class="eco-summary-chip">
+              <div class="eco-summary-value">{sectors_total}</div>
+              <div class="eco-summary-label">Secteurs touchés</div>
+            </div>
+            <div class="eco-summary-chip">
+              <div class="eco-summary-value">{documented_total}</div>
+              <div class="eco-summary-label">Liens documentés</div>
+            </div>
+            <div class="eco-summary-chip">
+              <div class="eco-summary-value">{sources_total}</div>
+              <div class="eco-summary-label">Sources publiques</div>
+            </div>
+          </div>
           <div class="eco-chain-grid">
             <div class="eco-column">
               <div class="eco-column-title">1. Intrants / ressources</div>
@@ -364,6 +497,7 @@ def ecosystem_value_chain_html(rows: pd.DataFrame, ticker: str, company_name: st
             <div class="eco-company-card">
               <div class="eco-company-name">{company}</div>
               <div class="eco-company-ticker">{ticker_clean}</div>
+              <div class="eco-company-proof">{documented_total} lien(s) documenté(s)</div>
             </div>
             <div class="eco-arrow">→</div>
             <div class="eco-column">
