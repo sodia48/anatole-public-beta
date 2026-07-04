@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core.ai import analyze_stock_in_french
 from core.analytics import add_indicators, enrich_news, explain_move
@@ -25,6 +26,7 @@ from core.ecosystem import (
     ecosystem_for_ticker,
     ecosystem_metrics,
     ecosystem_sankey,
+    ecosystem_value_chain_html,
 )
 from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
@@ -77,65 +79,166 @@ def volume_flow_label(last_open: object, last_close: object) -> str:
 
 
 
-def _ecosystem_layer(rows: pd.DataFrame, layer: str, limit: int = 5) -> pd.DataFrame:
+def _ecosystem_layer(rows: pd.DataFrame, layer: str, limit: int | None = None) -> pd.DataFrame:
     if rows.empty or "layer" not in rows.columns:
         return pd.DataFrame()
-    return rows[rows["layer"].astype(str) == layer].head(limit).copy()
+    subset = rows[rows["layer"].astype(str) == layer].copy()
+    if limit is None:
+        return subset
+    return subset.head(limit).copy()
 
 
-def _render_ecosystem_card(title: str, rows: pd.DataFrame, empty: str) -> None:
+def _eco_text(value: object, fallback: str = "Non documenté") -> str:
+    text = str(value or "").strip()
+    return text or fallback
+
+
+def _ecosystem_count(rows: pd.DataFrame, column: str, value: str) -> int:
+    if rows.empty or column not in rows.columns:
+        return 0
+    return int((rows[column].astype(str).str.strip() == value).sum())
+
+
+def _ecosystem_source_count(rows: pd.DataFrame) -> int:
+    if rows.empty or "source_url" not in rows.columns:
+        return 0
+    return int(rows["source_url"].astype(str).str.strip().ne("").sum())
+
+
+def _ecosystem_chain_height(rows: pd.DataFrame) -> int:
+    layer_sizes = [
+        len(_ecosystem_layer(rows, "Intrants")),
+        len(_ecosystem_layer(rows, "Clients servis")),
+        len(_ecosystem_layer(rows, "Secteurs impactés")),
+    ]
+    max_visible = min(max(layer_sizes) if layer_sizes else 0, 5)
+    return 460 + max(0, max_visible - 3) * 82
+
+
+def _ecosystem_summary_sentence(rows: pd.DataFrame, company_name: str) -> str:
+    intrants = len(_ecosystem_layer(rows, "Intrants"))
+    clients = len(_ecosystem_layer(rows, "Clients servis"))
+    secteurs = len(_ecosystem_layer(rows, "Secteurs impactés"))
+    documented = _ecosystem_count(rows, "confidence", "Documenté")
+    source_count = _ecosystem_source_count(rows)
+    evidence = (
+        f"{documented} lien(s) documenté(s), dont {source_count} avec source publique"
+        if documented
+        else "lecture indicative par secteur, à valider avec des sources publiques"
+    )
+    return (
+        f"{company_name} est lu comme un flux économique: {intrants} intrant(s), "
+        f"{clients} client(s) ou usage(s), {secteurs} secteur(s) impacté(s). "
+        f"Niveau de preuve: {evidence}."
+    )
+
+
+def _ecosystem_layer_signal(rows: pd.DataFrame) -> str:
+    if rows.empty:
+        return "Aucun élément encore disponible pour ce niveau."
+    documented = _ecosystem_count(rows, "confidence", "Documenté")
+    sources = _ecosystem_source_count(rows)
+    sectors = 0
+    if "sector" in rows.columns:
+        sectors = rows["sector"].astype(str).str.strip().replace("", pd.NA).dropna().nunique()
+    if documented:
+        return f"{len(rows)} lien(s), {documented} documenté(s), {sources} source(s), {sectors} secteur(s)."
+    return f"{len(rows)} lien(s) indicatif(s), {sectors} secteur(s) relié(s)."
+
+
+def _render_ecosystem_row(row: pd.Series) -> None:
+    relation = _eco_text(row.get("relation"), "Relation")
+    entity = _eco_text(row.get("entity"))
+    sector = _eco_text(row.get("sector"), "Secteur non précisé")
+    note = str(row.get("note", "") or "").strip()
+    confidence = _eco_text(row.get("confidence"), "Indicatif")
+    source_name = str(row.get("source_name", "") or "").strip()
+    source_url = str(row.get("source_url", "") or "").strip()
+    badge = "Documenté" if confidence == "Documenté" else "Indicatif"
+
     with st.container(border=True):
-        st.markdown(f"**{title}**")
-        if rows.empty:
-            st.caption(empty)
-            return
-        for _, row in rows.iterrows():
-            confidence = str(row.get("confidence", "")).strip()
-            source_name = str(row.get("source_name", "")).strip()
-            source_url = str(row.get("source_url", "")).strip()
-            badge = "Documenté" if confidence == "Documenté" else "Indicatif"
-            st.markdown(f"**{row.get('relation', 'Relation')}**")
-            st.write(str(row.get("entity", "Non documenté")))
-            st.caption(f"{row.get('sector', 'Secteur non précisé')} · {badge}")
-            if source_url:
-                st.link_button(source_name or "Source", source_url, width="stretch")
-            st.divider()
+        st.markdown(f"**{relation}**")
+        st.write(entity)
+        st.caption(f"{sector} · {badge}")
+        if note:
+            st.caption(note)
+        if source_url:
+            st.link_button(source_name or "Ouvrir la source", source_url, width="stretch")
+
+
+def _render_ecosystem_card(title: str, rows: pd.DataFrame, empty: str, limit: int = 4) -> None:
+    st.markdown(f"**{title}**")
+    st.caption(_ecosystem_layer_signal(rows))
+    if rows.empty:
+        st.info(empty)
+        return
+
+    visible = rows.head(limit)
+    for _, row in visible.iterrows():
+        _render_ecosystem_row(row)
+
+    remaining = len(rows) - len(visible)
+    if remaining > 0:
+        with st.expander(f"Voir {remaining} autre(s) lien(s)", expanded=False):
+            for _, row in rows.iloc[limit:].iterrows():
+                _render_ecosystem_row(row)
+
+
+def _ecosystem_source_table(rows: pd.DataFrame) -> pd.DataFrame:
+    if rows.empty or "source_url" not in rows.columns:
+        return pd.DataFrame()
+    sourced = rows[rows["source_url"].astype(str).str.strip() != ""].copy()
+    if sourced.empty:
+        return pd.DataFrame()
+    source_cols = [
+        col for col in ["layer", "relation", "entity", "confidence", "source_name", "source_url"] if col in sourced.columns
+    ]
+    return sourced[source_cols].rename(
+        columns={
+            "layer": "Couche",
+            "relation": "Relation",
+            "entity": "Entité / usage",
+            "confidence": "Confiance",
+            "source_name": "Source",
+            "source_url": "Lien source",
+        }
+    )
 
 
 def render_ecosystem_native(rows: pd.DataFrame, ticker: str, company_name: str) -> None:
     st.markdown("#### Chaîne de valeur lisible")
+    st.caption(_ecosystem_summary_sentence(rows, company_name))
+    components.html(
+        ecosystem_value_chain_html(rows, ticker, company_name),
+        height=_ecosystem_chain_height(rows),
+        scrolling=False,
+    )
+
     intrants = _ecosystem_layer(rows, "Intrants")
     clients = _ecosystem_layer(rows, "Clients servis")
     secteurs = _ecosystem_layer(rows, "Secteurs impactés")
+    documented = _ecosystem_count(rows, "confidence", "Documenté")
+    sources = _ecosystem_source_count(rows)
 
-    c1, c2, c3, c4 = st.columns([1.15, 0.85, 1.15, 1.15])
-    with c1:
-        _render_ecosystem_card("1. Intrants / ressources", intrants, "Aucun intrant documenté pour ce titre.")
-    with c2:
-        with st.container(border=True):
-            st.markdown("**2. Entreprise**")
-            st.markdown(f"### {company_name}")
-            st.caption(ticker)
-            documented = int((rows.get("confidence", pd.Series(dtype=str)).astype(str) == "Documenté").sum())
-            st.metric("Liens documentés", documented)
-    with c3:
-        _render_ecosystem_card("3. Clients / usages servis", clients, "Aucun client ou usage documenté pour ce titre.")
-    with c4:
-        _render_ecosystem_card("4. Secteurs impactés", secteurs, "Aucun secteur documenté pour ce titre.")
+    overview = st.columns(4)
+    overview[0].metric("Intrants", len(intrants))
+    overview[1].metric("Clients / usages", len(clients))
+    overview[2].metric("Secteurs touchés", len(secteurs))
+    overview[3].metric("Sources publiques", sources, help=f"{documented} lien(s) documenté(s) au total.")
 
-    sourced = rows[rows.get("source_url", pd.Series(dtype=str)).astype(str).str.strip() != ""].copy()
-    if not sourced.empty:
+    detail_cols = st.columns(3)
+    with detail_cols[0]:
+        _render_ecosystem_card("1. Ce qui entre dans le modèle", intrants, "Aucun intrant documenté pour ce titre.")
+    with detail_cols[1]:
+        _render_ecosystem_card("2. Ce que l'entreprise sert", clients, "Aucun client ou usage documenté pour ce titre.")
+    with detail_cols[2]:
+        _render_ecosystem_card("3. Où l'effet se propage", secteurs, "Aucun secteur documenté pour ce titre.")
+
+    source_table = _ecosystem_source_table(rows)
+    if not source_table.empty:
         st.markdown("#### Sources publiques intégrées")
-        source_cols = [col for col in ["layer", "relation", "entity", "confidence", "source_name", "source_url"] if col in sourced.columns]
         st.dataframe(
-            sourced[source_cols].rename(columns={
-                "layer": "Couche",
-                "relation": "Relation",
-                "entity": "Entité / usage",
-                "confidence": "Confiance",
-                "source_name": "Source",
-                "source_url": "Lien source",
-            }),
+            source_table,
             hide_index=True,
             width="stretch",
             column_config={"Lien source": st.column_config.LinkColumn("Lien source")},
