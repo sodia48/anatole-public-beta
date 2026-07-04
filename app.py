@@ -40,6 +40,12 @@ pages = {
             url_path="calendrier",
         ),
         st.Page(
+            "screens/24_IPO.py",
+            title="IPO à venir",
+            icon="🚀",
+            url_path="ipo",
+        ),
+        st.Page(
             "screens/15_Market_Drivers.py",
             title="Moteurs du marché",
             icon="🧭",
