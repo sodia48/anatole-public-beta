@@ -22,6 +22,7 @@ page_header(
 
 st.caption(
     "Les données IPO peuvent être modifiées, reportées ou annulées. "
+    "Sans API, Anatole consolide plusieurs sources publiques en meilleur effort ; la couverture n’est pas garantie exhaustive. "
     "Cette page sert au suivi informatif des événements de marché, pas à une recommandation d'achat."
 )
 
@@ -118,7 +119,7 @@ metric_3.metric(
 )
 metric_4.metric(
     "Sources actives",
-    sum(1 for status in statuses.values() if status == "OK"),
+    sum(1 for status in statuses.values() if str(status).startswith("OK")),
 )
 
 st.caption(source_summary(statuses))
@@ -132,6 +133,14 @@ if work.empty:
         st.markdown(
             """
             Options supportées :
+
+            Sources automatiques sans clé API :
+
+            - Yahoo Finance public ;
+            - StockAnalysis public ;
+            - Nasdaq public.
+
+            Sources renforcées possibles :
 
             - Ajouter `FINNHUB_API_KEY` dans les secrets Streamlit ou les variables d'environnement.
             - Ajouter `FMP_API_KEY` dans les secrets Streamlit ou les variables d'environnement.
