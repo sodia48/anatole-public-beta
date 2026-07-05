@@ -18,6 +18,7 @@ PAGE_COMMANDS = [
     ("Psychologie", "screens/23_Psychologie.py", "fear greed sentiment psychologie marché humeur risque confiance anxiété breadth rsi momentum"),
     ("Calendrier", "screens/6_Calendrier.py", "résultats dividendes macro"),
     ("IPO à venir", "screens/24_IPO.py", "ipo introduction bourse nouvel entrant calendrier sociétés bientôt cotées nasdaq nyse tsx"),
+    ("Transactions d’initiés", "screens/25_Insiders.py", "insider initié insiders dirigeant administrateur transactions achats ventes SEDI TMX"),
     ("Mode Focus", "screens/14_Focus.py", "graphique action finances"),
     ("Comparateur", "screens/2_Comparateur.py", "comparer titres performance"),
     ("Backtesting", "screens/7_Backtesting.py", "stratégie historique"),
