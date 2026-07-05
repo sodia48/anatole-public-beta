@@ -16,61 +16,105 @@ apply_style()
 sidebar_context()
 page_header(
     "IPO à venir",
-    "Suivez les sociétés qui préparent leur entrée en bourse et repérez les prochaines fenêtres de cotation.",
+    "Radar des introductions en bourse : dates annoncées, dossiers déposés, nouvelles inscriptions et sources consolidées.",
     "🚀",
 )
 
 st.caption(
-    "Les données IPO peuvent être modifiées, reportées ou annulées. "
-    "Sans API, Anatole consolide plusieurs sources publiques en meilleur effort et fusionne automatiquement les doublons détectés. "
-    "La couverture peut rester partielle si certains sites bloquent ou modifient leur accès public. "
-    "Cette page sert au suivi informatif des événements de marché, pas à une recommandation d'achat."
+    "Anatole consolide plusieurs sources publiques et fusionne les doublons détectés. "
+    "Les IPO peuvent être modifiées, reportées ou annulées : cette page sert au suivi informatif des événements de marché, "
+    "pas à une recommandation d'achat."
 )
 
 today = pd.Timestamp.now(tz=TORONTO_TZ).date()
 
-control_1, control_2, control_3 = st.columns([1.1, 1.2, 1.7])
+control_1, control_2, control_3, control_4 = st.columns([1.0, 1.1, 1.2, 1.7])
 with control_1:
     horizon_label = st.selectbox(
-        "Horizon",
+        "Horizon calendrier",
         ["30 jours", "90 jours", "180 jours", "365 jours"],
         index=2,
     )
 with control_2:
-    include_tbc = st.checkbox("Inclure les dates à confirmer", value=True)
+    dataset_mode = st.selectbox(
+        "Vue",
+        ["Tout", "Calendrier IPO", "Pipeline", "Canada", "États-Unis"],
+        index=0,
+    )
 with control_3:
+    min_confidence = st.selectbox(
+        "Confiance minimale",
+        ["Toutes", "Indicative", "Moyenne", "Élevée"],
+        index=0,
+    )
+with control_4:
     query = st.text_input(
         "Recherche",
-        placeholder="Nom, symbole, bourse, statut...",
+        placeholder="Nom, symbole, bourse, pays, source...",
     ).strip()
 
 horizon_days = int(horizon_label.split()[0])
 start = today.isoformat()
 end = (today + timedelta(days=horizon_days)).isoformat()
 
-if st.button("Actualiser le calendrier", width="stretch"):
-    load_upcoming_ipos.clear()
-    st.rerun()
+refresh_col, hint_col = st.columns([1, 3])
+with refresh_col:
+    if st.button("Actualiser le radar IPO", width="stretch"):
+        load_upcoming_ipos.clear()
+        st.rerun()
+with hint_col:
+    st.caption(
+        "Le pipeline inclut des dossiers S-1/F-1, des filings IPO et des nouvelles inscriptions. "
+        "Une ligne peut donc être une IPO datée ou une société à surveiller avant date officielle."
+    )
 
-with st.spinner("Chargement du calendrier IPO..."):
+with st.spinner("Chargement du radar IPO..."):
     ipos, statuses = load_upcoming_ipos(start, end)
 
-if not ipos.empty:
-    work = ipos.copy()
-    work["DateParsed"] = pd.to_datetime(work["Date"], errors="coerce")
+work = ipos.copy()
+if not work.empty:
+    work["DateParsed"] = pd.to_datetime(work.get("Date", pd.Series(dtype=str)), errors="coerce")
+    for column in [
+        "Société",
+        "Symbole",
+        "Bourse",
+        "Pays",
+        "Type d’événement",
+        "Statut",
+        "Source",
+        "Confiance donnée",
+        "Maturité IPO",
+    ]:
+        if column not in work.columns:
+            work[column] = ""
 
-    if not include_tbc:
-        work = work.loc[work["DateParsed"].notna()].copy()
+    if dataset_mode == "Calendrier IPO":
+        work = work.loc[work["Type d’événement"].astype(str).str.contains("Calendrier", case=False, na=False)].copy()
+    elif dataset_mode == "Pipeline":
+        work = work.loc[
+            work["Type d’événement"].astype(str).str.contains("Dépôt|depot|filing|réglementaire|reglementaire|Nouvelle", case=False, regex=True, na=False)
+        ].copy()
+    elif dataset_mode == "Canada":
+        work = work.loc[work["Pays"].astype(str).str.contains("Canada", case=False, na=False)].copy()
+    elif dataset_mode == "États-Unis":
+        work = work.loc[work["Pays"].astype(str).str.contains("États|Etats|United|US", case=False, regex=True, na=False)].copy()
+
+    confidence_order = {"Indicative": 1, "Moyenne": 2, "Élevée": 3}
+    if min_confidence != "Toutes":
+        required = confidence_order.get(min_confidence, 1)
+        work = work.loc[
+            work["Confiance donnée"].map(lambda value: confidence_order.get(str(value), 0) >= required)
+        ].copy()
 
     available_exchanges = sorted(
         exchange
         for exchange in work.get("Bourse", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
         if exchange
     )
-    available_statuses = sorted(
-        status
-        for status in work.get("Statut", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
-        if status
+    available_maturities = sorted(
+        maturity
+        for maturity in work.get("Maturité IPO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
+        if maturity
     )
 
     filter_1, filter_2 = st.columns(2)
@@ -81,142 +125,250 @@ if not ipos.empty:
             default=available_exchanges,
         )
     with filter_2:
-        selected_statuses = st.multiselect(
-            "Statuts",
-            available_statuses,
-            default=available_statuses,
+        selected_maturities = st.multiselect(
+            "Maturité",
+            available_maturities,
+            default=available_maturities,
         )
 
     if selected_exchanges:
         work = work.loc[work["Bourse"].isin(selected_exchanges)].copy()
-    if selected_statuses:
-        work = work.loc[work["Statut"].isin(selected_statuses)].copy()
+    if selected_maturities:
+        work = work.loc[work["Maturité IPO"].isin(selected_maturities)].copy()
 
     if query:
+        searchable_columns = [
+            "Société",
+            "Symbole",
+            "Bourse",
+            "Pays",
+            "Type d’événement",
+            "Statut",
+            "Source",
+            "Confiance donnée",
+        ]
         haystack = (
-            work[["Société", "Symbole", "Bourse", "Statut", "Source"]]
+            work[[column for column in searchable_columns if column in work.columns]]
             .fillna("")
             .astype(str)
             .agg(" ".join, axis=1)
             .str.lower()
         )
         work = work.loc[haystack.str.contains(query.lower(), regex=False)].copy()
-else:
-    work = ipos.copy()
 
 count = len(work)
+calendar_mask = (
+    work.get("Type d’événement", pd.Series(dtype=str)).astype(str).str.contains("Calendrier", case=False, na=False)
+    if count
+    else pd.Series(dtype=bool)
+)
+pipeline_mask = ~calendar_mask if count else pd.Series(dtype=bool)
+
 next_date = "N/D"
 if count and "DateParsed" in work.columns:
-    dated = work.loc[work["DateParsed"].notna()].sort_values("DateParsed")
-    if not dated.empty:
-        next_date = dated.iloc[0]["Date"]
+    dated_calendar = work.loc[calendar_mask & work["DateParsed"].notna()].sort_values("DateParsed")
+    if not dated_calendar.empty:
+        next_date = dated_calendar.iloc[0]["Date"]
 
-metric_1, metric_2, metric_3, metric_4 = st.columns(4)
+metric_1, metric_2, metric_3, metric_4, metric_5 = st.columns(5)
 metric_1.metric("IPO suivies", count)
-metric_2.metric("Prochaine date", next_date)
-metric_3.metric(
-    "Bourses couvertes",
-    len(work["Bourse"].dropna().replace("", pd.NA).dropna().unique()) if count and "Bourse" in work else 0,
-)
-metric_4.metric(
-    "Sources actives",
-    sum(1 for status in statuses.values() if str(status).startswith("OK")),
-)
-
-public_ok = [name for name, status in statuses.items() if name.endswith("public") and str(status).startswith("OK")]
-if count <= 1 and public_ok == ["Nasdaq public"]:
-    st.warning(
-        "Couverture publique limitée : seule la source Nasdaq a répondu pour l’instant. "
-        "Les autres sources sans API peuvent être bloquées ou vides selon le moment. "
-        "Pour une couverture plus fiable, utilise un fichier local `data/ipo_calendar.csv` ou une clé API."
-    )
-elif count <= 2 and len(public_ok) <= 1:
-    st.info(
-        "Peu de sources publiques ont répondu pour l’instant. Anatole tente automatiquement StockAnalysis, "
-        "Renaissance Capital, IPO Scoop, Nasdaq, NYSE, MarketWatch, Investing.com et Yahoo Finance, "
-        "mais l’accès public peut varier selon le moment."
-    )
+metric_2.metric("Calendrier daté", int(calendar_mask.sum()) if count else 0)
+metric_3.metric("Pipeline", int(pipeline_mask.sum()) if count else 0)
+metric_4.metric("Prochaine date", next_date)
+metric_5.metric("Sources actives", sum(1 for status in statuses.values() if str(status).startswith("OK")))
 
 st.caption(source_summary(statuses))
 
+public_ok = [name for name, status in statuses.items() if "public" in name.lower() and str(status).startswith("OK")]
+if count <= 2 and len(public_ok) <= 1:
+    st.info(
+        "Peu de sources publiques ont répondu pour l’instant. Anatole garde la page utilisable, "
+        "mais la couverture peut être partielle sans fichier local ou clé API."
+    )
+
 if work.empty:
     st.info(
-        "Aucune IPO à afficher avec les sources actuellement connectées et les filtres sélectionnés. "
-        "Ajoutez une source IPO ou élargissez l'horizon de recherche."
+        "Aucune IPO à afficher avec les sources actuellement disponibles et les filtres sélectionnés. "
+        "Élargis l'horizon ou repasse la vue à “Tout”."
     )
-    with st.expander("Configurer une source IPO"):
+    with st.expander("Configurer une source IPO fiable"):
         st.markdown(
             """
-            Options supportées :
+            Options recommandées :
 
-            Sources automatiques sans clé API :
+            - déposer un fichier `data/ipo_calendar.csv` pour une liste vérifiée ;
+            - ajouter `FINNHUB_API_KEY` ou `FMP_API_KEY` pour renforcer la couverture ;
+            - garder les sources publiques activées pour la veille : StockAnalysis, Renaissance Capital, IPO Scoop, Nasdaq, NYSE, SEC EDGAR, TMX, MarketWatch, Investing.com et Yahoo Finance.
 
-            - StockAnalysis public ;
-            - Renaissance Capital public ;
-            - IPO Scoop public ;
-            - Nasdaq public ;
-            - NYSE public ;
-            - MarketWatch public ;
-            - Investing.com public ;
-            - Yahoo Finance public en complément.
-
-            Anatole fusionne les doublons détectés entre sources : une même société ne devrait donc apparaître qu'une seule fois.
-
-            Sources renforcées possibles :
-
-            - Ajouter `FINNHUB_API_KEY` dans les secrets Streamlit ou les variables d'environnement.
-            - Ajouter `FMP_API_KEY` dans les secrets Streamlit ou les variables d'environnement.
-            - Déposer un fichier `data/ipo_calendar.csv` avec les colonnes `Date`, `Société`, `Symbole`, `Bourse`, `Prix indicatif`, `Actions offertes`, `Statut`, `Lien`.
-
-            Le fichier local est pratique si tu veux garder une liste vérifiée manuellement pour la bêta publique.
+            Anatole fusionne les doublons détectés par symbole, nom de société et similarité de nom.
             """
-        )
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Date": "2026-08-15",
-                        "Société": "Exemple Technologies",
-                        "Symbole": "EXPL",
-                        "Bourse": "NASDAQ",
-                        "Prix indicatif": "$18-$22",
-                        "Actions offertes": "10 000 000",
-                        "Statut": "À venir",
-                        "Lien": "",
-                    }
-                ]
-            ),
-            hide_index=True,
-            width="stretch",
         )
     footer()
     st.stop()
 
-# Graphique simple pour repérer où se concentre le pipeline IPO.
-chart_data = (
-    work.assign(Bourse=work["Bourse"].replace("", "N/D"))
-    .groupby(["Bourse", "Moment"], as_index=False)
-    .size()
-    .rename(columns={"size": "Nombre"})
-)
-if not chart_data.empty:
-    fig = px.bar(
-        chart_data,
-        x="Bourse",
-        y="Nombre",
-        color="Moment",
-        title="Pipeline IPO par bourse",
-        labels={"Nombre": "Nombre d'IPO"},
-    )
-    fig.update_layout(
-        height=360,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,.55)",
-        margin={"l": 10, "r": 10, "t": 58, "b": 20},
-    )
-    st.plotly_chart(fig, width="stretch")
+# Préparation des onglets.
+calendar_work = work.loc[calendar_mask].copy() if count else work.copy()
+pipeline_work = work.loc[pipeline_mask].copy() if count else work.copy()
+radar_work = work.sort_values(
+    ["Score donnée", "Sources détectées", "DateParsed"],
+    ascending=[False, False, True],
+    na_position="last",
+).copy()
 
-st.markdown("#### Calendrier")
+tab_radar, tab_calendar, tab_pipeline, tab_sources = st.tabs(
+    ["Radar", "Calendrier", "Pipeline", "Sources"]
+)
+
+with tab_radar:
+    st.markdown("#### Radar IPO")
+    st.caption(
+        "Le score donnée ne mesure pas la qualité de l’investissement. Il mesure seulement la robustesse de l’information disponible : nombre de sources, date, symbole, prix ou montant."
+    )
+
+    top = radar_work.head(8).copy()
+    if not top.empty:
+        cards = st.columns(4)
+        for idx, (_, row) in enumerate(top.iterrows()):
+            with cards[idx % 4]:
+                title = str(row.get("Société", "")).strip() or "Société à confirmer"
+                symbol = str(row.get("Symbole", "")).strip() or "N/D"
+                exchange = str(row.get("Bourse", "")).strip() or "N/D"
+                date_value = str(row.get("Date", "")).strip() or "À confirmer"
+                confidence = str(row.get("Confiance donnée", "Indicative"))
+                score = row.get("Score donnée", 0)
+                st.metric(f"{symbol} · {exchange}", f"{score}/100", confidence)
+                st.caption(f"{title} · {date_value}")
+
+    chart_col_1, chart_col_2 = st.columns(2)
+    with chart_col_1:
+        by_maturity = (
+            work.assign(**{"Maturité IPO": work["Maturité IPO"].replace("", "N/D")})
+            .groupby("Maturité IPO", as_index=False)
+            .size()
+            .rename(columns={"size": "Nombre"})
+        )
+        if not by_maturity.empty:
+            fig = px.bar(
+                by_maturity,
+                x="Maturité IPO",
+                y="Nombre",
+                title="Maturité du pipeline",
+                labels={"Nombre": "Nombre d’événements"},
+            )
+            fig.update_layout(height=340, margin={"l": 10, "r": 10, "t": 58, "b": 20})
+            st.plotly_chart(fig, width="stretch")
+    with chart_col_2:
+        by_country = (
+            work.assign(Pays=work["Pays"].replace("", "N/D"))
+            .groupby("Pays", as_index=False)
+            .size()
+            .rename(columns={"size": "Nombre"})
+        )
+        if not by_country.empty:
+            fig = px.bar(
+                by_country,
+                x="Pays",
+                y="Nombre",
+                title="Répartition géographique",
+                labels={"Nombre": "Nombre d’événements"},
+            )
+            fig.update_layout(height=340, margin={"l": 10, "r": 10, "t": 58, "b": 20})
+            st.plotly_chart(fig, width="stretch")
+
+    st.markdown("#### Fiche rapide")
+    choices = [
+        f"{row.get('Société', '')} · {row.get('Symbole', 'N/D')} · {row.get('Date', 'À confirmer')}"
+        for _, row in radar_work.iterrows()
+    ]
+    if choices:
+        selected = st.selectbox("Sélectionner une société", choices)
+        selected_index = choices.index(selected)
+        selected_row = radar_work.iloc[selected_index]
+        detail_1, detail_2, detail_3 = st.columns(3)
+        detail_1.metric("Confiance donnée", str(selected_row.get("Confiance donnée", "N/D")), f"{selected_row.get('Score donnée', 0)}/100")
+        detail_2.metric("Sources détectées", int(selected_row.get("Sources détectées", 1)))
+        detail_3.metric("Maturité", str(selected_row.get("Maturité IPO", "N/D")))
+        st.write(
+            f"**{selected_row.get('Société', 'Société à confirmer')}** — "
+            f"symbole **{selected_row.get('Symbole', 'N/D') or 'N/D'}**, "
+            f"bourse **{selected_row.get('Bourse', 'N/D') or 'N/D'}**, "
+            f"date **{selected_row.get('Date', 'À confirmer')}**."
+        )
+        st.caption(f"Points à vérifier : {selected_row.get('Points à vérifier', 'N/D')}")
+        link = str(selected_row.get("Lien", "")).strip()
+        if link.startswith("http"):
+            st.link_button("Ouvrir la source", link)
+
+with tab_calendar:
+    st.markdown("#### Calendrier des IPO datées")
+    if calendar_work.empty:
+        st.info("Aucune IPO datée dans les filtres actuels. Consulte l’onglet Pipeline pour les dossiers déposés ou les inscriptions récentes.")
+    else:
+        chart_data = (
+            calendar_work.assign(Bourse=calendar_work["Bourse"].replace("", "N/D"))
+            .groupby(["Bourse", "Moment"], as_index=False)
+            .size()
+            .rename(columns={"size": "Nombre"})
+        )
+        if not chart_data.empty:
+            fig = px.bar(
+                chart_data,
+                x="Bourse",
+                y="Nombre",
+                color="Moment",
+                title="Calendrier IPO par bourse",
+                labels={"Nombre": "Nombre d'IPO"},
+            )
+            fig.update_layout(height=360, margin={"l": 10, "r": 10, "t": 58, "b": 20})
+            st.plotly_chart(fig, width="stretch")
+        st.dataframe(
+            calendar_work[[column for column in [
+                "Date", "Jours avant IPO", "Moment", "Société", "Symbole", "Bourse", "Pays", "Prix indicatif", "Actions offertes", "Montant estimé", "Maturité IPO", "Confiance donnée", "Sources détectées", "Source", "Lien"
+            ] if column in calendar_work.columns]],
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Jours avant IPO": st.column_config.NumberColumn(format="%d"),
+                "Lien": st.column_config.LinkColumn("Lien"),
+            },
+        )
+
+with tab_pipeline:
+    st.markdown("#### Pipeline pré-IPO et nouvelles inscriptions")
+    st.caption(
+        "Cette vue ajoute les sociétés qui ont déposé un dossier IPO ou qui apparaissent dans des nouvelles inscriptions publiques. "
+        "Elles ne disposent pas toujours d’une date d’IPO officielle."
+    )
+    if pipeline_work.empty:
+        st.info("Aucune ligne pipeline dans les filtres actuels.")
+    else:
+        st.dataframe(
+            pipeline_work[[column for column in [
+                "Date", "Moment", "Société", "Symbole", "Bourse", "Pays", "Type d’événement", "Statut", "Maturité IPO", "Confiance donnée", "Sources détectées", "Points à vérifier", "Source", "Lien"
+            ] if column in pipeline_work.columns]],
+            hide_index=True,
+            width="stretch",
+            column_config={"Lien": st.column_config.LinkColumn("Lien")},
+        )
+
+with tab_sources:
+    st.markdown("#### État des sources")
+    status_table = pd.DataFrame(
+        [{"Source": source, "État": status} for source, status in statuses.items()]
+    )
+    st.dataframe(status_table, hide_index=True, width="stretch")
+
+    st.markdown("#### Couverture par source détectée")
+    source_rows = []
+    for _, row in work.iterrows():
+        for source in str(row.get("Source", "")).split("+"):
+            source = source.strip()
+            if source:
+                source_rows.append({"Source": source, "Société": row.get("Société", "")})
+    if source_rows:
+        source_counts = pd.DataFrame(source_rows).groupby("Source", as_index=False).size().rename(columns={"size": "Lignes uniques"})
+        st.dataframe(source_counts.sort_values("Lignes uniques", ascending=False), hide_index=True, width="stretch")
+
 visible_columns = [
     "Date",
     "Jours avant IPO",
@@ -224,37 +376,28 @@ visible_columns = [
     "Société",
     "Symbole",
     "Bourse",
+    "Pays",
+    "Type d’événement",
     "Prix indicatif",
     "Actions offertes",
+    "Montant estimé",
     "Statut",
+    "Maturité IPO",
+    "Confiance donnée",
+    "Sources détectées",
+    "Score donnée",
+    "Points à vérifier",
     "Source",
     "Lien",
 ]
 visible_columns = [column for column in visible_columns if column in work.columns]
 
-display = work[visible_columns].copy()
-st.dataframe(
-    display,
-    hide_index=True,
-    width="stretch",
-    column_config={
-        "Jours avant IPO": st.column_config.NumberColumn(format="%d"),
-        "Lien": st.column_config.LinkColumn("Lien"),
-    },
-)
-
-csv = display.to_csv(index=False).encode("utf-8-sig")
+csv = work[visible_columns].to_csv(index=False).encode("utf-8-sig")
 st.download_button(
-    "Télécharger le calendrier IPO",
+    "Télécharger le radar IPO",
     csv,
-    file_name=f"ipo_calendar_{today.isoformat()}.csv",
+    file_name=f"ipo_radar_{today.isoformat()}.csv",
     mime="text/csv",
 )
-
-with st.expander("État des sources"):
-    status_table = pd.DataFrame(
-        [{"Source": source, "État": status} for source, status in statuses.items()]
-    )
-    st.dataframe(status_table, hide_index=True, width="stretch")
 
 footer()
