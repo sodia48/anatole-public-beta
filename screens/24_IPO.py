@@ -22,7 +22,8 @@ page_header(
 
 st.caption(
     "Les données IPO peuvent être modifiées, reportées ou annulées. "
-    "Sans API, Anatole consolide plusieurs sources publiques en meilleur effort. La couverture peut rester partielle si certains sites bloquent ou modifient leur accès public. "
+    "Sans API, Anatole consolide plusieurs sources publiques en meilleur effort et fusionne automatiquement les doublons détectés. "
+    "La couverture peut rester partielle si certains sites bloquent ou modifient leur accès public. "
     "Cette page sert au suivi informatif des événements de marché, pas à une recommandation d'achat."
 )
 
@@ -129,6 +130,12 @@ if count <= 1 and public_ok == ["Nasdaq public"]:
         "Les autres sources sans API peuvent être bloquées ou vides selon le moment. "
         "Pour une couverture plus fiable, utilise un fichier local `data/ipo_calendar.csv` ou une clé API."
     )
+elif count <= 2 and len(public_ok) <= 1:
+    st.info(
+        "Peu de sources publiques ont répondu pour l’instant. Anatole tente automatiquement StockAnalysis, "
+        "Renaissance Capital, IPO Scoop, Nasdaq, NYSE, MarketWatch, Investing.com et Yahoo Finance, "
+        "mais l’accès public peut varier selon le moment."
+    )
 
 st.caption(source_summary(statuses))
 
@@ -145,9 +152,15 @@ if work.empty:
             Sources automatiques sans clé API :
 
             - StockAnalysis public ;
+            - Renaissance Capital public ;
             - IPO Scoop public ;
             - Nasdaq public ;
+            - NYSE public ;
+            - MarketWatch public ;
+            - Investing.com public ;
             - Yahoo Finance public en complément.
+
+            Anatole fusionne les doublons détectés entre sources : une même société ne devrait donc apparaître qu'une seule fois.
 
             Sources renforcées possibles :
 
