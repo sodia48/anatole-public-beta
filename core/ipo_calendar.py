@@ -26,7 +26,24 @@ IPO_COLUMNS = [
 ]
 
 LOCAL_IPO_FILE = DATA_DIR / "ipo_calendar.csv"
-REQUEST_TIMEOUT = 12
+REQUEST_TIMEOUT = 8
+
+# Ordre de confiance pour choisir la meilleure ligne lorsqu'une IPO est
+# trouvée par plusieurs sources. Les sources contrôlées/locales passent
+# avant les sites publics, puis Anatole fusionne les informations manquantes.
+SOURCE_PRIORITY = {
+    "Fichier local": 0,
+    "Finnhub": 1,
+    "Financial Modeling Prep": 2,
+    "StockAnalysis": 3,
+    "Renaissance Capital": 4,
+    "IPO Scoop": 5,
+    "Nasdaq": 6,
+    "NYSE": 7,
+    "MarketWatch": 8,
+    "Investing.com": 9,
+    "Yahoo Finance": 10,
+}
 
 PUBLIC_HEADERS = {
     "Accept": "application/json, text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -93,8 +110,12 @@ def load_upcoming_ipos(
     if public_enabled:
         public_loaders = (
             ("StockAnalysis public", lambda: _fetch_stockanalysis_ipo_calendar()),
+            ("Renaissance Capital public", lambda: _fetch_renaissance_ipo_calendar()),
             ("IPO Scoop public", lambda: _fetch_iposcoop_ipo_calendar()),
             ("Nasdaq public", lambda: _fetch_nasdaq_ipo_calendar()),
+            ("NYSE public", lambda: _fetch_nyse_ipo_calendar()),
+            ("MarketWatch public", lambda: _fetch_marketwatch_ipo_calendar()),
+            ("Investing.com public", lambda: _fetch_investing_ipo_calendar()),
             ("Yahoo Finance public", lambda: _fetch_yahoo_ipo_calendar(start_date, end_date)),
         )
         for source_name, loader in public_loaders:
@@ -104,8 +125,12 @@ def load_upcoming_ipos(
                 frames.append(frame)
     else:
         statuses["StockAnalysis public"] = "Désactivé"
+        statuses["Renaissance Capital public"] = "Désactivé"
         statuses["IPO Scoop public"] = "Désactivé"
         statuses["Nasdaq public"] = "Désactivé"
+        statuses["NYSE public"] = "Désactivé"
+        statuses["MarketWatch public"] = "Désactivé"
+        statuses["Investing.com public"] = "Désactivé"
         statuses["Yahoo Finance public"] = "Désactivé"
 
     if not frames:
@@ -304,6 +329,84 @@ def _fetch_stockanalysis_ipo_calendar() -> tuple[pd.DataFrame, str]:
         return _empty_frame(), _friendly_error(exc)
 
 
+def _fetch_renaissance_ipo_calendar() -> tuple[pd.DataFrame, str]:
+    """Source publique spécialisée très utile pour le pipeline US.
+
+    Renaissance Capital publie un calendrier IPO avec les IPO de la semaine,
+    les IPO après la semaine courante et des sous-sections NYSE/Nasdaq.
+    """
+    url = "https://www.renaissancecapital.com/IPO-Center/Calendar"
+    try:
+        html = _request_text(url, headers={"Referer": "https://www.renaissancecapital.com/IPO-Center"})
+        records = _extract_html_table_records(html, base_url="https://www.renaissancecapital.com")
+        if not records:
+            records = _extract_renaissance_text_records(html)
+        frame = _normalise_records(records, source="Renaissance Capital")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
+    except Exception as exc:
+        return _empty_frame(), _friendly_error(exc)
+
+
+def _fetch_nyse_ipo_calendar() -> tuple[pd.DataFrame, str]:
+    """Complément NYSE en meilleur effort.
+
+    La page NYSE est parfois rendue dynamiquement. Lorsqu'elle expose des
+    tables HTML ou du contenu indexable, Anatole l'intègre sans bloquer.
+    """
+    urls = [
+        "https://www.nyse.com/ipo-center/filings",
+        "https://www.nyse.com/ipo-center/recent-ipo",
+    ]
+    frames: list[pd.DataFrame] = []
+    errors: list[str] = []
+    for url in urls:
+        try:
+            html = _request_text(url, headers={"Referer": "https://www.nyse.com/ipo-center"})
+            records = _extract_html_table_records(html, base_url="https://www.nyse.com")
+            frame = _normalise_records(records, source="NYSE")
+            if not frame.empty:
+                frames.append(frame)
+        except Exception as exc:
+            errors.append(_friendly_error(exc))
+    if frames:
+        return pd.concat(frames, ignore_index=True), "OK"
+    return _empty_frame(), _combine_errors(errors) if errors else "Aucune donnée"
+
+
+def _fetch_marketwatch_ipo_calendar() -> tuple[pd.DataFrame, str]:
+    """Complément public MarketWatch."""
+    url = "https://www.marketwatch.com/investing/ipo"
+    try:
+        html = _request_text(url, headers={"Referer": "https://www.marketwatch.com/"})
+        records = _extract_html_table_records(html, base_url="https://www.marketwatch.com")
+        frame = _normalise_records(records, source="MarketWatch")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
+    except Exception as exc:
+        return _empty_frame(), _friendly_error(exc)
+
+
+def _fetch_investing_ipo_calendar() -> tuple[pd.DataFrame, str]:
+    """Complément public Investing.com."""
+    urls = [
+        "https://www.investing.com/ipo-calendar/",
+        "https://ca.investing.com/ipo-calendar/",
+    ]
+    frames: list[pd.DataFrame] = []
+    errors: list[str] = []
+    for url in urls:
+        try:
+            html = _request_text(url, headers={"Referer": "https://www.investing.com/"})
+            records = _extract_html_table_records(html, base_url="https://www.investing.com")
+            frame = _normalise_records(records, source="Investing.com")
+            if not frame.empty:
+                frames.append(frame)
+        except Exception as exc:
+            errors.append(_friendly_error(exc))
+    if frames:
+        return pd.concat(frames, ignore_index=True), "OK"
+    return _empty_frame(), _combine_errors(errors) if errors else "Aucune donnée"
+
+
 def _fetch_iposcoop_ipo_calendar() -> tuple[pd.DataFrame, str]:
     """Complément public sans API pour élargir la couverture."""
     url = "https://www.iposcoop.com/ipo-calendar/"
@@ -340,6 +443,42 @@ def _fetch_nasdaq_ipo_calendar() -> tuple[pd.DataFrame, str]:
     if collected:
         return pd.concat(collected, ignore_index=True), "OK"
     return _empty_frame(), _combine_errors(errors) if errors else "Aucune donnée"
+
+
+def _extract_renaissance_text_records(html: str) -> list[dict[str, Any]]:
+    """Fallback léger pour Renaissance si la table est aplatie en texte.
+
+    Le moteur de recherche expose parfois le contenu sous forme de texte plutôt
+    que comme une vraie table. Cette fonction récupère les lignes les plus
+    structurées sans prétendre remplacer une API.
+    """
+    text = _strip_html(html)
+    # Exemple observé : "MOT MetaOptics MOT 00/00/00 3.0 $5.00 - $7.00 $18 Roth".
+    pattern = re.compile(
+        r"\b(?P<ticker>[A-Z][A-Z0-9.]{1,8})\s+"
+        r"(?P<company>[A-Z][A-Za-z0-9&.,'’‑–—() /-]{2,80}?)\s+"
+        r"(?P=ticker)\s+"
+        r"(?P<date>\d{1,2}/\d{1,2}/\d{2,4}|00/00/00|TBA|TBD)\s+"
+        r"(?P<shares>[-\d.]+)?\s*"
+        r"(?P<price>\$?\d+(?:\.\d+)?(?:\s*-\s*\$?\d+(?:\.\d+)?)?)?",
+        flags=re.IGNORECASE,
+    )
+    records: list[dict[str, Any]] = []
+    for match in pattern.finditer(text):
+        company = match.group("company").strip()
+        if len(company) < 3 or company.lower() in {"company", "ticker"}:
+            continue
+        records.append(
+            {
+                "Symbole": match.group("ticker"),
+                "Société": company,
+                "Date": match.group("date"),
+                "Actions offertes": match.group("shares") or "",
+                "Prix indicatif": match.group("price") or "",
+                "Statut": "À venir",
+            }
+        )
+    return records
 
 
 def _extract_html_table_records(html: str, base_url: str = "") -> list[dict[str, Any]]:
@@ -418,17 +557,28 @@ def _normalise_header(value: Any) -> str:
         "date": "Date",
         "ipo date": "Date",
         "expected date": "Date",
+        "expected to trade": "Date",
+        "trade date": "Date",
         "offer date": "Date",
         "pricing date": "Date",
+        "filing date": "Date",
+        "price date": "Date",
         "exchange": "Bourse",
         "market": "Bourse",
         "price": "Prix indicatif",
         "price range": "Prix indicatif",
+        "price low": "Prix indicatif",
+        "price high": "Prix indicatif",
         "range": "Prix indicatif",
         "shares": "Actions offertes",
         "shares offered": "Actions offertes",
+        "shares (m)": "Actions offertes",
+        "shares millions": "Actions offertes",
         "offer amount": "Actions offertes",
+        "est. $ volume": "Actions offertes",
+        "deal size ($m)": "Actions offertes",
         "status": "Statut",
+        "scoop rating": "Statut",
         "type": "Statut",
         "url": "Lien",
         "link": "Lien",
@@ -558,6 +708,8 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "listingExchange",
             ),
         )
+        if not exchange and source in {"Nasdaq", "NYSE"}:
+            exchange = source.upper()
         price = _first_value(
             record,
             (
@@ -568,6 +720,9 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "Price Range",
                 "range",
                 "Range",
+                "Price Low",
+                "priceLow",
+                "low",
                 "proposedSharePrice",
                 "offerPrice",
                 "ipoPrice",
@@ -575,6 +730,9 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "sharePrice",
             ),
         )
+        price_high = _first_value(record, ("Price High", "priceHigh", "high"))
+        if price and price_high and str(price_high).strip() not in str(price):
+            price = f"{price}-{price_high}"
         shares = _first_value(
             record,
             (
@@ -639,17 +797,102 @@ def _filter_dates(frame: pd.DataFrame, start_date: date, end_date: date) -> pd.D
 
 
 def _deduplicate(frame: pd.DataFrame) -> pd.DataFrame:
+    """Fusionne les doublons entre sources au lieu de les afficher plusieurs fois.
+
+    Les calendriers IPO publics se recoupent beaucoup. Une même société peut
+    apparaître dans Nasdaq, StockAnalysis, IPO Scoop et Renaissance avec de
+    petites variations de nom/date. Anatole conserve une seule ligne et agrège
+    les sources.
+    """
     if frame.empty:
         return frame
+
     work = frame.copy()
-    work["_dedupe_symbol"] = work["Symbole"].str.upper().str.strip()
-    work["_dedupe_name"] = work["Société"].str.lower().str.strip()
-    work["_dedupe_date"] = work["Date"].str.strip()
-    work = work.drop_duplicates(
-        subset=["_dedupe_symbol", "_dedupe_name", "_dedupe_date"],
-        keep="first",
+    work["_dedupe_key"] = work.apply(_dedupe_key, axis=1)
+    work = work.loc[work["_dedupe_key"].ne("")].copy()
+    if work.empty:
+        return frame
+
+    merged_rows: list[dict[str, Any]] = []
+    for _, group in work.groupby("_dedupe_key", sort=False):
+        merged_rows.append(_merge_duplicate_group(group.drop(columns=["_dedupe_key"], errors="ignore")))
+
+    return pd.DataFrame(merged_rows)
+
+
+def _dedupe_key(row: pd.Series) -> str:
+    # Le nom passe avant le symbole afin de fusionner les cas où une source
+    # publie déjà le ticker et une autre indique seulement le nom de la société.
+    name_key = _normalise_company_key(row.get("Société", ""))
+    if name_key:
+        return f"name:{name_key}"
+    symbol_key = _normalise_symbol_key(row.get("Symbole", ""))
+    return f"symbol:{symbol_key}" if symbol_key else ""
+
+
+def _merge_duplicate_group(group: pd.DataFrame) -> dict[str, Any]:
+    ranked = group.copy()
+    ranked["_source_rank"] = ranked["Source"].map(lambda value: SOURCE_PRIORITY.get(str(value), 50))
+    ranked["_dated_rank"] = pd.to_datetime(ranked["Date"], errors="coerce").notna().astype(int)
+    ranked["_complete_rank"] = ranked.apply(_row_completeness, axis=1)
+    ranked = ranked.sort_values(
+        ["_source_rank", "_dated_rank", "_complete_rank"],
+        ascending=[True, False, False],
     )
-    return work.drop(columns=["_dedupe_symbol", "_dedupe_name", "_dedupe_date"], errors="ignore")
+
+    base = ranked.iloc[0].drop(labels=["_source_rank", "_dated_rank", "_complete_rank"], errors="ignore").to_dict()
+    for _, row in ranked.iterrows():
+        for column in IPO_COLUMNS:
+            candidate = _clean_text(row.get(column, ""))
+            current = _clean_text(base.get(column, ""))
+            if column == "Source":
+                continue
+            if _is_missing_value(current) and not _is_missing_value(candidate):
+                base[column] = candidate
+
+        # Si la ligne prioritaire n'a pas de date ferme mais qu'une autre source
+        # en a une, on utilise la date ferme.
+        current_date = _parse_date(base.get("Date", ""))
+        candidate_date = _parse_date(row.get("Date", ""))
+        if current_date is None and candidate_date is not None:
+            base["Date"] = _format_date(candidate_date)
+
+    sources = []
+    for source in ranked.sort_values("_source_rank")["Source"].astype(str).tolist():
+        if source and source not in sources:
+            sources.append(source)
+    base["Source"] = " + ".join(sources)
+    return base
+
+
+def _row_completeness(row: pd.Series) -> int:
+    useful_columns = ["Date", "Société", "Symbole", "Bourse", "Prix indicatif", "Actions offertes", "Statut", "Lien"]
+    return sum(0 if _is_missing_value(row.get(column, "")) else 1 for column in useful_columns)
+
+
+def _is_missing_value(value: Any) -> bool:
+    text = _clean_text(value)
+    return text == "" or text.lower() in {"à confirmer", "a confirmer", "n/d", "n/a", "none", "nan", "-"}
+
+
+def _normalise_symbol_key(value: Any) -> str:
+    text = _clean_text(value).upper()
+    text = re.sub(r"[^A-Z0-9]", "", text)
+    # Uniformise VII.U / VIIU sans confondre les tickers vides ou trop courts.
+    return text if len(text) >= 2 else ""
+
+
+def _normalise_company_key(value: Any) -> str:
+    text = _clean_text(value).lower()
+    text = unescape(text)
+    text = re.sub(r"&", " and ", text)
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    words = [word for word in text.split() if word not in {
+        "inc", "corp", "corporation", "company", "co", "ltd", "limited",
+        "plc", "llc", "group", "holdings", "holding", "sa", "spa", "ag",
+        "nv", "se", "lp", "class", "ordinary", "shares", "common",
+    }]
+    return " ".join(words).strip()
 
 
 def _add_timing_columns(frame: pd.DataFrame, today: date) -> pd.DataFrame:
@@ -751,6 +994,7 @@ def source_summary(statuses: dict[str, str]) -> str:
         return (
             "Sources actives : "
             + ", ".join(ok)
-            + ". Les sources publiques sans API sont utiles pour la veille, mais ne garantissent pas une couverture complète."
+            + ". Les doublons entre sources sont fusionnés automatiquement. "
+            "Les sources publiques sans API sont utiles pour la veille, mais ne garantissent pas une couverture complète."
         )
     return "Aucune source IPO active pour l'instant. Ajoute un fichier local ou une clé API pour fiabiliser la couverture."
