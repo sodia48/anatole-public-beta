@@ -203,9 +203,9 @@ def load_local_insider_trades(path: str | Path = DEFAULT_LOCAL_PATH) -> tuple[pd
     candidate = Path(path)
     if not candidate.exists():
         return pd.DataFrame(columns=CANONICAL_COLUMNS), {
-            "Source": "Fichier local",
-            "État": "Non configuré",
-            "Détail": "Ajouter data/insider_trades.csv pour une couverture contrôlée.",
+            "Source": "Import interne",
+            "État": "Non activé",
+            "Détail": "Aucun relevé d’initiés importé dans Anatole.",
         }
     try:
         if candidate.suffix.lower() in {".xlsx", ".xls"}:
@@ -214,15 +214,15 @@ def load_local_insider_trades(path: str | Path = DEFAULT_LOCAL_PATH) -> tuple[pd
             raw = pd.read_csv(candidate)
         frame = _canonicalise_frame(raw, source="Fichier local")
         return frame, {
-            "Source": "Fichier local",
-            "État": "OK" if not frame.empty else "Vide",
-            "Détail": f"{len(frame)} transactions chargées depuis {candidate.as_posix()}.",
+            "Source": "Import interne",
+            "État": "Connecté" if not frame.empty else "Aucune donnée",
+            "Détail": f"{len(frame)} transactions normalisées chargées.",
         }
     except Exception as exc:
         return pd.DataFrame(columns=CANONICAL_COLUMNS), {
-            "Source": "Fichier local",
-            "État": "Indisponible",
-            "Détail": f"Lecture impossible : {exc.__class__.__name__}.",
+            "Source": "Import interne",
+            "État": "Non disponible",
+            "Détail": "Le relevé importé n’a pas pu être lu correctement.",
         }
 
 
@@ -243,8 +243,8 @@ def fetch_yahoo_insider_transactions(symbol: str, timeout: int = DEFAULT_TIMEOUT
     if not yahoo:
         return pd.DataFrame(columns=CANONICAL_COLUMNS), {
             "Source": "Yahoo Finance public",
-            "État": "Symbole invalide",
-            "Détail": "Symbole vide ou non reconnu.",
+            "État": "Symbole non reconnu",
+            "Détail": "Le symbole sélectionné ne peut pas être interrogé automatiquement.",
         }
 
     urls = [
@@ -291,8 +291,8 @@ def fetch_yahoo_insider_transactions(symbol: str, timeout: int = DEFAULT_TIMEOUT
             frame = pd.DataFrame(rows, columns=CANONICAL_COLUMNS)
             return frame, {
                 "Source": "Yahoo Finance public",
-                "État": "OK" if not frame.empty else "Aucune donnée retournée",
-                "Détail": f"{len(frame)} transactions pour {yahoo}.",
+                "État": "Connecté" if not frame.empty else "Aucune transaction détectée",
+                "Détail": f"{len(frame)} transaction(s) normalisée(s) pour ce titre.",
             }
         except Exception as exc:
             last_error = exc.__class__.__name__
@@ -300,8 +300,8 @@ def fetch_yahoo_insider_transactions(symbol: str, timeout: int = DEFAULT_TIMEOUT
 
     return pd.DataFrame(columns=CANONICAL_COLUMNS), {
         "Source": "Yahoo Finance public",
-        "État": "Non disponible aujourd'hui",
-        "Détail": last_error or "Réponse vide ou bloquée.",
+        "État": "Accès public limité",
+        "Détail": "La source publique ne permet pas la lecture automatisée pour ce titre aujourd’hui.",
     }
 
 
@@ -315,8 +315,8 @@ def fetch_finnhub_insider_transactions(
     if not token:
         return pd.DataFrame(columns=CANONICAL_COLUMNS), {
             "Source": "Finnhub",
-            "État": "Clé absente",
-            "Détail": "Définir FINNHUB_API_KEY pour activer cette source.",
+            "État": "Source optionnelle inactive",
+            "Détail": "Connexion fournisseur non activée dans cet environnement.",
         }
 
     yahoo = to_yahoo_symbol(symbol)
@@ -330,7 +330,7 @@ def fetch_finnhub_insider_transactions(
             return pd.DataFrame(columns=CANONICAL_COLUMNS), {
                 "Source": "Finnhub",
                 "État": "Non disponible",
-                "Détail": f"HTTP {response.status_code} pour {yahoo}.",
+                "Détail": "Le fournisseur n’a pas retourné de données exploitables.",
             }
         payload = response.json()
         data = payload.get("data", payload if isinstance(payload, list) else [])
@@ -361,14 +361,14 @@ def fetch_finnhub_insider_transactions(
         frame = pd.DataFrame(rows, columns=CANONICAL_COLUMNS)
         return frame, {
             "Source": "Finnhub",
-            "État": "OK" if not frame.empty else "Aucune donnée retournée",
-            "Détail": f"{len(frame)} transactions pour {yahoo}.",
+            "État": "Connecté" if not frame.empty else "Aucune transaction détectée",
+            "Détail": f"{len(frame)} transaction(s) normalisée(s) pour ce titre.",
         }
     except Exception as exc:
         return pd.DataFrame(columns=CANONICAL_COLUMNS), {
             "Source": "Finnhub",
-            "État": "Indisponible",
-            "Détail": exc.__class__.__name__,
+            "État": "Non disponible",
+            "Détail": "Le fournisseur n’a pas pu être joint correctement.",
         }
 
 
@@ -474,7 +474,7 @@ def collect_insider_trades(
                 if not frame.empty:
                     frames.append(frame)
         else:
-            sources.append({"Source": "Finnhub", "État": "Clé absente", "Détail": "Source ignorée pour le scan univers."})
+            sources.append({"Source": "Fournisseur optionnel", "État": "Inactif", "Détail": "Connexion fournisseur non activée pour le scan univers."})
 
     if include_yahoo and wanted:
         for symbol in wanted[: max(1, int(max_public_symbols or 1))]:
@@ -483,7 +483,7 @@ def collect_insider_trades(
             if not frame.empty:
                 frames.append(frame)
     else:
-        sources.append({"Source": "Yahoo Finance public", "État": "Mode titre seulement", "Détail": "Active-le dans le radar ou utilise la vue titre spécifique."})
+        sources.append({"Source": "Source publique", "État": "Sur demande", "Détail": "Lecture ponctuelle disponible depuis la vue par titre."})
 
     if frames:
         combined = pd.concat(frames, ignore_index=True)
