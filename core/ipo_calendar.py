@@ -4,7 +4,9 @@ from datetime import date, timedelta
 from html import unescape
 from pathlib import Path
 from typing import Any
+from difflib import SequenceMatcher
 import re
+import xml.etree.ElementTree as ET
 
 import pandas as pd
 import requests
@@ -18,8 +20,11 @@ IPO_COLUMNS = [
     "Société",
     "Symbole",
     "Bourse",
+    "Pays",
+    "Type d’événement",
     "Prix indicatif",
     "Actions offertes",
+    "Montant estimé",
     "Statut",
     "Source",
     "Lien",
@@ -36,13 +41,16 @@ SOURCE_PRIORITY = {
     "Finnhub": 1,
     "Financial Modeling Prep": 2,
     "StockAnalysis": 3,
-    "Renaissance Capital": 4,
-    "IPO Scoop": 5,
-    "Nasdaq": 6,
-    "NYSE": 7,
-    "MarketWatch": 8,
-    "Investing.com": 9,
-    "Yahoo Finance": 10,
+    "StockAnalysis Filings": 4,
+    "Renaissance Capital": 5,
+    "IPO Scoop": 6,
+    "Nasdaq": 7,
+    "NYSE": 8,
+    "SEC EDGAR": 9,
+    "TMX New Listings": 10,
+    "MarketWatch": 11,
+    "Investing.com": 12,
+    "Yahoo Finance": 13,
 }
 
 PUBLIC_HEADERS = {
@@ -110,10 +118,13 @@ def load_upcoming_ipos(
     if public_enabled:
         public_loaders = (
             ("StockAnalysis public", lambda: _fetch_stockanalysis_ipo_calendar()),
+            ("StockAnalysis filings public", lambda: _fetch_stockanalysis_filings()),
             ("Renaissance Capital public", lambda: _fetch_renaissance_ipo_calendar()),
             ("IPO Scoop public", lambda: _fetch_iposcoop_ipo_calendar()),
             ("Nasdaq public", lambda: _fetch_nasdaq_ipo_calendar()),
             ("NYSE public", lambda: _fetch_nyse_ipo_calendar()),
+            ("SEC EDGAR S-1/F-1 public", lambda: _fetch_sec_ipo_filings()),
+            ("TMX new listings public", lambda: _fetch_tmx_new_listings()),
             ("MarketWatch public", lambda: _fetch_marketwatch_ipo_calendar()),
             ("Investing.com public", lambda: _fetch_investing_ipo_calendar()),
             ("Yahoo Finance public", lambda: _fetch_yahoo_ipo_calendar(start_date, end_date)),
@@ -125,10 +136,13 @@ def load_upcoming_ipos(
                 frames.append(frame)
     else:
         statuses["StockAnalysis public"] = "Désactivé"
+        statuses["StockAnalysis filings public"] = "Désactivé"
         statuses["Renaissance Capital public"] = "Désactivé"
         statuses["IPO Scoop public"] = "Désactivé"
         statuses["Nasdaq public"] = "Désactivé"
         statuses["NYSE public"] = "Désactivé"
+        statuses["SEC EDGAR S-1/F-1 public"] = "Désactivé"
+        statuses["TMX new listings public"] = "Désactivé"
         statuses["MarketWatch public"] = "Désactivé"
         statuses["Investing.com public"] = "Désactivé"
         statuses["Yahoo Finance public"] = "Désactivé"
@@ -141,6 +155,7 @@ def load_upcoming_ipos(
     combined = _filter_dates(combined, start_date, end_date)
     combined = _deduplicate(combined)
     combined = _add_timing_columns(combined, today)
+    combined = _add_quality_columns(combined)
     combined = combined.sort_values(["DateTri", "Société"], ascending=[True, True], na_position="last")
     return combined.drop(columns=["DateTri"], errors="ignore"), statuses
 
@@ -327,6 +342,138 @@ def _fetch_stockanalysis_ipo_calendar() -> tuple[pd.DataFrame, str]:
         return frame, "OK" if not frame.empty else "Aucune donnée"
     except Exception as exc:
         return _empty_frame(), _friendly_error(exc)
+
+
+def _fetch_stockanalysis_filings() -> tuple[pd.DataFrame, str]:
+    """Ajoute le pipeline des sociétés ayant déposé un dossier IPO.
+
+    Ces lignes ne garantissent pas une date d'IPO immédiate. Elles enrichissent
+    le radar avec les sociétés qui ont déjà déposé un dossier d'entrée en
+    bourse et qui peuvent ensuite apparaître dans le calendrier.
+    """
+    url = "https://stockanalysis.com/ipos/filings/"
+    try:
+        html = _request_text(url, headers={"Referer": "https://stockanalysis.com/ipos/"})
+        records = _extract_html_table_records(html, base_url="https://stockanalysis.com")
+        for record in records:
+            record.setdefault("Statut", "Dossier déposé")
+            record.setdefault("Type d’événement", "Dépôt IPO")
+        frame = _normalise_records(records, source="StockAnalysis Filings")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
+    except Exception as exc:
+        return _empty_frame(), _friendly_error(exc)
+
+
+def _fetch_sec_ipo_filings() -> tuple[pd.DataFrame, str]:
+    """Récupère les dépôts S-1/F-1 récents via le flux public EDGAR.
+
+    Ce n'est pas un calendrier de pricing. C'est un radar de pipeline : S-1,
+    S-1/A, F-1 et F-1/A signalent qu'une société a publié ou amendé un dossier
+    d'introduction en bourse.
+    """
+    forms = ("S-1", "S-1/A", "F-1", "F-1/A")
+    records: list[dict[str, Any]] = []
+    errors: list[str] = []
+    user_agent = str(get_secret("SEC_USER_AGENT", "AnatoleMarketDashboard/1.0 contact@example.com") or "").strip()
+    for form in forms:
+        try:
+            xml_text = _request_text(
+                "https://www.sec.gov/cgi-bin/browse-edgar",
+                params={
+                    "action": "getcurrent",
+                    "type": form,
+                    "owner": "exclude",
+                    "count": "40",
+                    "output": "atom",
+                },
+                headers={
+                    "Accept": "application/atom+xml, application/xml, text/xml, */*",
+                    "User-Agent": user_agent,
+                    "Referer": "https://www.sec.gov/search-filings",
+                },
+            )
+            records.extend(_extract_sec_atom_records(xml_text, form))
+        except Exception as exc:
+            errors.append(_friendly_error(exc))
+    if records:
+        frame = _normalise_records(records, source="SEC EDGAR")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
+    return _empty_frame(), _combine_errors(errors) if errors else "Aucune donnée"
+
+
+def _fetch_tmx_new_listings() -> tuple[pd.DataFrame, str]:
+    """Complément canadien : nouvelles inscriptions TSX/TSXV.
+
+    TMX publie surtout des sociétés déjà listées/récemment listées, pas
+    nécessairement un calendrier IPO futur. Anatole les sépare donc comme
+    événement de marché canadien plutôt que comme date d'IPO confirmée.
+    """
+    url = "https://www.tsx.com/en/news/new-company-listings"
+    try:
+        html = _request_text(url, headers={"Referer": "https://www.tsx.com/"})
+        records = _extract_html_table_records(html, base_url="https://www.tsx.com")
+        for record in records:
+            record.setdefault("Statut", "Nouvelle inscription")
+            record.setdefault("Bourse", "TSX/TSXV")
+            record.setdefault("Pays", "Canada")
+            record.setdefault("Type d’événement", "Nouvelle inscription")
+        frame = _normalise_records(records, source="TMX New Listings")
+        return frame, "OK" if not frame.empty else "Aucune donnée"
+    except Exception as exc:
+        return _empty_frame(), _friendly_error(exc)
+
+
+def _extract_sec_atom_records(xml_text: str, form: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return records
+
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    entries = root.findall("atom:entry", ns) or root.findall("entry")
+    for entry in entries:
+        title_node = entry.find("atom:title", ns)
+        if title_node is None:
+            title_node = entry.find("title")
+        updated_node = entry.find("atom:updated", ns)
+        if updated_node is None:
+            updated_node = entry.find("updated")
+        link_node = entry.find("atom:link", ns)
+        if link_node is None:
+            link_node = entry.find("link")
+        title = title_node.text if title_node is not None else ""
+        updated = updated_node.text if updated_node is not None else ""
+        link = link_node.attrib.get("href", "") if link_node is not None else ""
+        company = _extract_company_from_sec_title(title, form)
+        symbol = _extract_symbol_from_sec_title(title)
+        if not company:
+            continue
+        records.append(
+            {
+                "Date": updated,
+                "Société": company,
+                "Symbole": symbol,
+                "Bourse": "",
+                "Pays": "États-Unis",
+                "Type d’événement": "Dépôt réglementaire",
+                "Statut": f"Dossier {form}",
+                "Lien": link,
+            }
+        )
+    return records
+
+
+def _extract_company_from_sec_title(title: str, form: str) -> str:
+    text = _strip_html(title)
+    text = re.sub(rf"^\s*{re.escape(form)}\s*-\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*\(CIK.*$", "", text, flags=re.IGNORECASE).strip()
+    return text
+
+
+def _extract_symbol_from_sec_title(title: str) -> str:
+    match = re.search(r"\(([A-Z][A-Z0-9.]{1,8})\)\s*(?:$|[-,])", title)
+    return match.group(1).upper() if match else ""
 
 
 def _fetch_renaissance_ipo_calendar() -> tuple[pd.DataFrame, str]:
@@ -565,6 +712,11 @@ def _normalise_header(value: Any) -> str:
         "price date": "Date",
         "exchange": "Bourse",
         "market": "Bourse",
+        "country": "Pays",
+        "nation": "Pays",
+        "event type": "Type d’événement",
+        "event": "Type d’événement",
+        "ipo stage": "Type d’événement",
         "price": "Prix indicatif",
         "price range": "Prix indicatif",
         "price low": "Prix indicatif",
@@ -575,8 +727,12 @@ def _normalise_header(value: Any) -> str:
         "shares (m)": "Actions offertes",
         "shares millions": "Actions offertes",
         "offer amount": "Actions offertes",
-        "est. $ volume": "Actions offertes",
-        "deal size ($m)": "Actions offertes",
+        "est. $ volume": "Montant estimé",
+        "deal size ($m)": "Montant estimé",
+        "deal size": "Montant estimé",
+        "proceeds": "Montant estimé",
+        "amount": "Montant estimé",
+        "size": "Montant estimé",
         "status": "Statut",
         "scoop rating": "Statut",
         "type": "Statut",
@@ -710,6 +866,29 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
         )
         if not exchange and source in {"Nasdaq", "NYSE"}:
             exchange = source.upper()
+        country = _first_value(
+            record,
+            (
+                "Pays",
+                "country",
+                "Country",
+                "nation",
+                "Nation",
+                "region",
+            ),
+        )
+        event_type = _first_value(
+            record,
+            (
+                "Type d’événement",
+                "Type d'événement",
+                "eventType",
+                "event_type",
+                "event",
+                "type",
+                "IPO Stage",
+            ),
+        )
         price = _first_value(
             record,
             (
@@ -747,8 +926,23 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "Offer Amount",
             ),
         )
+        amount = _first_value(
+            record,
+            (
+                "Montant estimé",
+                "Deal Size",
+                "Deal Size ($M)",
+                "dealSize",
+                "proceeds",
+                "Proceeds",
+                "amount",
+                "Amount",
+                "Est. $ Volume",
+                "marketCap",
+            ),
+        )
         status = _first_value(record, ("Statut", "status", "Status", "dealStatus", "eventType", "type"))
-        link = _first_value(record, ("Lien", "url", "link", "prospectusUrl", "filingUrl", "webUrl"))
+        link = _first_value(record, ("Lien", "url", "link", "prospectusUrl", "filingUrl", "webUrl", "Filing", "Prospectus"))
 
         if not company and not symbol:
             continue
@@ -759,8 +953,11 @@ def _normalise_records(records: list[dict[str, Any]], source: str) -> pd.DataFra
                 "Société": _clean_text(company),
                 "Symbole": _clean_text(symbol).upper(),
                 "Bourse": _clean_text(exchange).upper(),
+                "Pays": _normalise_country(country, exchange, source),
+                "Type d’événement": _normalise_event_type(event_type, status, source),
                 "Prix indicatif": _clean_text(price),
                 "Actions offertes": _clean_text(shares),
+                "Montant estimé": _clean_text(amount),
                 "Statut": _normalise_status(status),
                 "Source": source,
                 "Lien": _clean_text(link),
@@ -791,32 +988,55 @@ def _filter_dates(frame: pd.DataFrame, start_date: date, end_date: date) -> pd.D
     work = frame.copy()
     start_ts = pd.Timestamp(start_date)
     end_ts = pd.Timestamp(end_date)
+    pipeline_start_ts = start_ts - pd.Timedelta(days=180)
     dated = work["DateTri"].notna()
-    in_range = (work["DateTri"] >= start_ts) & (work["DateTri"] <= end_ts)
-    return work.loc[(dated & in_range) | (~dated & work["Société"].ne(""))].copy()
+    event_text = (
+        work.get("Type d’événement", pd.Series("", index=work.index))
+        .fillna("")
+        .astype(str)
+        .str.lower()
+    )
+    status_text = work.get("Statut", pd.Series("", index=work.index)).fillna("").astype(str).str.lower()
+    is_pipeline = (
+        event_text.str.contains("dépôt|depot|filing|réglementaire|reglementaire|nouvelle inscription", regex=True)
+        | status_text.str.contains("dossier|filed|filing|s-1|f-1|nouvelle inscription", regex=True)
+    )
+    calendar_range = (work["DateTri"] >= start_ts) & (work["DateTri"] <= end_ts)
+    pipeline_range = (work["DateTri"] >= pipeline_start_ts) & (work["DateTri"] <= end_ts)
+    unknown_date = ~dated & work["Société"].ne("")
+    return work.loc[(dated & calendar_range) | (is_pipeline & dated & pipeline_range) | unknown_date].copy()
 
 
 def _deduplicate(frame: pd.DataFrame) -> pd.DataFrame:
     """Fusionne les doublons entre sources au lieu de les afficher plusieurs fois.
 
-    Les calendriers IPO publics se recoupent beaucoup. Une même société peut
-    apparaître dans Nasdaq, StockAnalysis, IPO Scoop et Renaissance avec de
-    petites variations de nom/date. Anatole conserve une seule ligne et agrège
-    les sources.
+    En plus de la clé exacte, cette version détecte les doublons probables par
+    symbole et par similarité de nom. Cela évite les répétitions du type
+    "Ltd." / "Limited", accentuation, ponctuation ou petits écarts entre sites.
     """
     if frame.empty:
         return frame
 
     work = frame.copy()
-    work["_dedupe_key"] = work.apply(_dedupe_key, axis=1)
-    work = work.loc[work["_dedupe_key"].ne("")].copy()
-    if work.empty:
-        return frame
+    work["_source_rank"] = work["Source"].map(lambda value: SOURCE_PRIORITY.get(str(value), 50))
+    work["_complete_rank"] = work.apply(_row_completeness, axis=1)
+    work = work.sort_values(["_source_rank", "_complete_rank"], ascending=[True, False])
+
+    groups: list[list[pd.Series]] = []
+    for _, row in work.iterrows():
+        placed = False
+        for group in groups:
+            if any(_rows_are_probable_duplicate(row, candidate) for candidate in group):
+                group.append(row)
+                placed = True
+                break
+        if not placed:
+            groups.append([row])
 
     merged_rows: list[dict[str, Any]] = []
-    for _, group in work.groupby("_dedupe_key", sort=False):
-        merged_rows.append(_merge_duplicate_group(group.drop(columns=["_dedupe_key"], errors="ignore")))
-
+    for group in groups:
+        group_frame = pd.DataFrame(group).drop(columns=["_source_rank", "_complete_rank"], errors="ignore")
+        merged_rows.append(_merge_duplicate_group(group_frame))
     return pd.DataFrame(merged_rows)
 
 
@@ -828,6 +1048,23 @@ def _dedupe_key(row: pd.Series) -> str:
         return f"name:{name_key}"
     symbol_key = _normalise_symbol_key(row.get("Symbole", ""))
     return f"symbol:{symbol_key}" if symbol_key else ""
+
+
+def _rows_are_probable_duplicate(left: pd.Series, right: pd.Series) -> bool:
+    left_symbol = _normalise_symbol_key(left.get("Symbole", ""))
+    right_symbol = _normalise_symbol_key(right.get("Symbole", ""))
+    if left_symbol and right_symbol and left_symbol == right_symbol:
+        return True
+
+    left_name = _normalise_company_key(left.get("Société", ""))
+    right_name = _normalise_company_key(right.get("Société", ""))
+    if not left_name or not right_name:
+        return False
+    if left_name == right_name:
+        return True
+    if len(left_name) >= 8 and len(right_name) >= 8 and (left_name in right_name or right_name in left_name):
+        return True
+    return SequenceMatcher(None, left_name, right_name).ratio() >= 0.91
 
 
 def _merge_duplicate_group(group: pd.DataFrame) -> dict[str, Any]:
@@ -866,7 +1103,19 @@ def _merge_duplicate_group(group: pd.DataFrame) -> dict[str, Any]:
 
 
 def _row_completeness(row: pd.Series) -> int:
-    useful_columns = ["Date", "Société", "Symbole", "Bourse", "Prix indicatif", "Actions offertes", "Statut", "Lien"]
+    useful_columns = [
+        "Date",
+        "Société",
+        "Symbole",
+        "Bourse",
+        "Pays",
+        "Type d’événement",
+        "Prix indicatif",
+        "Actions offertes",
+        "Montant estimé",
+        "Statut",
+        "Lien",
+    ]
     return sum(0 if _is_missing_value(row.get(column, "")) else 1 for column in useful_columns)
 
 
@@ -901,10 +1150,17 @@ def _add_timing_columns(frame: pd.DataFrame, today: date) -> pd.DataFrame:
     work = frame.copy()
     days: list[Any] = []
     moments: list[str] = []
-    for value in work.get("DateTri", []):
+    event_values = work.get("Type d’événement", pd.Series("", index=work.index)).fillna("").astype(str).tolist()
+    for idx, value in enumerate(work.get("DateTri", [])):
+        event_text = event_values[idx].lower() if idx < len(event_values) else ""
+        is_pipeline = any(token in event_text for token in ("dépôt", "depot", "filing", "réglementaire", "reglementaire", "nouvelle inscription"))
         if pd.isna(value):
             days.append(pd.NA)
-            moments.append("Date à confirmer")
+            moments.append("Pipeline à confirmer" if is_pipeline else "Date à confirmer")
+            continue
+        if is_pipeline:
+            days.append(pd.NA)
+            moments.append("Pipeline récent")
             continue
         delta = (pd.Timestamp(value).date() - today).days
         days.append(delta)
@@ -923,6 +1179,78 @@ def _add_timing_columns(frame: pd.DataFrame, today: date) -> pd.DataFrame:
     return work
 
 
+def _add_quality_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return _empty_frame()
+    work = frame.copy()
+    counts: list[int] = []
+    scores: list[int] = []
+    labels: list[str] = []
+    maturity: list[str] = []
+    gaps: list[str] = []
+    for _, row in work.iterrows():
+        sources = _split_sources(row.get("Source", ""))
+        source_count = max(1, len(sources))
+        counts.append(source_count)
+
+        score = 35
+        if source_count >= 2:
+            score += 20
+        if source_count >= 3:
+            score += 10
+        if any(source in {"Fichier local", "Finnhub", "Financial Modeling Prep"} for source in sources):
+            score += 15
+        if _parse_date(row.get("Date", "")) is not None and "pipeline" not in _clean_text(row.get("Moment", "")).lower():
+            score += 15
+        if not _is_missing_value(row.get("Symbole", "")):
+            score += 5
+        if not _is_missing_value(row.get("Prix indicatif", "")) or not _is_missing_value(row.get("Montant estimé", "")):
+            score += 5
+        score = max(0, min(100, score))
+        scores.append(score)
+        if score >= 80:
+            labels.append("Élevée")
+        elif score >= 60:
+            labels.append("Moyenne")
+        else:
+            labels.append("Indicative")
+
+        event_text = _clean_text(row.get("Type d’événement", "")).lower()
+        has_date = _parse_date(row.get("Date", "")) is not None
+        has_price = not _is_missing_value(row.get("Prix indicatif", ""))
+        if any(token in event_text for token in ("dépôt", "depot", "filing", "réglementaire", "reglementaire")):
+            maturity.append("Dossier déposé")
+        elif has_date and has_price:
+            maturity.append("Fourchette annoncée")
+        elif has_date:
+            maturity.append("Date annoncée")
+        else:
+            maturity.append("À confirmer")
+
+        missing = []
+        if not has_date:
+            missing.append("date")
+        if _is_missing_value(row.get("Symbole", "")):
+            missing.append("symbole")
+        if _is_missing_value(row.get("Prix indicatif", "")) and _is_missing_value(row.get("Montant estimé", "")):
+            missing.append("prix/montant")
+        gaps.append("Complet" if not missing else "À vérifier : " + ", ".join(missing))
+
+    work["Sources détectées"] = counts
+    work["Score donnée"] = scores
+    work["Confiance donnée"] = labels
+    work["Maturité IPO"] = maturity
+    work["Points à vérifier"] = gaps
+    return work
+
+
+def _split_sources(value: Any) -> list[str]:
+    text = _clean_text(value)
+    if not text:
+        return []
+    return [part.strip() for part in text.split("+") if part.strip()]
+
+
 def _format_date(value: Any) -> str:
     parsed = _parse_date(value)
     if parsed is None:
@@ -939,6 +1267,31 @@ def _clean_text(value: Any) -> str:
     return text
 
 
+def _normalise_country(country: Any, exchange: Any, source: str) -> str:
+    text = _clean_text(country)
+    if text:
+        return text
+    exchange_text = _clean_text(exchange).upper()
+    source_text = _clean_text(source).lower()
+    if any(token in exchange_text for token in ("TSX", "TSXV", "NEO", "CSE")) or "tmx" in source_text:
+        return "Canada"
+    if any(token in exchange_text for token in ("NASDAQ", "NYSE", "AMEX")) or "sec edgar" in source_text:
+        return "États-Unis"
+    return ""
+
+
+def _normalise_event_type(event_type: Any, status: Any, source: str) -> str:
+    text = _clean_text(event_type)
+    lowered = (text + " " + _clean_text(status) + " " + source).lower()
+    if any(token in lowered for token in ("s-1", "f-1", "filing", "filed", "dossier", "dépôt", "depot", "sec edgar")):
+        return "Dépôt réglementaire"
+    if "tmx" in lowered or "new listing" in lowered or "nouvelle inscription" in lowered:
+        return "Nouvelle inscription"
+    if text:
+        return text
+    return "Calendrier IPO"
+
+
 def _normalise_status(value: Any) -> str:
     status = _clean_text(value)
     if not status:
@@ -948,8 +1301,10 @@ def _normalise_status(value: Any) -> str:
         return "À venir"
     if "priced" in lowered:
         return "Prix fixé"
-    if "filed" in lowered or "filing" in lowered or "file" in lowered:
+    if "s-1" in lowered or "f-1" in lowered or "filed" in lowered or "filing" in lowered or "file" in lowered or "dossier" in lowered:
         return "Dossier déposé"
+    if "new listing" in lowered or "nouvelle inscription" in lowered:
+        return "Nouvelle inscription"
     if "withdraw" in lowered:
         return "Retirée"
     if "postpon" in lowered or "delayed" in lowered:
