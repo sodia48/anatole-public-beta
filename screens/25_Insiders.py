@@ -13,6 +13,11 @@ from core.insider_trades import (
     collect_insider_trades,
     fetch_finnhub_insider_transactions,
     fetch_yahoo_insider_transactions,
+    fetch_marketbeat_insider_transactions,
+    fetch_insiderscreener_transactions,
+    marketbeat_insider_url,
+    canadian_insider_url,
+    insiderscreener_company_url,
     filter_recent,
     enrich_with_companies,
     deduplicate_trades,
@@ -31,12 +36,12 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Transactions d’initiés",
-    "Analysez les achats, ventes et déclarations d’initiés sur les sociétés canadiennes suivies par Anatole.",
+    "Repérez les achats, ventes et déclarations d’initiés sur les sociétés canadiennes suivies par Anatole.",
     "🕵️",
 )
 
 st.caption(
-    "Vue informative. Les transactions d’initiés doivent être interprétées avec le contexte financier, réglementaire et la taille réelle de la transaction."
+    "Vue informative. Anatole consolide des sources publiques et officielles quand elles sont accessibles, puis normalise les résultats pour faciliter la vérification."
 )
 
 with load_timer("insider_constituents"):
@@ -144,14 +149,17 @@ def _render_summary_cards(frame: pd.DataFrame, source_rows: pd.DataFrame | None 
     d.metric("Flux net estimé", _format_money(summary["net_value"]))
     e, f = st.columns(2)
     e.metric("Confiance donnée", _quality_label(frame, source_count))
-    f.metric("Sources consultées", f"{source_count}")
+    connected = 0
+    if source_rows is not None and not source_rows.empty and "État" in source_rows:
+        connected = int(source_rows["État"].astype(str).str.contains("Connecté", case=False, na=False).sum())
+    f.metric("Sources actives", f"{connected}/{source_count}")
 
 
 def _render_empty_state(company: str | None = None, ticker: str | None = None) -> None:
     name = company or ticker or "ce titre"
     st.info(
-        f"Aucune transaction normalisée n’a été détectée pour {name} dans les sources automatiques actives. "
-        "Cela ne signifie pas qu’il n’existe aucune déclaration : vérifiez les sources officielles avant de conclure."
+        f"Aucune transaction normalisée n’a été détectée pour {name} dans les sources publiques disponibles aujourd’hui. "
+        "Anatole affiche aussi les liens de vérification officiels pour confirmer la situation au besoin."
     )
 
 
@@ -204,9 +212,9 @@ if section == "Radar univers":
         )
     with f3:
         public_scan = st.toggle(
-            "Recherche publique ponctuelle",
-            value=False,
-            help="Active une lecture automatique limitée sur les premiers titres affichés. Les sources officielles restent accessibles par titre.",
+            "Scan public automatique",
+            value=True,
+            help="Interroge automatiquement les sources publiques exploitables, sans clé API, sur les premiers titres affichés.",
         )
 
     sector_options = ["Tous"] + sorted([x for x in constituents.get("Secteur", pd.Series(dtype=str)).dropna().astype(str).unique() if x])
@@ -217,8 +225,10 @@ if section == "Radar univers":
         trades, sources = collect_insider_trades(
             scoped,
             days=int(days),
-            include_yahoo=bool(public_scan),
-            include_finnhub=True,
+            include_yahoo=False,
+            include_finnhub=False,
+            include_marketbeat=bool(public_scan),
+            include_insiderscreener=bool(public_scan),
             max_public_symbols=int(max_symbols),
         )
 
@@ -251,18 +261,21 @@ elif section == "Titre spécifique":
     row = constituents[constituents["Ticker"] == selected].head(1)
     company = str(row["Nom"].iloc[0]) if not row.empty and "Nom" in row else selected
 
-    c1, c2, c3 = st.columns(3)
-    c1.link_button("SEDI officiel", sedi_issuer_search_url(company), width="stretch")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.link_button("SEDI", sedi_issuer_search_url(company), width="stretch")
     c2.link_button("TMX", tmx_insider_url(selected), width="stretch")
-    c3.link_button("Yahoo Finance", yahoo_insider_url(selected), width="stretch")
+    c3.link_button("MarketBeat", marketbeat_insider_url(selected), width="stretch")
+    c4.link_button("InsiderScreener", insiderscreener_company_url(selected, company), width="stretch")
+    c5.link_button("Canadian Insider", canadian_insider_url(selected), width="stretch")
 
     q1, q2 = st.columns([1, 2])
     with q1:
         days = st.selectbox("Période analysée", [30, 60, 90, 180, 365], index=3, format_func=lambda x: f"{x} jours", key="single_days")
     with q2:
         with st.expander("Options de recherche", expanded=False):
-            use_yahoo = st.toggle("Inclure les sources publiques automatiques", value=True, key="single_yahoo")
-            use_finnhub = st.toggle("Inclure les connecteurs professionnels disponibles", value=True, key="single_finnhub")
+            use_public = st.toggle("Sources publiques automatiques", value=True, key="single_public_sources")
+            use_yahoo = st.toggle("Yahoo en source complémentaire", value=False, key="single_yahoo")
+            use_finnhub = st.toggle("Connecteur professionnel si disponible", value=False, key="single_finnhub")
 
     frames: list[pd.DataFrame] = []
     source_rows: list[dict[str, str]] = []
@@ -274,9 +287,23 @@ elif section == "Titre spécifique":
         if not local.empty:
             frames.append(local)
 
-    if use_yahoo:
+    if use_public:
         with st.spinner(f"Recherche des transactions disponibles pour {selected}…"):
-            yahoo_frame, yahoo_status = fetch_yahoo_insider_transactions(selected)
+            marketbeat_frame, marketbeat_status = fetch_marketbeat_insider_transactions(selected, company=company)
+            screener_frame, screener_status = fetch_insiderscreener_transactions(selected, company=company)
+        source_rows.extend([marketbeat_status, screener_status])
+        if not marketbeat_frame.empty:
+            frames.append(marketbeat_frame)
+        if not screener_frame.empty:
+            frames.append(screener_frame)
+    else:
+        source_rows.extend([
+            {"Source": "MarketBeat public", "État": "Sur demande", "Détail": "Lecture automatique désactivée pour cette recherche."},
+            {"Source": "InsiderScreener public", "État": "Sur demande", "Détail": "Lecture automatique désactivée pour cette recherche."},
+        ])
+
+    if use_yahoo:
+        yahoo_frame, yahoo_status = fetch_yahoo_insider_transactions(selected)
         source_rows.append(yahoo_status)
         if not yahoo_frame.empty:
             frames.append(yahoo_frame)
@@ -323,9 +350,11 @@ elif section == "Répertoire TSX":
         hide_index=True,
         width="stretch",
         column_config={
-            "Yahoo": st.column_config.LinkColumn("Yahoo", display_text="Ouvrir"),
             "SEDI": st.column_config.LinkColumn("SEDI", display_text="Ouvrir"),
             "TMX": st.column_config.LinkColumn("TMX", display_text="Ouvrir"),
+            "MarketBeat": st.column_config.LinkColumn("MarketBeat", display_text="Ouvrir"),
+            "InsiderScreener": st.column_config.LinkColumn("InsiderScreener", display_text="Ouvrir"),
+            "Canadian Insider": st.column_config.LinkColumn("Canadian Insider", display_text="Ouvrir"),
         },
     )
 
@@ -341,8 +370,9 @@ else:
 
         - **SEDI** : source officielle canadienne de vérification.
         - **TMX** : accès rapide par symbole aux informations de marché liées aux transactions d’initiés.
-        - **Sources publiques complémentaires** : utilisées uniquement lorsque la lecture automatisée est disponible.
-        - **Connecteurs professionnels** : peuvent être activés pour une couverture plus régulière.
+        - **MarketBeat public** : source publique exploitée automatiquement quand la page du titre est disponible.
+        - **InsiderScreener public** : source publique complémentaire pour détecter les transactions et signaux récents.
+        - **Canadian Insider** : source canadienne utile pour la vérification manuelle et le contexte INK/SEDI.
         - **Import interne** : permet de charger un relevé validé pour une couverture contrôlée du TSX Composite.
 
         **Lecture du signal**
