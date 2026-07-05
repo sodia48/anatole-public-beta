@@ -46,6 +46,12 @@ pages = {
             url_path="ipo",
         ),
         st.Page(
+            "screens/25_Insiders.py",
+            title="Transactions d’initiés",
+            icon="🕵️",
+            url_path="insiders",
+        ),
+        st.Page(
             "screens/15_Market_Drivers.py",
             title="Moteurs du marché",
             icon="🧭",
