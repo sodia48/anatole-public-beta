@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 import pandas as pd
 import streamlit as st
@@ -30,12 +31,12 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Transactions d’initiés",
-    "Repérez les achats, ventes et déclarations d’initiés sur les titres canadiens suivis par Anatole.",
+    "Analysez les achats, ventes et déclarations d’initiés sur les sociétés canadiennes suivies par Anatole.",
     "🕵️",
 )
 
 st.caption(
-    "Lecture informationnelle seulement. Les déclarations d’initiés canadiennes doivent toujours être vérifiées dans les sources officielles avant toute décision."
+    "Vue informative. Les transactions d’initiés doivent être interprétées avec le contexte financier, réglementaire et la taille réelle de la transaction."
 )
 
 with load_timer("insider_constituents"):
@@ -53,7 +54,7 @@ constituents = constituents.drop_duplicates("Ticker")
 
 section = st.segmented_control(
     "Vue",
-    ["Radar univers", "Titre spécifique", "Répertoire TSX", "Sources & méthode"],
+    ["Radar univers", "Titre spécifique", "Répertoire TSX", "Méthodologie"],
     default="Radar univers",
     selection_mode="single",
 )
@@ -77,18 +78,85 @@ def _format_money(value: float) -> str:
     return f"{sign}{value:,.0f} $"
 
 
-def _render_summary_cards(frame: pd.DataFrame) -> None:
+def _quality_label(frame: pd.DataFrame, source_count: int = 0) -> str:
+    if frame is None or frame.empty:
+        return "À vérifier"
+    if len(frame) >= 10 and source_count >= 2:
+        return "Élevée"
+    if len(frame) >= 3:
+        return "Bonne"
+    return "Partielle"
+
+
+def _clean_source_statuses(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame(columns=["Source", "État", "Couverture"])
+
+    result = frame.copy()
+    for col in ["Source", "État", "Détail"]:
+        if col not in result.columns:
+            result[col] = ""
+
+    def status_label(raw: str) -> str:
+        text = str(raw or "").lower()
+        if any(token in text for token in ["ok", "connecté", "connected"]):
+            return "Connectée"
+        if any(token in text for token in ["aucune transaction", "aucune donnée", "vide"]):
+            return "Aucune transaction détectée"
+        if any(token in text for token in ["non activ", "inactive", "inactif", "sur demande"]):
+            return "Disponible sur demande"
+        if any(token in text for token in ["limité", "non disponible", "indisponible"]):
+            return "Couverture limitée aujourd’hui"
+        return str(raw or "À vérifier")
+
+    def coverage_label(row: pd.Series) -> str:
+        source = str(row.get("Source", ""))
+        state = status_label(str(row.get("État", "")))
+        if state == "Connectée":
+            return "Données normalisées disponibles."
+        if state == "Aucune transaction détectée":
+            return "Aucun mouvement détecté dans la période sélectionnée."
+        if "Import" in source:
+            return "Aucun relevé interne n’a été importé."
+        if state == "Disponible sur demande":
+            return "Source consultable au cas par cas ou via connecteur."
+        return "La source ne permet pas une lecture automatisée fiable aujourd’hui."
+
+    output = pd.DataFrame(
+        {
+            "Source": result["Source"].astype(str).replace({"Fichier local": "Import interne", "Yahoo Finance public": "Source publique"}),
+            "État": result["État"].map(status_label),
+        }
+    )
+    output["Couverture"] = result.apply(coverage_label, axis=1)
+    return output.drop_duplicates().reset_index(drop=True)
+
+
+def _render_summary_cards(frame: pd.DataFrame, source_rows: pd.DataFrame | None = None) -> None:
     summary = build_insider_summary(frame)
+    source_count = 0
+    if source_rows is not None and not source_rows.empty and "Source" in source_rows:
+        source_count = int(source_rows["Source"].nunique())
     a, b, c, d = st.columns(4)
     a.metric("Transactions", f"{summary['transactions']}")
     b.metric("Sociétés touchées", f"{summary['companies']}")
     c.metric("Ratio achats", f"{summary['buy_ratio']:.0f}%")
     d.metric("Flux net estimé", _format_money(summary["net_value"]))
+    e, f = st.columns(2)
+    e.metric("Confiance donnée", _quality_label(frame, source_count))
+    f.metric("Sources consultées", f"{source_count}")
+
+
+def _render_empty_state(company: str | None = None, ticker: str | None = None) -> None:
+    name = company or ticker or "ce titre"
+    st.info(
+        f"Aucune transaction normalisée n’a été détectée pour {name} dans les sources automatiques actives. "
+        "Cela ne signifie pas qu’il n’existe aucune déclaration : vérifiez les sources officielles avant de conclure."
+    )
 
 
 def _render_trades_table(frame: pd.DataFrame, key: str) -> None:
     if frame.empty:
-        st.info("Aucune transaction d’initié disponible avec les sources actives pour cette sélection.")
         return
     show = frame.copy()
     for column in ["Actions", "Prix", "Valeur"]:
@@ -99,7 +167,7 @@ def _render_trades_table(frame: pd.DataFrame, key: str) -> None:
         width="stretch",
         key=key,
         column_config={
-            "Lien": st.column_config.LinkColumn("Lien source", display_text="Ouvrir"),
+            "Lien": st.column_config.LinkColumn("Source", display_text="Ouvrir"),
             "Valeur": st.column_config.NumberColumn("Valeur", format="$%.0f"),
             "Prix": st.column_config.NumberColumn("Prix", format="$%.2f"),
             "Actions": st.column_config.NumberColumn("Actions", format="%.0f"),
@@ -107,69 +175,67 @@ def _render_trades_table(frame: pd.DataFrame, key: str) -> None:
     )
 
 
+def _render_source_health(source_rows: pd.DataFrame, expanded: bool = False) -> None:
+    clean = _clean_source_statuses(source_rows)
+    if clean.empty:
+        return
+    with st.expander("Couverture des sources", expanded=expanded):
+        st.dataframe(clean, hide_index=True, width="stretch")
+
+
 if section == "Radar univers":
     st.subheader("Radar des transactions récentes")
     st.write(
-        "Cette vue consolide les transactions disponibles pour l’univers actif. "
-        "Elle privilégie les données locales ou API; les sources publiques sans clé peuvent être limitées pour éviter de ralentir tout le Composite."
+        "Cette vue synthétise les mouvements d’initiés détectés dans l’univers actif. "
+        "Elle sert à repérer des signaux à vérifier, pas à formuler une recommandation."
     )
 
-    f1, f2, f3, f4 = st.columns([1, 1, 1, 1])
+    f1, f2, f3 = st.columns([1, 1, 1])
     with f1:
         days = st.selectbox("Période", [30, 60, 90, 180, 365], index=3, format_func=lambda x: f"{x} jours")
     with f2:
         max_symbols = st.number_input(
-            "Titres à sonder",
+            "Titres sondés",
             min_value=5,
             max_value=max(5, min(250, len(constituents))),
             value=min(25, len(constituents)),
             step=5,
-            help="Cap volontaire pour garder Anatole rapide. La vue Titre spécifique couvre tout l’univers sur demande.",
+            help="Limite volontaire pour conserver une expérience rapide. La vue par titre permet une vérification ciblée sur tout l’univers.",
         )
     with f3:
-        include_yahoo = st.toggle(
-            "Sonde Yahoo public",
+        public_scan = st.toggle(
+            "Recherche publique ponctuelle",
             value=False,
-            help="Sans API, cette source peut être bloquée ou lente. Active-la pour sonder les premiers titres de l’univers.",
-        )
-    with f4:
-        include_finnhub = st.toggle(
-            "Finnhub si configuré",
-            value=True,
-            help="Utilise FINNHUB_API_KEY si la clé est disponible dans l’environnement.",
+            help="Active une lecture automatique limitée sur les premiers titres affichés. Les sources officielles restent accessibles par titre.",
         )
 
     sector_options = ["Tous"] + sorted([x for x in constituents.get("Secteur", pd.Series(dtype=str)).dropna().astype(str).unique() if x])
     selected_sector = st.selectbox("Secteur", sector_options, index=0)
     scoped = constituents if selected_sector == "Tous" else constituents[constituents["Secteur"].astype(str) == selected_sector]
 
-    with st.spinner("Consolidation des transactions d’initiés…"):
+    with st.spinner("Analyse des transactions d’initiés…"):
         trades, sources = collect_insider_trades(
             scoped,
             days=int(days),
-            include_yahoo=bool(include_yahoo),
-            include_finnhub=bool(include_finnhub),
+            include_yahoo=bool(public_scan),
+            include_finnhub=True,
             max_public_symbols=int(max_symbols),
         )
 
     st.caption(f"Univers actif : {current_universe().label} · {len(scoped)} titres · période : {days} jours.")
-    _render_summary_cards(trades)
-    _render_trades_table(trades, key="insider_radar_table")
-
-    with st.expander("État des sources"):
-        st.dataframe(sources, hide_index=True, width="stretch")
-
+    _render_summary_cards(trades, sources)
     if trades.empty:
-        st.warning(
-            "Pour une couverture complète du Composite, ajoute un fichier data/insider_trades.csv ou configure une source API. "
-            "Sans clé, Anatole peut quand même ouvrir les sources officielles par titre dans les vues Titre spécifique et Répertoire TSX."
-        )
+        _render_empty_state()
+    else:
+        _render_trades_table(trades, key="insider_radar_table")
+    _render_source_health(sources, expanded=False)
 
 elif section == "Titre spécifique":
-    st.subheader("Transactions par titre")
-    st.write("Sélectionne n’importe quel titre de l’univers actif, y compris TSX Composite et TSX 60, puis charge les transactions disponibles.")
+    st.subheader("Analyse par titre")
+    st.write("Sélectionnez une société de l’univers actif pour consulter les données disponibles et ouvrir les sources officielles de vérification.")
 
     options = constituents["Ticker"].tolist()
+    ticker_set = set(options)
     selected = st.selectbox(
         "Titre",
         options,
@@ -178,7 +244,7 @@ elif section == "Titre spécifique":
             value
             + " — "
             + str(constituents.loc[constituents["Ticker"] == value, "Nom"].iloc[0])
-            if value in set(constituents["Ticker"])
+            if value in ticker_set and "Nom" in constituents.columns
             else value
         ),
     )
@@ -186,17 +252,17 @@ elif section == "Titre spécifique":
     company = str(row["Nom"].iloc[0]) if not row.empty and "Nom" in row else selected
 
     c1, c2, c3 = st.columns(3)
-    c1.link_button("Ouvrir SEDI", sedi_issuer_search_url(company), width="stretch")
-    c2.link_button("Ouvrir TMX", tmx_insider_url(selected), width="stretch")
-    c3.link_button("Ouvrir Yahoo", yahoo_insider_url(selected), width="stretch")
+    c1.link_button("SEDI officiel", sedi_issuer_search_url(company), width="stretch")
+    c2.link_button("TMX", tmx_insider_url(selected), width="stretch")
+    c3.link_button("Yahoo Finance", yahoo_insider_url(selected), width="stretch")
 
-    q1, q2, q3 = st.columns([1, 1, 1])
+    q1, q2 = st.columns([1, 2])
     with q1:
         days = st.selectbox("Période analysée", [30, 60, 90, 180, 365], index=3, format_func=lambda x: f"{x} jours", key="single_days")
     with q2:
-        use_yahoo = st.toggle("Yahoo public", value=True, key="single_yahoo")
-    with q3:
-        use_finnhub = st.toggle("Finnhub si configuré", value=True, key="single_finnhub")
+        with st.expander("Options de recherche", expanded=False):
+            use_yahoo = st.toggle("Inclure les sources publiques automatiques", value=True, key="single_yahoo")
+            use_finnhub = st.toggle("Inclure les connecteurs professionnels disponibles", value=True, key="single_finnhub")
 
     frames: list[pd.DataFrame] = []
     source_rows: list[dict[str, str]] = []
@@ -209,35 +275,42 @@ elif section == "Titre spécifique":
             frames.append(local)
 
     if use_yahoo:
-        with st.spinner(f"Lecture Yahoo Finance pour {selected}…"):
+        with st.spinner(f"Recherche des transactions disponibles pour {selected}…"):
             yahoo_frame, yahoo_status = fetch_yahoo_insider_transactions(selected)
         source_rows.append(yahoo_status)
         if not yahoo_frame.empty:
             frames.append(yahoo_frame)
 
-    if use_finnhub:
+    if use_finnhub and os.getenv("FINNHUB_API_KEY", ""):
         finnhub_frame, finnhub_status = fetch_finnhub_insider_transactions(selected, days=int(days))
         source_rows.append(finnhub_status)
         if not finnhub_frame.empty:
             frames.append(finnhub_frame)
+    elif use_finnhub:
+        source_rows.append(
+            {
+                "Source": "Connecteur professionnel",
+                "État": "Disponible sur demande",
+                "Détail": "Connexion non activée dans cet environnement.",
+            }
+        )
 
-    if frames:
-        combined = pd.concat(frames, ignore_index=True)
-    else:
-        combined = pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     combined = enrich_with_companies(deduplicate_trades(filter_recent(combined, days=int(days))), constituents)
+    source_frame = pd.DataFrame(source_rows)
 
-    _render_summary_cards(combined)
-    _render_trades_table(combined, key="insider_single_table")
-
-    with st.expander("État des sources pour ce titre", expanded=True):
-        st.dataframe(pd.DataFrame(source_rows), hide_index=True, width="stretch")
+    _render_summary_cards(combined, source_frame)
+    if combined.empty:
+        _render_empty_state(company=company, ticker=selected)
+    else:
+        _render_trades_table(combined, key="insider_single_table")
+    _render_source_health(source_frame, expanded=False)
 
 elif section == "Répertoire TSX":
-    st.subheader("Répertoire de vérification par titre")
+    st.subheader("Répertoire de vérification")
     st.write(
-        "Cette matrice couvre tous les titres de l’univers actif et donne les liens de vérification. "
-        "Elle est utile lorsque les sources publiques ne retournent pas automatiquement les transactions."
+        "Cette matrice donne un accès rapide aux sources de vérification pour chaque titre de l’univers actif. "
+        "Elle est utile lorsque la donnée normalisée n’est pas encore disponible automatiquement."
     )
     search = st.text_input("Filtrer par symbole, société ou secteur", placeholder="RY, Banque Royale, Énergie…")
     matrix = build_symbol_link_matrix(constituents)
@@ -257,24 +330,25 @@ elif section == "Répertoire TSX":
     )
 
 else:
-    st.subheader("Sources & méthode")
+    st.subheader("Méthodologie")
     st.markdown(
         """
-        **Sources utilisées par Anatole :**
+        **Objectif du module**
 
-        - **SEDI** : source officielle canadienne pour les déclarations d'initiés. Anatole fournit un accès de vérification parce que SEDI ne propose pas de flux simple et stable pour scanner automatiquement tout le marché.
-        - **TMX Insider Trades by Symbol** : résumé quotidien par symbole basé sur les marqueurs de transactions fournis par les courtiers. Ce n'est pas toujours le même niveau de détail nominatif qu'un dépôt SEDI.
-        - **Yahoo Finance public** : source publique non garantie, utile en appoint sur un titre précis.
-        - **Finnhub** : source optionnelle si `FINNHUB_API_KEY` est configurée.
-        - **Fichier local** : `data/insider_trades.csv`, recommandé pour une couverture propre et contrôlée du TSX Composite.
+        Le module suit les transactions d’initiés comme un signal d’information : achats, ventes, exercices d’options et déclarations liées aux dirigeants, administrateurs ou personnes apparentées.
 
-        **Colonnes attendues pour le fichier local :**
-        `Date, Ticker, Société, Insider, Rôle, Transaction, Actions, Prix, Valeur, Source, Lien`
+        **Sources privilégiées**
+
+        - **SEDI** : source officielle canadienne de vérification.
+        - **TMX** : accès rapide par symbole aux informations de marché liées aux transactions d’initiés.
+        - **Sources publiques complémentaires** : utilisées uniquement lorsque la lecture automatisée est disponible.
+        - **Connecteurs professionnels** : peuvent être activés pour une couverture plus régulière.
+        - **Import interne** : permet de charger un relevé validé pour une couverture contrôlée du TSX Composite.
+
+        **Lecture du signal**
+
+        Un achat d’initié peut indiquer de la confiance, mais il peut aussi être isolé ou peu significatif. Une vente peut refléter une diversification personnelle, des impôts, une rémunération en actions ou une décision stratégique. Anatole ne transforme donc jamais une transaction d’initié en recommandation d’achat ou de vente.
         """
-    )
-    st.info(
-        "Le module ne transforme jamais une transaction d'initié en recommandation. "
-        "Un achat d'initié peut être intéressant à analyser, mais il doit être croisé avec le contexte financier, la liquidité, la taille de la transaction et les dépôts officiels."
     )
 
 footer()
