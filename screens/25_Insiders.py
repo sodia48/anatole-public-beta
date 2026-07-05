@@ -65,6 +65,26 @@ section = st.segmented_control(
 )
 
 
+def _format_decimal_fr(value: float, decimals: int = 2, suffix: str = "") -> str:
+    try:
+        if value is None or math.isnan(float(value)):
+            return "N/D"
+        number = float(value)
+    except Exception:
+        return "N/D"
+
+    sign = "-" if number < 0 else ""
+    number = abs(number)
+    formatted = f"{number:,.{decimals}f}"
+    formatted = formatted.replace(",", " ").replace(".", ",")
+    return f"{sign}{formatted}{suffix}"
+
+
+def _format_currency_fr(value: float, decimals: int = 2) -> str:
+    text = _format_decimal_fr(value, decimals=decimals)
+    return "N/D" if text == "N/D" else f"{text} $"
+
+
 def _format_money(value: float) -> str:
     try:
         if value is None or math.isnan(float(value)):
@@ -75,12 +95,12 @@ def _format_money(value: float) -> str:
     sign = "-" if value < 0 else ""
     value = abs(value)
     if value >= 1_000_000_000:
-        return f"{sign}{value / 1_000_000_000:.2f} G$"
+        return f"{sign}{_format_decimal_fr(value / 1_000_000_000, 2)} G$"
     if value >= 1_000_000:
-        return f"{sign}{value / 1_000_000:.2f} M$"
+        return f"{sign}{_format_decimal_fr(value / 1_000_000, 2)} M$"
     if value >= 1_000:
-        return f"{sign}{value / 1_000:.1f} k$"
-    return f"{sign}{value:,.0f} $"
+        return f"{sign}{_format_decimal_fr(value / 1_000, 1)} k$"
+    return f"{sign}{_format_currency_fr(value, 2)}"
 
 
 def _quality_label(frame: pd.DataFrame, source_count: int = 0) -> str:
@@ -166,19 +186,28 @@ def _render_empty_state(company: str | None = None, ticker: str | None = None) -
 def _render_trades_table(frame: pd.DataFrame, key: str) -> None:
     if frame.empty:
         return
+
     show = frame.copy()
-    for column in ["Actions", "Prix", "Valeur"]:
-        show[column] = pd.to_numeric(show[column], errors="coerce")
+    numeric_actions = pd.to_numeric(show.get("Actions"), errors="coerce")
+    numeric_price = pd.to_numeric(show.get("Prix"), errors="coerce")
+    numeric_value = pd.to_numeric(show.get("Valeur"), errors="coerce")
+
+    # Affichage lisible en français : séparateur de milliers, virgule décimale, deux décimales.
+    # Exemple : 3000 -> 3 000,00 ; 97.47 -> 97,47 $ ; 292410 -> 292 410,00 $.
+    show["Actions"] = numeric_actions.map(lambda value: _format_decimal_fr(value, 2))
+    show["Prix"] = numeric_price.map(lambda value: _format_currency_fr(value, 2))
+    show["Valeur"] = numeric_value.map(lambda value: _format_currency_fr(value, 2))
+
     st.dataframe(
         show,
         hide_index=True,
         width="stretch",
         key=key,
         column_config={
+            "Actions": st.column_config.TextColumn("Actions"),
+            "Prix": st.column_config.TextColumn("Prix"),
+            "Valeur": st.column_config.TextColumn("Valeur"),
             "Lien": st.column_config.LinkColumn("Source", display_text="Ouvrir"),
-            "Valeur": st.column_config.NumberColumn("Valeur", format="$%.0f"),
-            "Prix": st.column_config.NumberColumn("Prix", format="$%.2f"),
-            "Actions": st.column_config.NumberColumn("Actions", format="%.0f"),
         },
     )
 
