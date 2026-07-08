@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import pandas as pd
 import streamlit as st
+import yfinance as yf
 
 from core.data import fetch_market_snapshot
+from core.utils import raw_to_yahoo
 
 
 ETF_COLUMNS = [
@@ -193,3 +195,351 @@ def etf_summary(frame: pd.DataFrame) -> dict[str, object]:
         "sector": int(frame.get("Famille", pd.Series(dtype=str)).astype(str).str.contains("Secteur|Thématique", case=False, regex=True).sum()),
         "issuers": int(frame.get("Émetteur", pd.Series(dtype=str)).nunique()),
     }
+
+
+# Positions indicatives utilisées seulement si les sources publiques ne retournent pas
+# de composition exploitable. Elles servent à donner une lecture pédagogique des
+# principaux moteurs, pas à remplacer la fiche officielle du fonds.
+FALLBACK_HOLDINGS: list[dict[str, object]] = [
+    # Marché canadien large
+    {"ETF": "XIU", "Ticker": "RY", "YahooTicker": "RY.TO", "Nom": "Royal Bank of Canada", "Poids": 8.0},
+    {"ETF": "XIU", "Ticker": "TD", "YahooTicker": "TD.TO", "Nom": "Toronto-Dominion Bank", "Poids": 6.0},
+    {"ETF": "XIU", "Ticker": "SHOP", "YahooTicker": "SHOP.TO", "Nom": "Shopify", "Poids": 5.5},
+    {"ETF": "XIU", "Ticker": "ENB", "YahooTicker": "ENB.TO", "Nom": "Enbridge", "Poids": 4.5},
+    {"ETF": "XIU", "Ticker": "BN", "YahooTicker": "BN.TO", "Nom": "Brookfield Corporation", "Poids": 4.0},
+    {"ETF": "XIC", "Ticker": "RY", "YahooTicker": "RY.TO", "Nom": "Royal Bank of Canada", "Poids": 6.5},
+    {"ETF": "XIC", "Ticker": "TD", "YahooTicker": "TD.TO", "Nom": "Toronto-Dominion Bank", "Poids": 5.0},
+    {"ETF": "XIC", "Ticker": "SHOP", "YahooTicker": "SHOP.TO", "Nom": "Shopify", "Poids": 4.5},
+    {"ETF": "XIC", "Ticker": "ENB", "YahooTicker": "ENB.TO", "Nom": "Enbridge", "Poids": 3.5},
+    {"ETF": "XIC", "Ticker": "CNQ", "YahooTicker": "CNQ.TO", "Nom": "Canadian Natural Resources", "Poids": 3.0},
+    {"ETF": "ZCN", "Ticker": "RY", "YahooTicker": "RY.TO", "Nom": "Royal Bank of Canada", "Poids": 6.5},
+    {"ETF": "ZCN", "Ticker": "TD", "YahooTicker": "TD.TO", "Nom": "Toronto-Dominion Bank", "Poids": 5.0},
+    {"ETF": "ZCN", "Ticker": "SHOP", "YahooTicker": "SHOP.TO", "Nom": "Shopify", "Poids": 4.5},
+    {"ETF": "VCN", "Ticker": "RY", "YahooTicker": "RY.TO", "Nom": "Royal Bank of Canada", "Poids": 6.0},
+    {"ETF": "VCN", "Ticker": "TD", "YahooTicker": "TD.TO", "Nom": "Toronto-Dominion Bank", "Poids": 4.8},
+    {"ETF": "VCN", "Ticker": "SHOP", "YahooTicker": "SHOP.TO", "Nom": "Shopify", "Poids": 4.2},
+    # Secteurs canadiens
+    {"ETF": "XFN", "Ticker": "RY", "YahooTicker": "RY.TO", "Nom": "Royal Bank of Canada", "Poids": 20.0},
+    {"ETF": "XFN", "Ticker": "TD", "YahooTicker": "TD.TO", "Nom": "Toronto-Dominion Bank", "Poids": 15.0},
+    {"ETF": "XFN", "Ticker": "BMO", "YahooTicker": "BMO.TO", "Nom": "Bank of Montreal", "Poids": 10.0},
+    {"ETF": "XFN", "Ticker": "BNS", "YahooTicker": "BNS.TO", "Nom": "Bank of Nova Scotia", "Poids": 9.0},
+    {"ETF": "XFN", "Ticker": "MFC", "YahooTicker": "MFC.TO", "Nom": "Manulife Financial", "Poids": 7.0},
+    {"ETF": "ZEB", "Ticker": "RY", "YahooTicker": "RY.TO", "Nom": "Royal Bank of Canada", "Poids": 16.7},
+    {"ETF": "ZEB", "Ticker": "TD", "YahooTicker": "TD.TO", "Nom": "Toronto-Dominion Bank", "Poids": 16.7},
+    {"ETF": "ZEB", "Ticker": "BMO", "YahooTicker": "BMO.TO", "Nom": "Bank of Montreal", "Poids": 16.7},
+    {"ETF": "ZEB", "Ticker": "BNS", "YahooTicker": "BNS.TO", "Nom": "Bank of Nova Scotia", "Poids": 16.7},
+    {"ETF": "ZEB", "Ticker": "CM", "YahooTicker": "CM.TO", "Nom": "CIBC", "Poids": 16.7},
+    {"ETF": "XEG", "Ticker": "CNQ", "YahooTicker": "CNQ.TO", "Nom": "Canadian Natural Resources", "Poids": 25.0},
+    {"ETF": "XEG", "Ticker": "SU", "YahooTicker": "SU.TO", "Nom": "Suncor Energy", "Poids": 18.0},
+    {"ETF": "XEG", "Ticker": "CVE", "YahooTicker": "CVE.TO", "Nom": "Cenovus Energy", "Poids": 12.0},
+    {"ETF": "XEG", "Ticker": "IMO", "YahooTicker": "IMO.TO", "Nom": "Imperial Oil", "Poids": 8.0},
+    {"ETF": "XEG", "Ticker": "TOU", "YahooTicker": "TOU.TO", "Nom": "Tourmaline Oil", "Poids": 7.0},
+    {"ETF": "XIT", "Ticker": "SHOP", "YahooTicker": "SHOP.TO", "Nom": "Shopify", "Poids": 25.0},
+    {"ETF": "XIT", "Ticker": "CSU", "YahooTicker": "CSU.TO", "Nom": "Constellation Software", "Poids": 20.0},
+    {"ETF": "XIT", "Ticker": "CLS", "YahooTicker": "CLS.TO", "Nom": "Celestica", "Poids": 10.0},
+    {"ETF": "XIT", "Ticker": "GIB.A", "YahooTicker": "GIB-A.TO", "Nom": "CGI", "Poids": 9.0},
+    {"ETF": "XIT", "Ticker": "OTEX", "YahooTicker": "OTEX.TO", "Nom": "OpenText", "Poids": 5.0},
+    {"ETF": "XMA", "Ticker": "AEM", "YahooTicker": "AEM.TO", "Nom": "Agnico Eagle Mines", "Poids": 18.0},
+    {"ETF": "XMA", "Ticker": "ABX", "YahooTicker": "ABX.TO", "Nom": "Barrick Gold", "Poids": 12.0},
+    {"ETF": "XMA", "Ticker": "WPM", "YahooTicker": "WPM.TO", "Nom": "Wheaton Precious Metals", "Poids": 10.0},
+    {"ETF": "XMA", "Ticker": "NTR", "YahooTicker": "NTR.TO", "Nom": "Nutrien", "Poids": 8.0},
+    {"ETF": "XMA", "Ticker": "TECK.B", "YahooTicker": "TECK-B.TO", "Nom": "Teck Resources", "Poids": 7.0},
+    {"ETF": "XGD", "Ticker": "AEM", "YahooTicker": "AEM.TO", "Nom": "Agnico Eagle Mines", "Poids": 18.0},
+    {"ETF": "XGD", "Ticker": "ABX", "YahooTicker": "ABX.TO", "Nom": "Barrick Gold", "Poids": 12.0},
+    {"ETF": "XGD", "Ticker": "FNV", "YahooTicker": "FNV.TO", "Nom": "Franco-Nevada", "Poids": 8.0},
+    {"ETF": "XRE", "Ticker": "CAR.UN", "YahooTicker": "CAR-UN.TO", "Nom": "Canadian Apartment Properties REIT", "Poids": 12.0},
+    {"ETF": "XRE", "Ticker": "REI.UN", "YahooTicker": "REI-UN.TO", "Nom": "RioCan REIT", "Poids": 9.0},
+    {"ETF": "XRE", "Ticker": "GRT.UN", "YahooTicker": "GRT-UN.TO", "Nom": "Granite REIT", "Poids": 8.0},
+    {"ETF": "XUT", "Ticker": "FTS", "YahooTicker": "FTS.TO", "Nom": "Fortis", "Poids": 18.0},
+    {"ETF": "XUT", "Ticker": "EMA", "YahooTicker": "EMA.TO", "Nom": "Emera", "Poids": 12.0},
+    {"ETF": "XUT", "Ticker": "H", "YahooTicker": "H.TO", "Nom": "Hydro One", "Poids": 10.0},
+    {"ETF": "XST", "Ticker": "ATD", "YahooTicker": "ATD.TO", "Nom": "Alimentation Couche-Tard", "Poids": 22.0},
+    {"ETF": "XST", "Ticker": "L", "YahooTicker": "L.TO", "Nom": "Loblaw", "Poids": 16.0},
+    {"ETF": "XST", "Ticker": "DOL", "YahooTicker": "DOL.TO", "Nom": "Dollarama", "Poids": 12.0},
+    # États-Unis / thèmes
+    {"ETF": "XUS", "Ticker": "NVDA", "YahooTicker": "NVDA", "Nom": "NVIDIA", "Poids": 7.0},
+    {"ETF": "XUS", "Ticker": "MSFT", "YahooTicker": "MSFT", "Nom": "Microsoft", "Poids": 6.5},
+    {"ETF": "XUS", "Ticker": "AAPL", "YahooTicker": "AAPL", "Nom": "Apple", "Poids": 6.0},
+    {"ETF": "XUS", "Ticker": "AMZN", "YahooTicker": "AMZN", "Nom": "Amazon", "Poids": 4.0},
+    {"ETF": "XUS", "Ticker": "META", "YahooTicker": "META", "Nom": "Meta Platforms", "Poids": 3.0},
+    {"ETF": "VFV", "Ticker": "NVDA", "YahooTicker": "NVDA", "Nom": "NVIDIA", "Poids": 7.0},
+    {"ETF": "VFV", "Ticker": "MSFT", "YahooTicker": "MSFT", "Nom": "Microsoft", "Poids": 6.5},
+    {"ETF": "VFV", "Ticker": "AAPL", "YahooTicker": "AAPL", "Nom": "Apple", "Poids": 6.0},
+    {"ETF": "ZSP", "Ticker": "NVDA", "YahooTicker": "NVDA", "Nom": "NVIDIA", "Poids": 7.0},
+    {"ETF": "ZSP", "Ticker": "MSFT", "YahooTicker": "MSFT", "Nom": "Microsoft", "Poids": 6.5},
+    {"ETF": "ZSP", "Ticker": "AAPL", "YahooTicker": "AAPL", "Nom": "Apple", "Poids": 6.0},
+    {"ETF": "XCHP", "Ticker": "NVDA", "YahooTicker": "NVDA", "Nom": "NVIDIA", "Poids": 12.0},
+    {"ETF": "XCHP", "Ticker": "AVGO", "YahooTicker": "AVGO", "Nom": "Broadcom", "Poids": 8.0},
+    {"ETF": "XCHP", "Ticker": "AMD", "YahooTicker": "AMD", "Nom": "Advanced Micro Devices", "Poids": 6.0},
+    {"ETF": "XCHP", "Ticker": "TSM", "YahooTicker": "TSM", "Nom": "Taiwan Semiconductor", "Poids": 6.0},
+    {"ETF": "XHAK", "Ticker": "CRWD", "YahooTicker": "CRWD", "Nom": "CrowdStrike", "Poids": 6.0},
+    {"ETF": "XHAK", "Ticker": "PANW", "YahooTicker": "PANW", "Nom": "Palo Alto Networks", "Poids": 6.0},
+    {"ETF": "XHAK", "Ticker": "ZS", "YahooTicker": "ZS", "Nom": "Zscaler", "Poids": 4.0},
+]
+
+
+def _normalise_symbol(value: object) -> str:
+    return str(value or "").strip().upper().replace("/", ".")
+
+
+def _normalise_weight(value: object) -> float | None:
+    try:
+        number = float(str(value).replace("%", "").replace(",", "."))
+    except Exception:
+        return None
+    if pd.isna(number):
+        return None
+    if 0 < number <= 1:
+        return number * 100.0
+    return number
+
+
+def _holding_yahoo_symbol(symbol: str, etf_row: pd.Series | None = None) -> str:
+    raw = _normalise_symbol(symbol)
+    if not raw:
+        return ""
+    # Les fonds canadiens sectoriels ont très souvent des composantes TSX.
+    region = str(etf_row.get("Région", "") if etf_row is not None else "").lower()
+    family = str(etf_row.get("Famille", "") if etf_row is not None else "").lower()
+    exposure = str(etf_row.get("Exposition", "") if etf_row is not None else "").lower()
+    is_canadian = "canada" in region or "canad" in family or "tsx" in exposure
+    if raw.endswith((".TO", ".V")):
+        return raw
+    if is_canadian:
+        return raw_to_yahoo(raw)
+    return raw
+
+
+def _local_holding_candidates(path: str | Path = "data/etf_holdings.csv") -> pd.DataFrame:
+    candidate = Path(path)
+    if not candidate.exists():
+        return pd.DataFrame()
+    try:
+        frame = pd.read_csv(candidate)
+    except Exception:
+        return pd.DataFrame()
+    if frame.empty:
+        return pd.DataFrame()
+    rename_map = {
+        "Fund": "ETF",
+        "FNB": "ETF",
+        "Symbol": "Ticker",
+        "Symbole": "Ticker",
+        "Holding": "Nom",
+        "Name": "Nom",
+        "Weight": "Poids",
+        "Poids (%)": "Poids",
+        "Sector": "Secteur",
+        "Yahoo": "YahooTicker",
+    }
+    frame = frame.rename(columns=rename_map).copy()
+    for column in ["ETF", "Ticker", "YahooTicker", "Nom", "Poids", "Secteur"]:
+        if column not in frame.columns:
+            frame[column] = ""
+    frame["ETF"] = frame["ETF"].astype(str).str.upper().str.strip()
+    frame["Ticker"] = frame["Ticker"].astype(str).str.upper().str.strip()
+    frame["Poids"] = frame["Poids"].map(_normalise_weight)
+    frame["SourcePositions"] = "Catalogue positions"
+    return frame[["ETF", "Ticker", "YahooTicker", "Nom", "Poids", "Secteur", "SourcePositions"]]
+
+
+def _fallback_holdings(etf_ticker: str) -> pd.DataFrame:
+    etf = str(etf_ticker or "").upper().strip()
+    frame = pd.DataFrame([row for row in FALLBACK_HOLDINGS if str(row.get("ETF", "")).upper() == etf])
+    if frame.empty:
+        return pd.DataFrame(columns=["ETF", "Ticker", "YahooTicker", "Nom", "Poids", "Secteur", "SourcePositions"])
+    frame["Secteur"] = frame.get("Secteur", "")
+    frame["SourcePositions"] = "Profil indicatif"
+    return frame[["ETF", "Ticker", "YahooTicker", "Nom", "Poids", "Secteur", "SourcePositions"]]
+
+
+def _holdings_from_yfinance(etf_yahoo_ticker: str, etf_row: pd.Series | None = None) -> pd.DataFrame:
+    try:
+        ticker = yf.Ticker(str(etf_yahoo_ticker))
+        funds_data = getattr(ticker, "funds_data", None)
+        raw = getattr(funds_data, "top_holdings", None) if funds_data is not None else None
+        if callable(raw):
+            raw = raw()
+        if raw is None or not isinstance(raw, pd.DataFrame) or raw.empty:
+            return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+    frame = raw.reset_index().copy()
+    lower = {str(column).lower().strip(): column for column in frame.columns}
+    symbol_col = next((lower[key] for key in lower if key in {"symbol", "ticker", "holding"} or "symbol" in key), None)
+    name_col = next((lower[key] for key in lower if key in {"name", "holding name", "company"} or "name" in key), None)
+    weight_col = next((lower[key] for key in lower if "weight" in key or "percent" in key or "%" in key), None)
+    if symbol_col is None:
+        symbol_col = frame.columns[0]
+    result = pd.DataFrame()
+    result["Ticker"] = frame[symbol_col].map(_normalise_symbol)
+    result["Nom"] = frame[name_col].astype(str) if name_col is not None else result["Ticker"]
+    result["Poids"] = frame[weight_col].map(_normalise_weight) if weight_col is not None else pd.NA
+    result = result.dropna(subset=["Ticker"])
+    result = result[result["Ticker"].astype(str).str.len().between(1, 12)]
+    if result.empty:
+        return pd.DataFrame()
+    result["YahooTicker"] = result["Ticker"].map(lambda value: _holding_yahoo_symbol(value, etf_row))
+    result["ETF"] = ""
+    result["Secteur"] = ""
+    result["SourcePositions"] = "Données publiques"
+    return result[["ETF", "Ticker", "YahooTicker", "Nom", "Poids", "Secteur", "SourcePositions"]]
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_etf_history(yahoo_ticker: str, period: str = "1y") -> pd.DataFrame:
+    ticker = str(yahoo_ticker or "").strip()
+    if not ticker:
+        return pd.DataFrame()
+    try:
+        raw = yf.download(ticker, period=period, interval="1d", auto_adjust=True, progress=False, threads=False)
+    except Exception:
+        return pd.DataFrame()
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = [str(col[0]) for col in raw.columns]
+    close_col = "Close" if "Close" in raw.columns else next((col for col in raw.columns if str(col).lower() == "close"), None)
+    if close_col is None:
+        return pd.DataFrame()
+    frame = raw[[close_col]].rename(columns={close_col: "Prix"}).dropna().copy()
+    if frame.empty:
+        return pd.DataFrame()
+    frame = frame.reset_index()
+    date_col = "Date" if "Date" in frame.columns else frame.columns[0]
+    frame = frame.rename(columns={date_col: "Date"})
+    frame["Date"] = pd.to_datetime(frame["Date"], errors="coerce")
+    frame["Prix"] = pd.to_numeric(frame["Prix"], errors="coerce")
+    frame = frame.dropna(subset=["Date", "Prix"])
+    if frame.empty:
+        return pd.DataFrame()
+    first = float(frame["Prix"].iloc[0])
+    if first and not pd.isna(first):
+        frame["Base 100"] = frame["Prix"] / first * 100.0
+    else:
+        frame["Base 100"] = pd.NA
+    frame["Variation journalière"] = frame["Prix"].pct_change() * 100.0
+    frame["Rendement"] = (frame["Prix"] / first - 1.0) * 100.0 if first else pd.NA
+    frame["Sommet"] = frame["Prix"].cummax()
+    frame["Repli depuis sommet"] = (frame["Prix"] / frame["Sommet"] - 1.0) * 100.0
+    return frame[["Date", "Prix", "Base 100", "Variation journalière", "Rendement", "Repli depuis sommet"]]
+
+
+@st.cache_data(ttl=1_800, show_spinner=False)
+def load_etf_holdings(etf_ticker: str, etf_yahoo_ticker: str = "") -> pd.DataFrame:
+    etf = str(etf_ticker or "").upper().strip()
+    if not etf:
+        return pd.DataFrame()
+    catalogue = load_etf_catalogue()
+    etf_row = None
+    if not catalogue.empty and "Ticker" in catalogue.columns:
+        matched = catalogue[catalogue["Ticker"].astype(str).str.upper().eq(etf)]
+        if not matched.empty:
+            etf_row = matched.iloc[0]
+            if not etf_yahoo_ticker:
+                etf_yahoo_ticker = str(etf_row.get("YahooTicker", ""))
+
+    local = _local_holding_candidates()
+    if not local.empty:
+        filtered = local[local["ETF"].astype(str).str.upper().eq(etf)].copy()
+        if not filtered.empty:
+            filtered["YahooTicker"] = filtered.apply(
+                lambda row: row["YahooTicker"] if str(row.get("YahooTicker", "")).strip() else _holding_yahoo_symbol(row.get("Ticker", ""), etf_row),
+                axis=1,
+            )
+            return filtered.drop_duplicates(subset=["Ticker"], keep="first").reset_index(drop=True)
+
+    public = _holdings_from_yfinance(etf_yahoo_ticker, etf_row) if etf_yahoo_ticker else pd.DataFrame()
+    if not public.empty:
+        public["ETF"] = etf
+        return public.drop_duplicates(subset=["Ticker"], keep="first").reset_index(drop=True)
+
+    fallback = _fallback_holdings(etf)
+    return fallback.drop_duplicates(subset=["Ticker"], keep="first").reset_index(drop=True)
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_holding_returns(yahoo_tickers: tuple[str, ...], period: str = "6mo") -> pd.DataFrame:
+    tickers = tuple(dict.fromkeys(str(t).strip() for t in yahoo_tickers if str(t or "").strip()))
+    if not tickers:
+        return pd.DataFrame()
+    try:
+        raw = yf.download(list(tickers), period=period, interval="1d", auto_adjust=True, progress=False, threads=True)
+    except Exception:
+        return pd.DataFrame()
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+
+    if len(tickers) == 1:
+        if isinstance(raw.columns, pd.MultiIndex):
+            close = raw["Close"].iloc[:, 0] if "Close" in raw.columns.get_level_values(0) else pd.Series(dtype=float)
+        else:
+            close = raw.get("Close", pd.Series(dtype=float))
+        series_map = {tickers[0]: close}
+    else:
+        if isinstance(raw.columns, pd.MultiIndex) and "Close" in raw.columns.get_level_values(0):
+            close_df = raw["Close"]
+        elif "Close" in raw.columns:
+            close_df = raw[["Close"]]
+            close_df.columns = [tickers[0]]
+        else:
+            close_df = pd.DataFrame()
+        series_map = {str(col): close_df[col] for col in close_df.columns} if not close_df.empty else {}
+
+    rows = []
+    for ticker, series in series_map.items():
+        clean = pd.to_numeric(series, errors="coerce").dropna()
+        if clean.empty:
+            continue
+        start = float(clean.iloc[0])
+        end = float(clean.iloc[-1])
+        if not start:
+            continue
+        rows.append(
+            {
+                "YahooTicker": str(ticker),
+                "Prix début": start,
+                "Prix fin": end,
+                "Performance": (end / start - 1.0) * 100.0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def estimate_etf_contributors(etf_ticker: str, etf_yahoo_ticker: str, period: str = "6mo") -> pd.DataFrame:
+    holdings = load_etf_holdings(etf_ticker, etf_yahoo_ticker).copy()
+    if holdings.empty:
+        return pd.DataFrame()
+    holdings["Poids"] = holdings["Poids"].map(_normalise_weight)
+    holdings = holdings.dropna(subset=["YahooTicker", "Poids"])
+    holdings = holdings[holdings["Poids"].astype(float).gt(0)]
+    if holdings.empty:
+        return pd.DataFrame()
+    returns = load_holding_returns(tuple(holdings["YahooTicker"].astype(str).tolist()), period=period)
+    if returns.empty:
+        holdings["Performance"] = pd.NA
+        holdings["Contribution estimée"] = pd.NA
+        return holdings
+    merged = holdings.merge(returns, on="YahooTicker", how="left")
+    merged["Performance"] = pd.to_numeric(merged["Performance"], errors="coerce")
+    merged["Poids"] = pd.to_numeric(merged["Poids"], errors="coerce")
+    merged["Contribution estimée"] = merged["Poids"] * merged["Performance"] / 100.0
+    merged["Lecture"] = merged["Contribution estimée"].map(
+        lambda value: "Moteur positif" if pd.notna(value) and float(value) >= 0 else "Frein"
+    )
+    return merged.sort_values("Contribution estimée", ascending=False, na_position="last").reset_index(drop=True)
+
+
+def etf_history_summary(history: pd.DataFrame) -> dict[str, object]:
+    if history.empty or "Prix" not in history.columns:
+        return {"start": None, "end": None, "return": None, "drawdown": None}
+    prices = pd.to_numeric(history["Prix"], errors="coerce").dropna()
+    if prices.empty:
+        return {"start": None, "end": None, "return": None, "drawdown": None}
+    start = float(prices.iloc[0])
+    end = float(prices.iloc[-1])
+    total = (end / start - 1.0) * 100.0 if start else None
+    drawdown_series = pd.to_numeric(history.get("Repli depuis sommet", pd.Series(dtype=float)), errors="coerce").dropna()
+    drawdown = float(drawdown_series.min()) if not drawdown_series.empty else None
+    return {"start": start, "end": end, "return": total, "drawdown": drawdown}
