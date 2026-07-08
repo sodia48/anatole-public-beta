@@ -40,6 +40,12 @@ pages = {
             url_path="calendrier",
         ),
         st.Page(
+            "screens/26_ETF.py",
+            title="ETF sectoriels",
+            icon="🧺",
+            url_path="etf-sectoriels",
+        ),
+        st.Page(
             "screens/24_IPO.py",
             title="IPO à venir",
             icon="🚀",
