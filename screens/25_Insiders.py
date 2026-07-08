@@ -243,7 +243,7 @@ if section == "Radar univers":
         public_scan = st.toggle(
             "Scan public automatique",
             value=True,
-            help="Interroge automatiquement les sources publiques exploitables, sans clé API, sur les premiers titres affichés.",
+            help="Interroge automatiquement les sources publiques exploitables sur les premiers titres affichés.",
         )
 
     sector_options = ["Tous"] + sorted([x for x in constituents.get("Secteur", pd.Series(dtype=str)).dropna().astype(str).unique() if x])

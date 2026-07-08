@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from core.config import TORONTO_TZ
-from core.ipo_calendar import load_upcoming_ipos, source_summary
+from core.ipo_calendar import load_upcoming_ipos
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 
 
@@ -27,6 +27,42 @@ st.caption(
 )
 
 today = pd.Timestamp.now(tz=TORONTO_TZ).date()
+
+
+
+def _public_source_label(name: object) -> str:
+    value = str(name or "").strip()
+    replacements = {
+        "Fichier local": "Catalogue interne",
+        "Finnhub": "Source premium",
+        "Financial Modeling Prep": "Source premium",
+        "SEC EDGAR": "Dépôts réglementaires",
+    }
+    return replacements.get(value, value)
+
+
+def _clean_source_text(value: object) -> str:
+    parts = [part.strip() for part in str(value or "").split("+") if part.strip()]
+    cleaned = [_public_source_label(part) for part in parts]
+    return " + ".join(dict.fromkeys(cleaned)) if cleaned else "—"
+
+
+def _clean_status_text(status: object) -> str:
+    text = str(status or "").strip()
+    lowered = text.lower()
+    if text.startswith("OK"):
+        return text.replace("OK", "Disponible", 1)
+    if "clé absente" in lowered:
+        return "Disponible sur abonnement"
+    if "non configur" in lowered:
+        return "Catalogue standard"
+    if "indisponible" in lowered or "erreur" in lowered or "http" in lowered or "importerror" in lowered:
+        return "Temporairement indisponible"
+    return text or "À vérifier"
+
+
+def _clean_statuses(statuses: dict) -> dict[str, str]:
+    return {_public_source_label(source): _clean_status_text(status) for source, status in statuses.items()}
 
 control_1, control_2, control_3, control_4 = st.columns([1.0, 1.1, 1.2, 1.7])
 with control_1:
@@ -71,6 +107,8 @@ with hint_col:
 with st.spinner("Chargement du radar IPO..."):
     ipos, statuses = load_upcoming_ipos(start, end)
 
+public_statuses = _clean_statuses(statuses)
+
 work = ipos.copy()
 if not work.empty:
     work["DateParsed"] = pd.to_datetime(work.get("Date", pd.Series(dtype=str)), errors="coerce")
@@ -87,6 +125,9 @@ if not work.empty:
     ]:
         if column not in work.columns:
             work[column] = ""
+
+    if "Source" in work.columns:
+        work["Source"] = work["Source"].map(_clean_source_text)
 
     if dataset_mode == "Calendrier IPO":
         work = work.loc[work["Type d’événement"].astype(str).str.contains("Calendrier", case=False, na=False)].copy()
@@ -175,15 +216,18 @@ metric_1.metric("IPO suivies", count)
 metric_2.metric("Calendrier daté", int(calendar_mask.sum()) if count else 0)
 metric_3.metric("Pipeline", int(pipeline_mask.sum()) if count else 0)
 metric_4.metric("Prochaine date", next_date)
-metric_5.metric("Sources actives", sum(1 for status in statuses.values() if str(status).startswith("OK")))
+metric_5.metric("Sources actives", sum(1 for status in public_statuses.values() if str(status).startswith("Disponible")))
 
-st.caption(source_summary(statuses))
+available_sources = [name for name, status in public_statuses.items() if str(status).startswith("Disponible")]
+st.caption(
+    "Sources disponibles : " + (", ".join(available_sources[:6]) if available_sources else "couverture limitée pour le moment")
+)
 
-public_ok = [name for name, status in statuses.items() if "public" in name.lower() and str(status).startswith("OK")]
+public_ok = [name for name, status in public_statuses.items() if str(status).startswith("Disponible")]
 if count <= 2 and len(public_ok) <= 1:
     st.info(
-        "Peu de sources publiques ont répondu pour l’instant. Anatole garde la page utilisable, "
-        "mais la couverture peut être partielle sans fichier local ou clé API."
+        "La couverture publique est limitée pour le moment. Anatole affiche les éléments détectés, "
+        "mais certaines IPO peuvent ne pas encore apparaître dans le radar."
     )
 
 if work.empty:
@@ -191,16 +235,12 @@ if work.empty:
         "Aucune IPO à afficher avec les sources actuellement disponibles et les filtres sélectionnés. "
         "Élargis l'horizon ou repasse la vue à “Tout”."
     )
-    with st.expander("Configurer une source IPO fiable"):
+    with st.expander("Comment améliorer la couverture"):
         st.markdown(
             """
-            Options recommandées :
+            Pour une meilleure lecture du marché primaire, Anatole combine les calendriers publics, les nouvelles inscriptions et les dépôts réglementaires disponibles.
 
-            - déposer un fichier `data/ipo_calendar.csv` pour une liste vérifiée ;
-            - ajouter `FINNHUB_API_KEY` ou `FMP_API_KEY` pour renforcer la couverture ;
-            - garder les sources publiques activées pour la veille : StockAnalysis, Renaissance Capital, IPO Scoop, Nasdaq, NYSE, SEC EDGAR, TMX, MarketWatch, Investing.com et Yahoo Finance.
-
-            Anatole fusionne les doublons détectés par symbole, nom de société et similarité de nom.
+            La couverture peut varier selon les sources, la date et les règles d’accès des fournisseurs. Les sociétés sans date officielle restent dans le pipeline lorsqu’elles sont détectées.
             """
         )
     footer()
@@ -354,7 +394,7 @@ with tab_pipeline:
 with tab_sources:
     st.markdown("#### État des sources")
     status_table = pd.DataFrame(
-        [{"Source": source, "État": status} for source, status in statuses.items()]
+        [{"Source": source, "État": status} for source, status in public_statuses.items()]
     )
     st.dataframe(status_table, hide_index=True, width="stretch")
 

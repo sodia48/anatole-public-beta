@@ -14,7 +14,7 @@ context = current_context()
 
 page_header(
     "État de la bêta publique",
-    "Transparence sur les fonctions, les limites et la configuration active.",
+    "Transparence sur les fonctions disponibles, les limites de la bêta et la qualité des données.",
     "🧪",
 )
 
@@ -22,12 +22,12 @@ db_ok, db_detail = database_health()
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Version", "4.7 Smooth Audit")
-c2.metric("Base", database_backend())
-c3.metric("Base disponible", "Oui" if db_ok else "Non")
-c4.metric("Connexion OIDC", "Configurée" if auth_configured() else "Non configurée")
+c2.metric("Sauvegarde", "Active" if db_ok else "À vérifier")
+c3.metric("Données utilisateur", "Disponibles" if db_ok else "À vérifier")
+c4.metric("Connexion", "Active" if auth_configured() else "Mode invité")
 
 if not db_ok:
-    st.error(f"Base de données indisponible : {db_detail}")
+    st.error("La sauvegarde des données utilisateur est temporairement indisponible.")
 
 st.markdown(
     """
@@ -46,7 +46,6 @@ st.markdown(
     - Les données Yahoo Finance peuvent être différées ou limitées.
     - Certaines sources officielles peuvent changer leur format.
     - Le mode invité n’offre pas une persistance garantie.
-    - Le worker d’alertes doit être déployé séparément pour les notifications hors session.
     - L’application n’est pas un service de courtage.
 
     ### Optimisations actives
@@ -55,8 +54,8 @@ st.markdown(
     - Calendriers officiels chargés en parallèle
     - Actualités et calendriers d’entreprises chargés en parallèle
     - Pages lourdes chargées seulement à la demande
-    - Préférences et schéma de base initialisés en un minimum de requêtes
-    - Tests automatiques de toutes les pages enregistrées
+    - Préférences chargées rapidement
+    - Vérifications automatiques des pages principales
     """
 )
 

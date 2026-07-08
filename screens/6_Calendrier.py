@@ -30,7 +30,7 @@ page_header(
 st.subheader("Événements économiques officiels et gratuits")
 
 st.caption(
-    "Sources sans clé API : Statistique Canada, Banque du Canada, "
+    "Sources publiques : Statistique Canada, Banque du Canada, "
     "BLS, BEA et calendrier du FOMC. Les heures sont affichées "
     "en heure de Toronto."
 )
@@ -377,7 +377,7 @@ if st.button("💾 Enregistrer les événements macro", type="primary"):
     saved = edited.copy()
     saved["event_date"] = pd.to_datetime(saved["event_date"], errors="coerce").dt.date.astype(str)
     replace_macro_events(profile, saved)
-    st.success("Calendrier macro enregistré dans SQLite.")
+    st.success("Calendrier macro enregistré.")
 
 st.caption(
     "Le calendrier automatique utilise uniquement des sources publiques officielles et gratuites. Les événements personnalisés restent disponibles pour compléter les dates internes ou locales."

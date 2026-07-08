@@ -44,7 +44,7 @@ if st.button("💾 Enregistrer le portefeuille", type="primary"):
     cleaned = editor.copy()
     cleaned["ticker"] = cleaned["ticker"].apply(lambda value: normalise_symbol(value, constituents))
     replace_positions(profile, cleaned)
-    st.success("Portefeuille enregistré dans SQLite.")
+    st.success("Portefeuille enregistré.")
     st.rerun()
 
 positions = get_positions(profile)
@@ -132,7 +132,7 @@ else:
     st.caption("Le risque historique est disponible sur demande afin de garder le portefeuille rapide à l'ouverture.")
 
 st.download_button(
-    "Télécharger le portefeuille en CSV",
+    "Télécharger le portefeuille",
     portfolio.to_csv(index=False).encode("utf-8-sig"),
     file_name=f"portefeuille_{profile}.csv",
     mime="text/csv",

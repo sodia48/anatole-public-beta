@@ -25,7 +25,7 @@ st.markdown(
     Anatole peut conserver, selon les fonctions utilisées :
 
     - un identifiant technique de profil ;
-    - votre adresse courriel et votre nom si vous utilisez la connexion OIDC ;
+    - votre adresse courriel et votre nom si vous utilisez la connexion ;
     - vos watchlists, positions de démonstration, préférences et alertes ;
     - vos commentaires transmis dans le formulaire de bêta ;
     - des journaux techniques nécessaires au diagnostic.
@@ -38,7 +38,7 @@ st.markdown(
     - des numéros de comptes bancaires ou de courtage ;
     - des numéros de carte ;
     - des documents d’identité ;
-    - des clés API dans les champs de l’interface.
+    - des identifiants de services externes dans les champs de l’interface.
 
     ## Services externes
 

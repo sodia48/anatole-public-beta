@@ -167,7 +167,7 @@ base_columns = [column for column in base_columns if column in result]
 
 display_result = result[base_columns].head(mobile_page_limit(220, 70))
 if len(result) > len(display_result):
-    st.caption(f"Affichage limité à {len(display_result)} titres pour préserver la fluidité. Télécharge le CSV pour obtenir tous les résultats.")
+    st.caption(f"Affichage limité à {len(display_result)} titres pour préserver la fluidité. Télécharge la liste complète pour obtenir tous les résultats.")
 
 st.dataframe(
     display_result,
@@ -189,7 +189,7 @@ st.dataframe(
 )
 
 st.download_button(
-    "Télécharger les résultats en CSV",
+    "Télécharger les résultats",
     data=result[base_columns].to_csv(index=False).encode("utf-8-sig"),
     file_name=f"screener_{current_universe().short_label.lower().replace(' ', '_')}.csv",
     mime="text/csv",

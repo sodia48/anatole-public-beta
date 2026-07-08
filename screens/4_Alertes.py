@@ -32,7 +32,7 @@ configure_page("Alertes", "🔔")
 apply_style()
 profile = sidebar_context()
 page_header(
-    "Alertes persistantes",
+    "Alertes",
     "Surveille tes titres, tes seuils et tes signaux importants.",
     "🔔",
 )
@@ -114,8 +114,8 @@ telegram_ready = bool(get_secret("TELEGRAM_BOT_TOKEN") and get_secret("TELEGRAM_
 email_ready = bool(get_secret("SMTP_HOST") and get_secret("SMTP_USERNAME") and get_secret("SMTP_PASSWORD") and get_secret("ALERT_EMAIL_TO"))
 status_cols = st.columns(3)
 status_cols[0].metric("Notifications dans l'app", "Prêtes")
-status_cols[1].metric("Telegram", "Configuré" if telegram_ready else "Non configuré")
-status_cols[2].metric("Courriel", "Configuré" if email_ready else "Non configuré")
+status_cols[1].metric("Telegram", "Prêt" if telegram_ready else "À activer")
+status_cols[2].metric("Courriel", "Prêt" if email_ready else "À activer")
 
 
 alerts = get_alerts(profile)
@@ -129,16 +129,16 @@ needs_technical = _needs_technical_features(alerts)
 show_live_technical = False
 if needs_technical:
     show_live_technical = st.toggle(
-        "Afficher les valeurs techniques en direct",
+        "Afficher les signaux détaillés",
         value=False,
-        help="Charge les historiques de l'univers seulement si tu veux voir RSI, volume relatif ou croisements SMA avant l'évaluation.",
+        help="Affiche les derniers indicateurs disponibles pour mieux comprendre les alertes avant l’évaluation.",
     )
     if show_live_technical:
         with st.spinner("Chargement des indicateurs techniques des alertes…"):
             _, _, _, technical_features = load_technical_bundle()
         feature_map = technical_features.set_index("YahooTicker").to_dict(orient="index")
 
-if st.button("▶️ Évaluer maintenant et enregistrer les déclenchements"):
+if st.button("▶️ Vérifier les alertes maintenant"):
     allowed, wait_seconds = consume(
         "manual_alert_evaluation",
         max_calls=6,
@@ -154,7 +154,7 @@ if st.button("▶️ Évaluer maintenant et enregistrer les déclenchements"):
     evaluation_features = feature_map
     active_alerts = alerts[alerts["active"] == 1]
     if _needs_technical_features(active_alerts):
-        with st.spinner("Chargement technique pour l'évaluation des alertes…"):
+        with st.spinner("Mise à jour des signaux d’alerte…"):
             _, _, _, technical_features = load_technical_bundle()
         evaluation_features = technical_features.set_index("YahooTicker").to_dict(orient="index")
 
