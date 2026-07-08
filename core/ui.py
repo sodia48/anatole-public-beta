@@ -1513,49 +1513,44 @@ def page_header(
     hero_search_profile: str | None = None,
     show_universe_selector: bool = True,
 ) -> None:
+    """Render the page header without raw HTML blocks.
+
+    V5.7.5 hotfix: use native Streamlit elements for the hero header. This
+    avoids Streamlit/Render showing literal HTML tags on some pages while
+    keeping the app stable across all sections.
+    """
     terminal_topbar()
-    safe_title = html.escape(title)
-    safe_subtitle = html.escape(subtitle)
-    safe_icon = html.escape(icon)
-    show_market_universe = bool(show_universe_selector) and str(title) not in NO_UNIVERSE_SELECTOR_TITLES
 
-    universe_chip = ""
+    title_text = str(title or "")
+    subtitle_text = str(subtitle or "")
+    icon_text = str(icon or "📈")
+    show_market_universe = bool(show_universe_selector) and title_text not in NO_UNIVERSE_SELECTOR_TITLES
+
+    chips: list[str] = []
     if show_market_universe:
-        universe_chip = f'<span class="sky-chip">{html.escape(current_universe().short_label)}</span>'
+        try:
+            chips.append(str(current_universe().short_label))
+        except Exception:
+            pass
+    chips.extend(["Données de marché", "Analyse claire", "Actualités", "Bêta"])
 
-    st.markdown(
-        f"""
-        <section class="sky-hero">
-            <div class="sky-hero-copy">
-                <div class="sky-hero-kicker">● Bêta publique sur Render</div>
-                <div class="sky-hero-title">{safe_title}</div>
-                <div class="sky-hero-subtitle">{safe_subtitle}</div>
-                <div class="sky-hero-chips">
-                    {universe_chip}
-                    <span class="sky-chip">Données de marché</span>
-                    <span class="sky-chip">Analyse claire</span>
-                    <span class="sky-chip">Actualités</span>
-                    <span class="sky-chip">Bêta</span>
-                </div>
-            </div>
-            <div class="sky-hero-icon">{safe_icon}</div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    with st.container():
+        st.caption("● Bêta publique sur Render")
+        col_title, col_icon = st.columns([0.86, 0.14], vertical_alignment="center")
+        with col_title:
+            st.title(title_text)
+            if subtitle_text:
+                st.write(subtitle_text)
+            st.caption(" · ".join(chips))
+        with col_icon:
+            st.markdown(f"# {icon_text}")
 
     if show_hero_search:
         try:
             from core.search import render_universal_search
 
-            st.markdown('<div class="sky-hero-search-card">', unsafe_allow_html=True)
-            st.markdown(
-                """
-                <div class="sky-hero-search-title">Recherche rapide</div>
-                <div class="sky-hero-search-note">Tape un symbole, un ISIN ou le nom d'un stock ici pour le retrouver instantanément, sans quitter l'accueil.</div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.subheader("Recherche rapide")
+            st.caption("Tape un symbole, un ISIN ou le nom d’un titre pour le retrouver rapidement.")
             render_universal_search(
                 location="page",
                 profile=hero_search_profile,
@@ -1564,7 +1559,6 @@ def page_header(
                 navigate_on_select=False,
                 show_inline_results=True,
             )
-            st.markdown('</div>', unsafe_allow_html=True)
         except Exception:
             pass
 
@@ -1572,19 +1566,16 @@ def page_header(
         try:
             from core.universe import render_universe_selector_inline
 
-            st.markdown('<div class="sky-universe-strip">', unsafe_allow_html=True)
             render_universe_selector_inline(
                 st.session_state.get("profile", DEFAULT_PROFILE),
-                key_suffix=str(title).lower().replace(" ", "_").replace("'", ""),
+                key_suffix=title_text.lower().replace(" ", "_").replace("'", ""),
             )
-            st.markdown("</div>", unsafe_allow_html=True)
         except Exception:
             # Le sélecteur d'univers ne doit jamais empêcher la page de s'afficher.
             pass
 
     if bool(st.session_state.get("show_mobile_nav", True)):
         mobile_navigation()
-
 
 def summary_card(text: str, label: str = "Résumé du marché") -> None:
     st.markdown(
