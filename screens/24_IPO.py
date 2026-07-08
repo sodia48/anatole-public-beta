@@ -18,7 +18,6 @@ page_header(
     "IPO à venir",
     "Radar des introductions en bourse : dates annoncées, dossiers déposés, nouvelles inscriptions et sources consolidées.",
     "🚀",
-    show_universe_selector=False,
 )
 
 st.caption(

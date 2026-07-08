@@ -25,7 +25,6 @@ page_header(
     "ETF sectoriels",
     "Explorez les FNB cotés au Canada par secteur, puis analysez leur évolution historique et leurs principaux moteurs.",
     "🧺",
-    show_universe_selector=False,
 )
 
 
