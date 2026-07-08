@@ -116,8 +116,8 @@ UNIVERSES: dict[str, MarketUniverse] = {
         label="TSX complet / étendu",
         short_label="TSX étendu",
         description=(
-            "Univers TSX élargi. Utilise une liste TMX/CSV si elle est fournie, "
-            "sinon un proxy large XIC + XMD et une liste de secours."
+            "Univers TSX élargi avec couverture progressive des titres canadiens, "
+            "incluant un proxy large lorsque la source complète est temporairement limitée."
         ),
         source_kind="tsx_directory_or_proxy",
         expected_count=None,
@@ -257,7 +257,7 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
         key=f"market_universe_inline_{key_suffix}_{current_key}",
         help=(
             "TSX 60 est le plus rapide. Composite élargit la couverture. "
-            "TSX étendu charge davantage de titres avec des limites anti-502."
+            "TSX étendu charge davantage de titres avec des limites de performance."
         ),
     )
 

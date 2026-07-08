@@ -318,8 +318,8 @@ def _render_login_gate(mode: str) -> None:
 
     if not auth_configured():
         st.error(
-            "Le mode connexion est activé, mais la configuration OIDC est absente. "
-            "Ajoute la section `[auth]` dans les secrets du déploiement."
+            "La connexion utilisateur est temporairement indisponible. "
+            "Vous pouvez réessayer plus tard ou continuer en mode invité si cette option est proposée."
         )
         st.stop()
 
