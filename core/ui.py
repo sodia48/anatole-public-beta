@@ -1486,17 +1486,42 @@ def terminal_topbar() -> None:
     )
 
 
+
+
+NO_UNIVERSE_SELECTOR_TITLES = {
+    "Diagnostics et qualité des données",
+    "Espaces de travail personnalisables",
+    "Rapports",
+    "Assistant financier",
+    "Centre de notifications",
+    "Préférences",
+    "Votre avis sur Anatole",
+    "Avis de confidentialité",
+    "Conditions d’utilisation de la bêta",
+    "État de la bêta publique",
+    "Recherche",
+    "IPO à venir",
+    "ETF sectoriels",
+}
+
 def page_header(
     title: str,
     subtitle: str,
     icon: str = "📈",
     show_hero_search: bool = False,
     hero_search_profile: str | None = None,
+    show_universe_selector: bool = True,
 ) -> None:
     terminal_topbar()
     safe_title = html.escape(title)
     safe_subtitle = html.escape(subtitle)
     safe_icon = html.escape(icon)
+    show_market_universe = bool(show_universe_selector) and str(title) not in NO_UNIVERSE_SELECTOR_TITLES
+
+    universe_chip = ""
+    if show_market_universe:
+        universe_chip = f'<span class="sky-chip">{html.escape(current_universe().short_label)}</span>'
+
     st.markdown(
         f"""
         <section class="sky-hero">
@@ -1505,11 +1530,11 @@ def page_header(
                 <div class="sky-hero-title">{safe_title}</div>
                 <div class="sky-hero-subtitle">{safe_subtitle}</div>
                 <div class="sky-hero-chips">
-                    <span class="sky-chip">{html.escape(current_universe().short_label)}</span>
-                    <span class="sky-chip">Données live</span>
-                    <span class="sky-chip">Analyse technique</span>
+                    {universe_chip}
+                    <span class="sky-chip">Données de marché</span>
+                    <span class="sky-chip">Analyse claire</span>
                     <span class="sky-chip">Actualités</span>
-                    <span class="sky-chip">IA optionnelle</span>
+                    <span class="sky-chip">Bêta</span>
                 </div>
             </div>
             <div class="sky-hero-icon">{safe_icon}</div>
@@ -1542,18 +1567,19 @@ def page_header(
         except Exception:
             pass
 
-    try:
-        from core.universe import render_universe_selector_inline
+    if show_market_universe:
+        try:
+            from core.universe import render_universe_selector_inline
 
-        st.markdown('<div class="sky-universe-strip">', unsafe_allow_html=True)
-        render_universe_selector_inline(
-            st.session_state.get("profile", DEFAULT_PROFILE),
-            key_suffix=str(title).lower().replace(" ", "_").replace("'", ""),
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-    except Exception:
-        # Le sélecteur d'univers ne doit jamais empêcher la page de s'afficher.
-        pass
+            st.markdown('<div class="sky-universe-strip">', unsafe_allow_html=True)
+            render_universe_selector_inline(
+                st.session_state.get("profile", DEFAULT_PROFILE),
+                key_suffix=str(title).lower().replace(" ", "_").replace("'", ""),
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+        except Exception:
+            # Le sélecteur d'univers ne doit jamais empêcher la page de s'afficher.
+            pass
 
     if bool(st.session_state.get("show_mobile_nav", True)):
         mobile_navigation()
