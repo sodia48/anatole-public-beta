@@ -1488,6 +1488,7 @@ def terminal_topbar() -> None:
 
 
 
+# V5.7.4 global hotfix: keep the full UI helper surface available.
 NO_UNIVERSE_SELECTOR_TITLES = {
     "Diagnostics et qualité des données",
     "Espaces de travail personnalisables",
@@ -1512,53 +1513,49 @@ def page_header(
     hero_search_profile: str | None = None,
     show_universe_selector: bool = True,
 ) -> None:
-    """Render a safe professional page header.
-
-    V5.7.3 hotfix: the hero is rendered with st.html when available to avoid
-    Streamlit/Markdown showing raw HTML in production. Falls back to
-    st.markdown(..., unsafe_allow_html=True) for older Streamlit versions.
-    """
     terminal_topbar()
-    safe_title = html.escape(str(title or ""))
-    safe_subtitle = html.escape(str(subtitle or ""))
-    safe_icon = html.escape(str(icon or "📈"))
+    safe_title = html.escape(title)
+    safe_subtitle = html.escape(subtitle)
+    safe_icon = html.escape(icon)
     show_market_universe = bool(show_universe_selector) and str(title) not in NO_UNIVERSE_SELECTOR_TITLES
 
-    chips = []
+    universe_chip = ""
     if show_market_universe:
-        try:
-            chips.append(html.escape(current_universe().short_label))
-        except Exception:
-            pass
-    chips.extend(["Données de marché", "Analyse claire", "Actualités", "Bêta"])
-    chip_html = "".join(f'<span class="sky-chip">{chip}</span>' for chip in chips)
+        universe_chip = f'<span class="sky-chip">{html.escape(current_universe().short_label)}</span>'
 
-    hero_html = f"""
-    <section class="sky-hero">
-        <div class="sky-hero-copy">
-            <div class="sky-hero-kicker">● Bêta publique sur Render</div>
-            <div class="sky-hero-title">{safe_title}</div>
-            <div class="sky-hero-subtitle">{safe_subtitle}</div>
-            <div class="sky-hero-chips">{chip_html}</div>
-        </div>
-        <div class="sky-hero-icon">{safe_icon}</div>
-    </section>
-    """
-    if hasattr(st, "html"):
-        st.html(hero_html)
-    else:
-        st.markdown(hero_html, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <section class="sky-hero">
+            <div class="sky-hero-copy">
+                <div class="sky-hero-kicker">● Bêta publique sur Render</div>
+                <div class="sky-hero-title">{safe_title}</div>
+                <div class="sky-hero-subtitle">{safe_subtitle}</div>
+                <div class="sky-hero-chips">
+                    {universe_chip}
+                    <span class="sky-chip">Données de marché</span>
+                    <span class="sky-chip">Analyse claire</span>
+                    <span class="sky-chip">Actualités</span>
+                    <span class="sky-chip">Bêta</span>
+                </div>
+            </div>
+            <div class="sky-hero-icon">{safe_icon}</div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if show_hero_search:
         try:
             from core.search import render_universal_search
 
-            search_open = '<div class="sky-hero-search-card"><div class="sky-hero-search-title">Recherche rapide</div><div class="sky-hero-search-note">Tape un symbole, un ISIN ou le nom d’un titre pour le retrouver rapidement.</div>'
-            search_close = '</div>'
-            if hasattr(st, "html"):
-                st.html(search_open)
-            else:
-                st.markdown(search_open, unsafe_allow_html=True)
+            st.markdown('<div class="sky-hero-search-card">', unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div class="sky-hero-search-title">Recherche rapide</div>
+                <div class="sky-hero-search-note">Tape un symbole, un ISIN ou le nom d'un stock ici pour le retrouver instantanément, sans quitter l'accueil.</div>
+                """,
+                unsafe_allow_html=True,
+            )
             render_universal_search(
                 location="page",
                 profile=hero_search_profile,
@@ -1567,10 +1564,7 @@ def page_header(
                 navigate_on_select=False,
                 show_inline_results=True,
             )
-            if hasattr(st, "html"):
-                st.html(search_close)
-            else:
-                st.markdown(search_close, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         except Exception:
             pass
 
@@ -1578,24 +1572,161 @@ def page_header(
         try:
             from core.universe import render_universe_selector_inline
 
-            if hasattr(st, "html"):
-                st.html('<div class="sky-universe-strip">')
-            else:
-                st.markdown('<div class="sky-universe-strip">', unsafe_allow_html=True)
+            st.markdown('<div class="sky-universe-strip">', unsafe_allow_html=True)
             render_universe_selector_inline(
                 st.session_state.get("profile", DEFAULT_PROFILE),
                 key_suffix=str(title).lower().replace(" ", "_").replace("'", ""),
             )
-            if hasattr(st, "html"):
-                st.html('</div>')
-            else:
-                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         except Exception:
             # Le sélecteur d'univers ne doit jamais empêcher la page de s'afficher.
             pass
 
     if bool(st.session_state.get("show_mobile_nav", True)):
         mobile_navigation()
+
+
+def summary_card(text: str, label: str = "Résumé du marché") -> None:
+    st.markdown(
+        f"""
+        <div class="sky-summary">
+            <div class="sky-summary-label">{html.escape(label)}</div>
+            <div class="sky-summary-text">{html.escape(text)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def home_launchpad() -> None:
+    st.markdown('<div class="sky-launchpad-title">Accès rapide</div>', unsafe_allow_html=True)
+    columns = st.columns(4)
+    with columns[0]:
+        st.page_link("screens/1_Screener.py", label="Screener avancé", icon="🔎", width="stretch")
+    with columns[1]:
+        st.page_link("screens/2_Comparateur.py", label="Comparer des titres", icon="⚖️", width="stretch")
+    with columns[2]:
+        st.page_link("screens/3_Portefeuille.py", label="Mon portefeuille", icon="💼", width="stretch")
+    with columns[3]:
+        st.page_link("screens/23_Psychologie.py", label="Psychologie du marché", icon="🧠", width="stretch")
+    st.page_link("screens/5_Actualites.py", label="Flux d'actualités", icon="📰", width="stretch")
+
+
+def ticker_tape(items: Iterable[dict]) -> None:
+    cards = []
+    for item in items:
+        ticker = html.escape(str(item.get("ticker", "N/D")))
+        price = html.escape(str(item.get("price", "N/D")))
+        change_value = item.get("change")
+        try:
+            change_number = float(change_value)
+            change_text = f"{change_number:+.2f}%"
+            css_class = "sky-up" if change_number >= 0 else "sky-down"
+        except (TypeError, ValueError):
+            change_text = "N/D"
+            css_class = ""
+        cards.append(
+            f'<span class="sky-ticker-item"><strong>{ticker}</strong>'
+            f'<span>{price}</span><span class="{css_class}">{change_text}</span></span>'
+        )
+
+    if not cards:
+        return
+
+    repeated = "".join(cards + cards)
+    st.markdown(
+        f'<div class="sky-ticker-wrap"><div class="sky-ticker-track">{repeated}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+
+
+def render_mobile_watchlist_card(
+    ticker: str,
+    name: str,
+    sector: str,
+    price: str,
+    change: str,
+    volume: str,
+) -> None:
+    """Carte mobile pure HTML/CSS, sans JavaScript, pour la watchlist."""
+    st.markdown(
+        f"""
+        <div class="sky-mobile-card">
+            <div class="sky-mobile-card-top">
+                <div>
+                    <div class="sky-mobile-card-title">{html.escape(str(ticker))}</div>
+                    <div class="sky-mobile-card-sub">{html.escape(str(name))}</div>
+                </div>
+                <div class="sky-mobile-card-sector">{html.escape(str(sector))}</div>
+            </div>
+            <div class="sky-mobile-card-grid">
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Prix</div>
+                    <div class="sky-mobile-stat-value">{html.escape(str(price))}</div>
+                </div>
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Variation</div>
+                    <div class="sky-mobile-stat-value">{html.escape(str(change))}</div>
+                </div>
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Volume</div>
+                    <div class="sky-mobile-stat-value">{html.escape(str(volume))}</div>
+                </div>
+                <div class="sky-mobile-stat">
+                    <div class="sky-mobile-stat-label">Lecture</div>
+                    <div class="sky-mobile-stat-value">Suivi</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def mobile_navigation() -> None:
+    st.markdown(
+        """
+        <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
+          <a data-path="/cockpit" href="/cockpit" target="_self">🏠<br>Accueil</a>
+          <a data-path="/recherche" href="/recherche" target="_self">🔍<br>Recherche</a>
+          <a data-path="/screener" href="/screener" target="_self">🔎<br>Screener</a>
+          <a data-path="/focus" href="/focus" target="_self">🎯<br>Focus</a>
+          <a data-path="/watchlist" href="/watchlist" target="_self">⭐<br>Liste</a>
+        </nav>
+        <script>
+        (function() {
+          try {
+            const path = window.location.pathname.toLowerCase();
+            document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
+              const target = (node.getAttribute('data-path') || '').toLowerCase();
+              if (target && path.includes(target.replace('/', ''))) {
+                node.classList.add('active');
+              }
+            });
+          } catch (error) {}
+        })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def skeleton_cards(count: int = 4, height: int = 110) -> None:
+    columns = st.columns(count)
+    for column in columns:
+        column.markdown(
+            f'<div class="sky-skeleton" style="min-height:{int(height)}px"></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def dependency_version(package: str) -> str:
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return "Non installé"
 
 
 def footer() -> None:
