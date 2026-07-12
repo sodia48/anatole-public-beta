@@ -1302,6 +1302,95 @@ def apply_style() -> None:
                 display: none;
             }}
         }}
+
+        /* V5.7.7 — mobile premium polish */
+        @media (max-width: 760px) {{
+            .block-container {{
+                padding-left: .88rem !important;
+                padding-right: .88rem !important;
+                padding-bottom: calc(6.3rem + env(safe-area-inset-bottom, 0px)) !important;
+                max-width: 100% !important;
+            }}
+            .sky-terminal-bar {{
+                position: sticky !important;
+                top: .45rem !important;
+                z-index: 950 !important;
+                border-radius: 22px !important;
+                box-shadow: 0 18px 48px rgba(15,39,66,.14) !important;
+                backdrop-filter: blur(24px) saturate(1.15) !important;
+            }}
+            .sky-hero {{
+                border-radius: 24px !important;
+                padding: 18px 16px !important;
+                margin-bottom: 14px !important;
+            }}
+            .sky-hero-title, h1 {{
+                font-size: clamp(2.05rem, 11vw, 3.1rem) !important;
+                letter-spacing: -.055em !important;
+                line-height: 1.02 !important;
+            }}
+            h2 {{ font-size: 1.55rem !important; letter-spacing: -.035em !important; }}
+            h3 {{ font-size: 1.12rem !important; }}
+            p, .stMarkdown, [data-testid="stCaptionContainer"] {{
+                line-height: 1.55 !important;
+            }}
+            div[data-testid="stMetric"] {{
+                border-radius: 20px !important;
+                min-height: 92px !important;
+            }}
+            div[data-testid="stMetricValue"] {{
+                font-size: 1.28rem !important;
+                line-height: 1.05 !important;
+            }}
+            .stPlotlyChart {{
+                border-radius: 24px !important;
+                overflow: hidden !important;
+                border: 1px solid var(--sky-border) !important;
+                box-shadow: 0 18px 44px rgba(15,39,66,.08) !important;
+                background: rgba(255,255,255,.56) !important;
+                touch-action: pan-y !important;
+            }}
+            .stPlotlyChart .modebar,
+            .stPlotlyChart .modebar-container,
+            .stPlotlyChart .draglayer {{
+                display: none !important;
+                pointer-events: none !important;
+            }}
+            .stTabs [data-baseweb="tab-list"] {{
+                gap: 6px !important;
+                overflow-x: auto !important;
+                scrollbar-width: none !important;
+                padding-bottom: 4px !important;
+            }}
+            .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {{ display:none !important; }}
+            .stTabs [data-baseweb="tab"] {{
+                border-radius: 999px !important;
+                min-width: max-content !important;
+                padding: 10px 14px !important;
+                background: rgba(255,255,255,.68) !important;
+                border: 1px solid var(--sky-border) !important;
+                box-shadow: 0 8px 18px rgba(15,39,66,.05) !important;
+            }}
+            .stSelectbox, .stTextInput, .stNumberInput, .stMultiSelect {{
+                border-radius: 18px !important;
+            }}
+            .sky-mobile-nav {{
+                left: 18px !important;
+                right: 18px !important;
+                bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+                border-radius: 28px !important;
+                padding: 10px 10px !important;
+                box-shadow: 0 22px 60px rgba(15,39,66,.18) !important;
+                backdrop-filter: blur(28px) saturate(1.2) !important;
+            }}
+            .sky-mobile-nav a {{
+                border-radius: 20px !important;
+                padding: 8px 7px !important;
+                transition: transform .16s ease, background .16s ease, color .16s ease !important;
+            }}
+            .sky-mobile-nav a:active {{ transform: scale(.96); }}
+        }}
+
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -1534,16 +1623,25 @@ def page_header(
             pass
     chips.extend(["Données de marché", "Analyse claire", "Actualités", "Bêta"])
 
-    with st.container():
-        st.caption("● Bêta publique sur Render")
-        col_title, col_icon = st.columns([0.86, 0.14], vertical_alignment="center")
-        with col_title:
-            st.title(title_text)
-            if subtitle_text:
-                st.write(subtitle_text)
-            st.caption(" · ".join(chips))
-        with col_icon:
-            st.markdown(f"# {icon_text}")
+    chip_html = "".join(
+        f'<span class="sky-chip">{html.escape(chip)}</span>'
+        for chip in chips
+        if chip
+    )
+    st.markdown(
+        f"""
+        <section class="sky-hero sky-hero-pro">
+            <div class="sky-hero-copy">
+                <div class="sky-hero-kicker"><span>●</span> Bêta publique sur Render</div>
+                <div class="sky-hero-title">{html.escape(title_text)}</div>
+                <div class="sky-hero-subtitle">{html.escape(subtitle_text)}</div>
+                <div class="sky-hero-chips">{chip_html}</div>
+            </div>
+            <div class="sky-hero-icon" aria-hidden="true">{html.escape(icon_text)}</div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if show_hero_search:
         try:
@@ -1676,25 +1774,51 @@ def render_mobile_watchlist_card(
     )
 
 
+
+def plotly_mobile_config(*, interactive: bool = False) -> dict:
+    """Configuration Plotly stable pour Render/mobile."""
+    try:
+        from core.device import mobile_mode_enabled
+        is_mobile = bool(mobile_mode_enabled())
+    except Exception:
+        is_mobile = False
+    config = {
+        "displayModeBar": False,
+        "displaylogo": False,
+        "responsive": True,
+        "scrollZoom": False,
+        "doubleClick": False,
+        "modeBarButtonsToRemove": [
+            "zoom2d", "pan2d", "select2d", "lasso2d",
+            "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d",
+        ],
+    }
+    if is_mobile and not interactive:
+        config["staticPlot"] = True
+    return config
+
 def mobile_navigation() -> None:
+    """Navigation mobile stable.
+
+    Chaque lien ci-dessous correspond à un ``url_path`` déclaré dans ``app.py``.
+    Cela évite le message Streamlit « Page not found » sur mobile.
+    """
     st.markdown(
         """
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a data-path="/cockpit" href="/cockpit" target="_self">🏠<br>Accueil</a>
-          <a data-path="/recherche" href="/recherche" target="_self">🔍<br>Recherche</a>
-          <a data-path="/screener" href="/screener" target="_self">🔎<br>Screener</a>
-          <a data-path="/focus" href="/focus" target="_self">🎯<br>Focus</a>
-          <a data-path="/watchlist" href="/watchlist" target="_self">⭐<br>Liste</a>
+          <a data-path="cockpit" href="/cockpit" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
+          <a data-path="recherche" href="/recherche" target="_self" aria-label="Recherche">🔍<br>Recherche</a>
+          <a data-path="screener" href="/screener" target="_self" aria-label="Screener">🔎<br>Screener</a>
+          <a data-path="focus" href="/focus" target="_self" aria-label="Focus">🎯<br>Focus</a>
+          <a data-path="watchlist" href="/watchlist" target="_self" aria-label="Liste">⭐<br>Liste</a>
         </nav>
         <script>
         (function() {
           try {
-            const path = window.location.pathname.toLowerCase();
+            const path = window.location.pathname.toLowerCase().replace(/^\\//, '');
             document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
               const target = (node.getAttribute('data-path') || '').toLowerCase();
-              if (target && path.includes(target.replace('/', ''))) {
-                node.classList.add('active');
-              }
+              node.classList.toggle('active', Boolean(target && path.startsWith(target)));
             });
           } catch (error) {}
         })();
