@@ -160,7 +160,7 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
         ],
     )
     fig.update_traces(
-        texttemplate="<b>%{label}</b><br>%{customdata[2]}<br>%{customdata[1]}",
+        texttemplate="<b>%{label}</b><br>%{customdata[2]}",
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             "Ticker : %{label}<br>"
@@ -175,13 +175,13 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
         marker={
             "line": {"color": "rgba(255,255,255,0.78)", "width": 1.35},
         },
-        tiling={"pad": 3},
-        textfont={"size": 13},
+        tiling={"pad": 3, "packing": "squarify"},
+        textfont={"size": 12},
     )
     fig.update_layout(
         height=height,
-        margin={"t": 10, "l": 0, "r": 0, "b": 0},
-        uniformtext={"minsize": 10, "mode": "hide"},
+        margin={"t": 8, "l": 0, "r": 0, "b": 0},
+        uniformtext={"minsize": 9, "mode": "hide"},
         coloraxis_colorbar={
             "title": {"text": "Var. %", "font": {"color": palette["muted"]}},
             "thickness": 14,
