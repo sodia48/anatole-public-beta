@@ -134,6 +134,65 @@ def _selected_etf_row(directory: pd.DataFrame, selected: str) -> pd.Series:
     return matched.iloc[0]
 
 
+
+
+def _search_etfs(directory: pd.DataFrame, query: str, limit: int = 12) -> pd.DataFrame:
+    """Return a compact, ranked ETF search result set."""
+    if directory.empty:
+        return directory.copy()
+
+    frame = directory.copy()
+    q = str(query or "").strip().lower()
+
+    if not q:
+        preferred = [
+            "XIC", "XIU", "ZCN", "VCN", "XFN", "ZEB", "XEG", "ZEO",
+            "XIT", "XMA", "XGD", "XRE", "XUT", "XST", "VFV", "XUS",
+        ]
+        preferred_rank = {ticker: i for i, ticker in enumerate(preferred)}
+        frame["_rank"] = frame["Ticker"].astype(str).str.upper().map(preferred_rank).fillna(999)
+        return frame.sort_values(["_rank", "Ticker"]).drop(columns=["_rank"], errors="ignore").head(limit)
+
+    searchable_columns = [
+        "Ticker", "Nom", "Émetteur", "Famille", "Secteur", "Région", "Exposition", "Rôle"
+    ]
+    score = pd.Series(0, index=frame.index, dtype="int64")
+    ticker_text = frame.get("Ticker", pd.Series("", index=frame.index)).astype(str).str.lower()
+
+    score += ticker_text.eq(q).astype(int) * 100
+    score += ticker_text.str.startswith(q).astype(int) * 70
+    score += ticker_text.str.contains(q, regex=False).astype(int) * 45
+
+    for column in searchable_columns:
+        if column not in frame.columns:
+            continue
+        values = frame[column].astype(str).str.lower()
+        score += values.eq(q).astype(int) * 35
+        score += values.str.startswith(q).astype(int) * 25
+        score += values.str.contains(q, regex=False).astype(int) * 12
+
+    matches = frame[score.gt(0)].copy()
+    if matches.empty:
+        return matches
+    matches["_score"] = score.loc[matches.index]
+    return matches.sort_values(["_score", "Ticker"], ascending=[False, True]).drop(columns=["_score"], errors="ignore").head(limit)
+
+
+def _compact_search_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+    columns = ["Ticker", "Nom", "Émetteur", "Secteur", "Exposition", "Rôle"]
+    display = frame.copy()
+    for column in columns:
+        if column not in display.columns:
+            display[column] = pd.NA
+    return display[columns].rename(
+        columns={
+            "Ticker": "Symbole",
+            "Rôle": "Utilité",
+        }
+    )
+
 def _format_contributor_frame(frame: pd.DataFrame, limit: int = 10) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame()
@@ -245,21 +304,56 @@ elif section == "ETF cotés TSX":
     )
 
 elif section == "Analyse historique":
-    st.subheader("Évolution historique d’un ETF")
+    st.subheader("Recherche et évolution historique d’un ETF")
     st.write(
-        "Sélectionnez un ETF pour voir son évolution en base 100 et les principales actions qui ont contribué à la performance sur la période choisie."
+        "Recherchez un FNB par symbole, secteur, émetteur ou thème. Anatole affiche ensuite son évolution historique et les titres qui ont le plus contribué à sa performance."
     )
 
-    left, right = st.columns([2, 1])
-    with left:
-        options = [_option_label(row) for row in directory.itertuples(index=False)]
-        default_index = next((i for i, item in enumerate(options) if item.startswith("XIC")), 0)
-        selected = st.selectbox("ETF à analyser", options, index=default_index)
-    with right:
+    search_left, period_right = st.columns([2.2, 1])
+    with search_left:
+        search_query = st.text_input(
+            "Rechercher un ETF",
+            placeholder="Ex. XIC, banques, énergie, dividendes, technologie, or…",
+            key="etf_history_search_query",
+        )
+    with period_right:
         selected_period_label = st.selectbox("Période", list(PERIODS.keys()), index=3)
 
+    matches = _search_etfs(directory, search_query, limit=12)
+
+    if matches.empty:
+        st.warning("Aucun ETF ne correspond à cette recherche. Essayez un symbole, un secteur ou un thème différent.")
+        footer()
+        st.stop()
+
+    selected_ticker = st.session_state.get("etf_history_selected_ticker")
+    available_tickers = matches["Ticker"].astype(str).str.upper().tolist()
+    if selected_ticker not in available_tickers:
+        selected_ticker = available_tickers[0]
+        st.session_state["etf_history_selected_ticker"] = selected_ticker
+
+    st.caption(
+        "Résultats suggérés" if search_query.strip() else "Suggestions rapides — utilisez la barre de recherche pour affiner."
+    )
+    st.dataframe(_compact_search_frame(matches), hide_index=True, width="stretch")
+
+    button_cols = st.columns(4)
+    for idx, row in enumerate(matches.head(8).itertuples(index=False)):
+        ticker = str(getattr(row, "Ticker", "")).upper()
+        name = str(getattr(row, "Nom", ""))
+        is_current = ticker == selected_ticker
+        label = f"Analyser {ticker}" if not is_current else f"✓ {ticker}"
+        with button_cols[idx % 4]:
+            if st.button(label, key=f"etf_history_pick_{ticker}_{idx}", width="stretch", help=name):
+                st.session_state["etf_history_selected_ticker"] = ticker
+                selected_ticker = ticker
+
+    selected_rows = directory[directory["Ticker"].astype(str).str.upper().eq(str(selected_ticker).upper())]
+    if selected_rows.empty:
+        selected_rows = matches.head(1)
+    etf_row = selected_rows.iloc[0]
+
     period = PERIODS[selected_period_label]
-    etf_row = _selected_etf_row(directory, selected)
     etf_ticker = str(etf_row.get("Ticker", "")).upper()
     etf_yahoo = str(etf_row.get("YahooTicker", ""))
 
