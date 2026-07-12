@@ -5,7 +5,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import streamlit as st
-from streamlit_plotly_events2 import plotly_events
 
 from core.analytics import market_pulse
 from core.charts import heatmap_figure, market_breadth_chart, sector_performance_chart
@@ -29,9 +28,108 @@ from core.ui import (
     skeleton_cards,
     summary_card,
     ticker_tape,
+    plotly_mobile_config,
 )
 from core.utils import format_money, market_status, safe_float
 from core.workspaces import active_workspace
+
+
+def _fmt_home_pct(value: object) -> str:
+    try:
+        number = float(value)
+    except Exception:
+        return "N/D"
+    return f"{number:+.2f}%"
+
+
+def _fmt_home_money(value: object) -> str:
+    try:
+        number = float(value)
+    except Exception:
+        return "N/D"
+    return f"${number:,.2f}"
+
+
+def render_mobile_market_map(frame: pd.DataFrame) -> None:
+    """Carte marché mobile sans zoom Plotly, avec accès rapide aux fiches."""
+    if frame.empty:
+        st.info("Aucun titre ne correspond aux filtres.")
+        return
+
+    st.markdown("### Carte mobile")
+    st.caption(
+        "Vue tactile optimisée : les actions sont regroupées par secteur et "
+        "restent lisibles sans zoom ni déplacement involontaire."
+    )
+
+    work = frame.copy()
+    work["Variation"] = pd.to_numeric(work.get("Variation"), errors="coerce")
+    work["PoidsIndice"] = pd.to_numeric(work.get("PoidsIndice"), errors="coerce").fillna(0)
+    sector_summary = (
+        work.groupby("Secteur", as_index=False)
+        .agg(
+            Variation=("Variation", "mean"),
+            Poids=("PoidsIndice", "sum"),
+            Titres=("Ticker", "count"),
+        )
+        .sort_values("Variation", ascending=False)
+    )
+
+    for _, sector_row in sector_summary.iterrows():
+        sector_name = str(sector_row.get("Secteur", "Autre"))
+        sector_frame = (
+            work.loc[work["Secteur"] == sector_name]
+            .sort_values(["PoidsIndice", "Variation"], ascending=[False, False])
+            .head(10)
+        )
+        label = (
+            f"{sector_name} · {_fmt_home_pct(sector_row.get('Variation'))} · "
+            f"{int(sector_row.get('Titres', 0))} titres"
+        )
+        with st.expander(label, expanded=False):
+            for i, row in sector_frame.iterrows():
+                ticker = str(row.get("Ticker", "N/D"))
+                name = str(row.get("Nom", ""))
+                change = _fmt_home_pct(row.get("Variation"))
+                price = _fmt_home_money(row.get("Prix"))
+                button_label = f"{ticker} · {change} · {price}"
+                if st.button(button_label, key=f"mobile_heatmap_open_{sector_name}_{ticker}_{i}", width="stretch"):
+                    st.session_state.selected_ticker = str(row.get("YahooTicker", ticker))
+                    st.switch_page("screens/14_Focus.py")
+                if name:
+                    st.caption(name)
+
+
+def render_heatmap_focus_selector(frame: pd.DataFrame, key_prefix: str) -> None:
+    """Sélecteur propre pour ouvrir une fiche depuis la carte statique."""
+    if frame.empty:
+        return
+    candidates = frame.copy()
+    candidates["VariationAbs"] = pd.to_numeric(candidates.get("Variation"), errors="coerce").abs()
+    candidates = candidates.sort_values(["VariationAbs", "PoidsIndice"], ascending=[False, False]).head(80)
+    options = [
+        (
+            f"{row.get('Ticker', '')} — {row.get('Nom', '')} "
+            f"({_fmt_home_pct(row.get('Variation'))})"
+        )
+        for _, row in candidates.iterrows()
+    ]
+    if not options:
+        return
+    selected = st.selectbox(
+        "Ouvrir une fiche depuis la carte",
+        options,
+        index=None,
+        placeholder="Choisir une action…",
+        key=f"{key_prefix}_focus_selector",
+    )
+    if selected:
+        ticker = selected.split(" — ", 1)[0].strip()
+        match = candidates[candidates["Ticker"].astype(str) == ticker]
+        if not match.empty:
+            if st.button("Ouvrir la fiche Focus", key=f"{key_prefix}_open_focus", width="stretch"):
+                st.session_state.selected_ticker = str(match.iloc[0].get("YahooTicker", ticker))
+                st.switch_page("screens/14_Focus.py")
 
 
 configure_page("Vue d'ensemble", "📈")
@@ -39,7 +137,7 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Anatole",
-    "Hey Bud, bienvenue sur Anatole.\\nJe suis en ce moment en mode bêta.",
+    "Bienvenue sur Anatole, votre cockpit de lecture du marché canadien en bêta publique.",
     show_hero_search=True,
     hero_search_profile=profile,
 )
@@ -50,7 +148,7 @@ visible_modules = {
     for item in workspace_layout
     if bool(item.get("visible", False))
 }
-st.caption(f"Espace actif : {workspace_name}")
+st.caption(f"Espace de travail actif : {workspace_name}")
 
 if bool(st.session_state.get("show_quick_links", False)):
     home_launchpad()
@@ -171,7 +269,13 @@ def live_cockpit() -> None:
 
     overview_left, overview_right = st.columns([1.9, 1])
     with overview_left:
-        st.plotly_chart(sector_performance_chart(market), width="stretch", key=f"accueil_performance_secteurs_{universe_key}")
+        sector_chart = sector_performance_chart(market)
+        st.plotly_chart(
+            sector_chart,
+            width="stretch",
+            key=f"accueil_performance_secteurs_{universe_key}",
+            config=plotly_mobile_config(),
+        )
     with overview_right:
         if "Watchlist" in visible_modules:
             st.subheader("Watchlist")
@@ -216,16 +320,6 @@ def live_cockpit() -> None:
     if "Heatmap" not in visible_modules and visible_modules:
         return
 
-    show_heatmap = st.toggle(
-        "Afficher la carte du marché",
-        value=bool(st.session_state.get("show_home_heatmap", False)),
-        help="La heatmap interactive est chargée seulement sur demande pour accélérer l'accueil.",
-        key="show_home_heatmap",
-    )
-    if not show_heatmap:
-        st.caption("Carte du marché désactivée au démarrage pour garder l'accueil rapide.")
-        return
-
     st.subheader("Carte du marché")
     with st.expander("Filtres de la carte", expanded=False):
         all_sectors = sorted(market["Secteur"].dropna().unique().tolist())
@@ -255,33 +349,19 @@ def live_cockpit() -> None:
     ].copy()
     if filtered.empty:
         st.info("Aucun titre ne correspond aux filtres.")
+    elif mobile_is_lite():
+        render_mobile_market_map(filtered)
     else:
         height = mobile_chart_height(760 if cinema else 580, 430)
         figure = heatmap_figure(filtered, height=height)
-        clicks = plotly_events(
+        st.plotly_chart(
             figure,
-            click_event=True,
-            hover_event=False,
-            select_event=False,
-            override_height=height,
+            width="stretch",
             key=f"minimal_heatmap_{universe_key}",
-            config={
-                "displaylogo": False,
-                "responsive": True,
-                "scrollZoom": False,
-                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
-            },
+            config=plotly_mobile_config(),
         )
-        st.caption("Clique sur une entreprise pour ouvrir sa fiche dédiée.")
-        if clicks:
-            point_number = clicks[-1].get("pointNumber", clicks[-1].get("pointIndex"))
-            labels = list(figure.data[0].labels)
-            if point_number is not None and 0 <= int(point_number) < len(labels):
-                label = str(labels[int(point_number)])
-                match = filtered[filtered["Ticker"] == label]
-                if not match.empty:
-                    st.session_state.selected_ticker = str(match.iloc[0]["YahooTicker"])
-                    st.switch_page("screens/14_Focus.py")
+        st.caption("Carte stabilisée : pas de zoom involontaire. Utilise le sélecteur ci-dessous pour ouvrir une fiche.")
+        render_heatmap_focus_selector(filtered, key_prefix=f"minimal_heatmap_{universe_key}")
 
     with st.expander("Principaux mouvements", expanded=False):
         left, right = st.columns(2)

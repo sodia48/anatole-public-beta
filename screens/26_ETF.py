@@ -15,7 +15,7 @@ from core.etf_directory import (
     load_etf_holdings,
     sector_map_frame,
 )
-from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
+from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, plotly_mobile_config
 
 
 configure_page("ETF sectoriels", "🧺")
@@ -383,7 +383,7 @@ elif section == "Analyse historique":
             labels={"Base 100": "Base 100", "Date": "Date"},
         )
         fig.update_layout(height=420, margin=dict(l=10, r=10, t=55, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config=plotly_mobile_config())
 
         hist_display = chart_frame.tail(8).copy()
         hist_display["Prix"] = hist_display["Prix"].map(fmt_money)
@@ -439,7 +439,7 @@ elif section == "Analyse historique":
                 labels={"Contribution estimée": "Points de rendement estimés", "Libellé": "Titre"},
             )
             fig2.update_layout(height=460, margin=dict(l=10, r=10, t=55, b=10))
-            st.plotly_chart(fig2, width="stretch")
+            st.plotly_chart(fig2, width="stretch", config=plotly_mobile_config())
 
         source = contributors["SourcePositions"].dropna().astype(str).unique().tolist()
         if source and "Profil indicatif" in source:

@@ -4,18 +4,56 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_plotly_events2 import plotly_events
 
 from core.analytics import market_pulse
 from core.universe import current_universe
 from core.runtime import load_light_market_bundle
+from core.device import mobile_is_lite, mobile_chart_height
 from core.ui import (
     apply_style,
     configure_page,
     footer,
     page_header,
     sidebar_context,
+    plotly_mobile_config,
 )
+
+
+def _fmt_pct(value: object) -> str:
+    try:
+        return f"{float(value):+.2f}%"
+    except Exception:
+        return "N/D"
+
+
+def _fmt_pt(value: object) -> str:
+    try:
+        return f"{float(value):+.3f} pt"
+    except Exception:
+        return "N/D"
+
+
+def render_mobile_contributor_cards(frame: pd.DataFrame, limit: int = 10) -> None:
+    """Liste mobile lisible des principaux contributeurs."""
+    if frame.empty:
+        st.info("Aucune action disponible pour ce secteur.")
+        return
+    top = frame.head(limit).copy()
+    for i, row in top.iterrows():
+        contribution = float(row.get("ContributionPoints", 0) or 0)
+        icon = "▲" if contribution >= 0 else "▼"
+        tone = "Soutien" if contribution >= 0 else "Frein"
+        with st.container(border=True):
+            left, right = st.columns([0.58, 0.42], vertical_alignment="center")
+            with left:
+                st.markdown(f"**{icon} {row.get('Ticker', 'N/D')} — {row.get('Nom', '')}**")
+                st.caption(str(row.get("Secteur", "")))
+            with right:
+                st.metric(tone, _fmt_pt(row.get("ContributionPoints")), _fmt_pct(row.get("Variation")))
+            yahoo = str(row.get("YahooTicker", row.get("Ticker", "")))
+            if st.button("Ouvrir la fiche", key=f"market_driver_mobile_focus_{yahoo}_{i}", width="stretch"):
+                st.session_state.selected_ticker = yahoo
+                st.switch_page("screens/14_Focus.py")
 
 
 def resolve_clicked_sector(
@@ -49,8 +87,8 @@ sidebar_context()
 page_header(
     "Pourquoi le marché bouge ?",
     (
-        "Clique sur un secteur pour afficher immédiatement les actions "
-        "qui expliquent le plus son mouvement."
+        "Sélectionne un secteur pour voir les actions qui expliquent le plus "
+        "son mouvement, sans carte instable ni zoom involontaire."
     ),
     "🧭",
 )
@@ -135,7 +173,41 @@ if selected_sector:
         .copy()
     )
 
-chart_col, summary_col = st.columns([1.65, 1], gap="large")
+selection_col, chart_col = st.columns([0.9, 1.55], gap="large")
+
+with selection_col:
+    with st.container(border=True):
+        st.markdown("### Secteur à analyser")
+        manual_sector = st.selectbox(
+            "Choisir un secteur",
+            available_sectors,
+            index=(
+                available_sectors.index(selected_sector)
+                if selected_sector in available_sectors
+                else 0
+            ),
+            key="market_driver_sector_selector_v577",
+        )
+        if manual_sector != selected_sector:
+            st.session_state["selected_market_driver_sector"] = manual_sector
+            selected_sector = manual_sector
+            sector_row = sector.loc[sector["Secteur"] == selected_sector].iloc[0]
+            sector_stocks = (
+                work.loc[work["Secteur"] == selected_sector]
+                .dropna(subset=["ContributionPoints"])
+                .sort_values("ContributionAbsolue", ascending=False)
+                .copy()
+            )
+
+        if sector_row is not None:
+            st.markdown(f"## {selected_sector}")
+            s1, s2 = st.columns(2)
+            s1.metric("Contribution", _fmt_pt(sector_row.get("ContributionPoints")))
+            s2.metric("Variation", _fmt_pct(sector_row.get("VariationMoyenne")))
+            s3, s4 = st.columns(2)
+            s3.metric("Poids indicatif", f"{float(sector_row.get('Poids', 0) or 0):.2f}%")
+            s4.metric("Titres", int(sector_row.get("NombreTitres", 0) or 0))
+            st.caption("Lecture indicative fondée sur les poids disponibles et les variations observées.")
 
 with chart_col:
     fig = px.bar(
@@ -146,23 +218,9 @@ with chart_col:
         color="ContributionPoints",
         color_continuous_scale=["#DC2626", "#315A7D", "#059669"],
         color_continuous_midpoint=0,
-        custom_data=[
-            "Secteur",
-            "VariationMoyenne",
-            "Poids",
-            "NombreTitres",
-        ],
-        title=(
-            "Contribution sectorielle indicative au mouvement"
-            + (
-                f"<br><sup>Secteur sélectionné : {selected_sector}</sup>"
-                if selected_sector
-                else ""
-            )
-        ),
-        labels={
-            "ContributionPoints": "Contribution (points de % indicatifs)",
-        },
+        custom_data=["Secteur", "VariationMoyenne", "Poids", "NombreTitres"],
+        title="Contribution sectorielle indicative",
+        labels={"ContributionPoints": "Contribution (points de % indicatifs)"},
     )
     fig.update_traces(
         hovertemplate=(
@@ -174,126 +232,40 @@ with chart_col:
         ),
     )
     fig.update_layout(
-        height=560,
+        height=mobile_chart_height(520, 390),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,.55)",
-        margin={"l": 10, "r": 10, "t": 80, "b": 20},
-        coloraxis_colorbar={
-            "title": "Contribution",
-            "thickness": 15,
-        },
+        margin={"l": 8, "r": 8, "t": 60, "b": 18},
+        coloraxis_colorbar={"title": "Contribution", "thickness": 12},
+        showlegend=False,
     )
-
-    st.caption(
-        "Clique directement sur une barre. Le panneau de droite sera "
-        "mis à jour avec les actions contributrices."
-    )
-
-    clicked_points = plotly_events(
+    st.plotly_chart(
         fig,
-        click_event=True,
-        select_event=False,
-        hover_event=False,
-        override_height=560,
-        override_width="100%",
-        config={
-            "displayModeBar": False,
-            "scrollZoom": False,
-            "displaylogo": False,
-            "responsive": True,
-        },
-        key="market_drivers_sector_click_v469",
+        width="stretch",
+        key="market_drivers_sector_static_v577",
+        config=plotly_mobile_config(),
     )
+    st.caption("Graphique stabilisé : la sélection se fait avec le menu à gauche pour éviter les zooms involontaires.")
 
-clicked_sector = resolve_clicked_sector(
-    clicked_points,
-    available_sectors,
-)
-
-if clicked_sector and clicked_sector != selected_sector:
-    st.session_state["selected_market_driver_sector"] = clicked_sector
-    selected_sector = clicked_sector
-    sector_row = sector.loc[
-        sector["Secteur"] == selected_sector
-    ].iloc[0]
-    sector_stocks = (
-        work.loc[work["Secteur"] == selected_sector]
-        .dropna(subset=["ContributionPoints"])
-        .sort_values("ContributionAbsolue", ascending=False)
-        .copy()
-    )
-
-with summary_col:
-    with st.container(border=True):
-        st.markdown("### Actions contributrices")
-
-        # Sélecteur de secours et moyen rapide de comparer les secteurs.
-        manual_sector = st.selectbox(
-            "Secteur affiché",
-            available_sectors,
-            index=(
-                available_sectors.index(selected_sector)
-                if selected_sector in available_sectors
-                else 0
-            ),
-            key="market_driver_sector_fallback",
+with st.container(border=True):
+    st.markdown("### Principaux moteurs du secteur")
+    if sector_stocks.empty:
+        st.info("Aucune action disponible pour ce secteur.")
+    elif mobile_is_lite():
+        render_mobile_contributor_cards(sector_stocks, limit=8)
+    else:
+        preview = sector_stocks.head(8).copy()
+        display = preview[["Ticker", "Nom", "Variation", "PoidsIndice", "ContributionPoints"]].copy()
+        st.dataframe(
+            display,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Variation": st.column_config.NumberColumn("Variation", format="%+.2f%%"),
+                "PoidsIndice": st.column_config.NumberColumn("Poids", format="%.2f%%"),
+                "ContributionPoints": st.column_config.NumberColumn("Contribution", format="%+.3f pt"),
+            },
         )
-
-        if manual_sector != selected_sector:
-            st.session_state[
-                "selected_market_driver_sector"
-            ] = manual_sector
-            selected_sector = manual_sector
-            sector_row = sector.loc[
-                sector["Secteur"] == selected_sector
-            ].iloc[0]
-            sector_stocks = (
-                work.loc[work["Secteur"] == selected_sector]
-                .dropna(subset=["ContributionPoints"])
-                .sort_values("ContributionAbsolue", ascending=False)
-                .copy()
-            )
-
-        if sector_row is not None:
-            st.markdown(f"## {selected_sector}")
-
-            s1, s2 = st.columns(2)
-            s1.metric(
-                "Contribution",
-                f"{sector_row['ContributionPoints']:+.3f} pt",
-            )
-            s2.metric(
-                "Variation moyenne",
-                f"{sector_row['VariationMoyenne']:+.2f}%",
-            )
-
-            s3, s4 = st.columns(2)
-            s3.metric(
-                "Poids indicatif",
-                f"{sector_row['Poids']:.2f}%",
-            )
-            s4.metric(
-                "Titres",
-                int(sector_row["NombreTitres"]),
-            )
-
-            st.markdown("#### Principaux moteurs")
-
-            preview = sector_stocks.head(7).copy()
-            if preview.empty:
-                st.info("Aucune action disponible pour ce secteur.")
-            else:
-                for _, row in preview.iterrows():
-                    contribution = float(row["ContributionPoints"])
-                    variation = float(row["Variation"])
-                    icon = "▲" if contribution >= 0 else "▼"
-
-                    st.markdown(
-                        f"**{icon} {row['Ticker']} — {row['Nom']}**  \n"
-                        f"Variation : `{variation:+.2f}%` · "
-                        f"Contribution : `{contribution:+.3f} pt`"
-                    )
-
 st.divider()
 
 if selected_sector and sector_row is not None:
@@ -340,18 +312,21 @@ if selected_sector and sector_row is not None:
         )
     )
     stock_fig.update_layout(
-        height=max(380, 42 * len(top_sector_stocks) + 130),
+        height=max(360, 38 * len(top_sector_stocks) + 110),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,.55)",
         showlegend=False,
-        margin={"l": 10, "r": 10, "t": 70, "b": 20},
+        margin={"l": 8, "r": 8, "t": 58, "b": 18},
     )
-    st.plotly_chart(
-        stock_fig,
-        width="stretch",
-        key=f"market_driver_stocks_{selected_sector}_v469",
-        config={"displayModeBar": False, "responsive": True},
-    )
+    if mobile_is_lite():
+        render_mobile_contributor_cards(sector_stocks.head(12), limit=12)
+    else:
+        st.plotly_chart(
+            stock_fig,
+            width="stretch",
+            key=f"market_driver_stocks_{selected_sector}_v577",
+            config=plotly_mobile_config(),
+        )
 
     positive_sector = (
         sector_stocks.loc[
