@@ -1,11 +1,34 @@
+[theme]
+base = "dark"
+primaryColor = "#3B5FE0"
+backgroundColor = "#0A0D18"
+secondaryBackgroundColor = "#131824"
+textColor = "#EDF1F7"
+font = "sans serif"
+
+[theme.sidebar]
+primaryColor = "#3B5FE0"
+backgroundColor = "#080B12"
+secondaryBackgroundColor = "#11151F"
+textColor = "#EDF1F7"
+
+[client]
+toolbarMode = "viewer"
+showErrorDetails = "none"
+showErrorLinks = false
+
 [server]
 headless = true
-enableCORS = false
-enableXsrfProtection = false
-port = 8501
+enableCORS = true
+enableXsrfProtection = true
+maxUploadSize = 10
+maxMessageSize = 50
+enableWebsocketCompression = true
+disconnectedSessionTTL = 300
 
 [browser]
 gatherUsageStats = false
 
-[theme]
-base = "light"
+[logger]
+level = "info"
+messageFormat = "%(asctime)s | %(levelname)s | %(message)s"
