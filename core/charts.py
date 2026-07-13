@@ -117,13 +117,28 @@ def _modernize(fig: go.Figure, height: int | None = None) -> go.Figure:
     )
     return fig
 
-def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
+def heatmap_figure(
+    df: pd.DataFrame,
+    height: int = 760,
+    *,
+    mobile_readable: bool = False,
+    size_mode: str = "weight",
+) -> go.Figure:
     palette = _palette()
     view = df.copy()
 
     for column in ["Prix", "Variation", "PoidsIndice", "Volume"]:
         if column in view.columns:
             view[column] = pd.to_numeric(view[column], errors="coerce")
+
+    # Sur mobile, une treemap pondérée rend souvent les petites capitalisations
+    # trop fines pour être lisibles. Le mode ``equal`` conserve la vraie couleur
+    # de performance mais donne une case visible à chaque action affichée.
+    view["__TileSize"] = pd.to_numeric(view.get("PoidsIndice"), errors="coerce").fillna(0)
+    if mobile_readable or str(size_mode).lower() in {"equal", "egal", "égale", "lisible"}:
+        view["__TileSize"] = 1.0
+    else:
+        view["__TileSize"] = view["__TileSize"].clip(lower=0.02)
 
     view["PrixTxt"] = view["Prix"].map(
         lambda value: f"${value:,.2f}" if pd.notna(value) else "N/D"
@@ -141,7 +156,7 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
     fig = px.treemap(
         view,
         path=["Secteur", "Ticker"],
-        values="PoidsIndice",
+        values="__TileSize",
         color="Variation",
         color_continuous_scale=[
             [0.0, "#DC2626"],
@@ -159,8 +174,9 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
             "SourceCours",
         ],
     )
+    texttemplate = "<b>%{label}</b><br>%{customdata[2]}<br>%{customdata[1]}" if mobile_readable else "<b>%{label}</b><br>%{customdata[2]}"
     fig.update_traces(
-        texttemplate="<b>%{label}</b><br>%{customdata[2]}",
+        texttemplate=texttemplate,
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             "Ticker : %{label}<br>"
@@ -176,12 +192,17 @@ def heatmap_figure(df: pd.DataFrame, height: int = 760) -> go.Figure:
             "line": {"color": "rgba(255,255,255,0.78)", "width": 1.35},
         },
         tiling={"pad": 3, "packing": "squarify"},
-        textfont={"size": 12},
+        textfont={"size": 12 if not mobile_readable else 13},
+        selected={"marker": {"opacity": 1.0}},
+        unselected={"marker": {"opacity": 0.92}},
     )
     fig.update_layout(
         height=height,
         margin={"t": 8, "l": 0, "r": 0, "b": 0},
-        uniformtext={"minsize": 9, "mode": "hide"},
+        uniformtext={"minsize": 8 if mobile_readable else 9, "mode": "show" if mobile_readable else "hide"},
+        dragmode=False,
+        clickmode="event+select",
+        uirevision=None,
         coloraxis_colorbar={
             "title": {"text": "Var. %", "font": {"color": palette["muted"]}},
             "thickness": 14,
