@@ -23,6 +23,8 @@ MOBILE_NAV_DEFAULTS = {
     "focus": "focus",
     "liste": "watchlist",
     "watchlist": "watchlist",
+    "terminal": "terminal-pro",
+    "pro": "terminal-pro",
 }
 
 
@@ -175,6 +177,12 @@ pages = {
         ),
     ],
     "INTELLIGENCE": [
+        _make_page(
+            "screens/27_Terminal_Pro.py",
+            title="Terminal Pro",
+            icon="💎",
+            url_path="terminal-pro",
+        ),
         _make_page(
             "screens/13_Assistant.py",
             title="Assistant contextuel",
