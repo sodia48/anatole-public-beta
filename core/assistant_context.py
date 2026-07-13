@@ -656,7 +656,43 @@ def suggested_questions() -> dict[str, list[str]]:
             "Quels titres ont les rendements de dividende les plus élevés ?",
             "Résume les nouvelles importantes de ma liste de suivi.",
         ],
+        "Terminal Pro": [
+            "Donne-moi le radar institutionnel Anatole avec les meilleurs profils et les fragilités.",
+            "Quelles dislocations méritent une vérification aujourd’hui ?",
+            "Explique le score Anatole et la rotation sectorielle comme un comité d’investissement.",
+        ],
     }
+
+
+
+
+def _premium_terminal_answer(question: str, market: pd.DataFrame) -> str:
+    try:
+        from core.intelligence_engine import build_institutional_brief, explain_ticker, score_titles
+
+        tickers = _extract_tickers(question, market)
+        if tickers:
+            return explain_ticker(market, tickers[0])
+        brief = build_institutional_brief(market)
+        scored = score_titles(market)
+        if scored.empty:
+            return brief
+        leaders = scored.head(5)
+        pressure = scored.sort_values("Score Anatole", ascending=True).head(5)
+        lines = [brief, "", "## Lecture supplémentaire — Radar premium", "", "### Profils les plus solides statistiquement"]
+        for _, row in leaders.iterrows():
+            lines.append(
+                f"- **{row.get('Ticker')}** · score {_num(row.get('Score Anatole'), 1)}/100 · {row.get('Catégorie')} · {row.get('Lecture Anatole')}"
+            )
+        lines.append("\n### Profils les plus fragiles à vérifier")
+        for _, row in pressure.iterrows():
+            lines.append(
+                f"- **{row.get('Ticker')}** · score {_num(row.get('Score Anatole'), 1)}/100 · {row.get('Risque principal')} · {row.get('Points à vérifier')}"
+            )
+        lines.append("\n**Lecture Anatole :** ce classement sert à prioriser les vérifications, pas à recommander une transaction.")
+        return "\n".join(lines)
+    except Exception:
+        return _deep_market_answer(market)
 
 
 def local_answer(
@@ -671,6 +707,9 @@ def local_answer(
     q = question.lower().strip()
     if market is None or market.empty:
         return "Les données de marché ne sont pas disponibles pour le moment. Essaie de relancer l’analyse ou de poser une question plus ciblée."
+
+    if any(term in q for term in ["terminal", "radar", "score anatole", "dislocation", "institutionnel", "conviction", "meilleurs profils", "profils solides", "comité"]):
+        return _premium_terminal_answer(question, market)
 
     tickers = _extract_tickers(question, market)
     if len(tickers) >= 2 and any(term in q for term in ["compare", "compar", " vs ", "contre"]):
