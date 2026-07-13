@@ -390,21 +390,10 @@ def apply_style() -> None:
             color: var(--sky-text);
         }}
 
-        html, body, [class*="css"], .stMarkdown, .stButton, .stTextInput, .stSelectbox,
+        html, body, .stMarkdown, .stButton, .stTextInput, .stSelectbox,
         [data-testid="stMetricValue"], [data-testid="stMetricLabel"], [data-testid="stMetricDelta"],
         h1, h2, h3, h4, h5, h6, p, label, button, input, textarea {{
             font-family: var(--sky-font) !important;
-        }}
-
-        /* Ne jamais toucher la police des icônes Streamlit (Material Symbols) :
-           elles s'affichent via un texte-ligature (ex. "arrow_right") transformé
-           en glyphe par leur propre police. Leur imposer Inter fait réapparaître
-           ce texte brut par-dessus les libellés. */
-        [data-testid="stIconMaterial"],
-        [data-testid="stIconEmoji"],
-        [class*="material-symbols"],
-        span[data-testid^="stIcon"] {{
-            font-family: initial !important;
         }}
 
         [data-testid="stMetricValue"], .sky-ticker-item, .sky-home-panel-value,
