@@ -8,14 +8,14 @@ import streamlit as st
 
 
 COLORWAY = [
-    "#2563EB",
-    "#0EA5E9",
-    "#14B8A6",
-    "#8B5CF6",
-    "#F59E0B",
+    "#3B5FE0",
+    "#7C6CF6",
+    "#22D3EE",
+    "#16C784",
+    "#F5A623",
     "#EC4899",
-    "#22C55E",
-    "#64748B",
+    "#8891A5",
+    "#EA3943",
 ]
 
 DEFAULT_PLOTLY_OVERLAYS = [
@@ -47,22 +47,22 @@ def _palette() -> dict[str, str]:
     dark = bool(st.session_state.get("theme_toggle", False))
     if dark:
         return {
-            "text": "#EAF6FF",
-            "muted": "#9AB6CC",
-            "grid": "rgba(148, 184, 210, 0.13)",
-            "surface": "rgba(11,31,48,0.72)",
-            "legend": "rgba(15,39,59,0.86)",
-            "border": "rgba(125,211,252,0.16)",
-            "hover": "rgba(2,12,22,0.97)",
+            "text": "#EDF1F7",
+            "muted": "#8891A5",
+            "grid": "rgba(148, 158, 190, 0.12)",
+            "surface": "rgba(13,17,27,0.78)",
+            "legend": "rgba(16,20,32,0.88)",
+            "border": "rgba(148,158,190,0.16)",
+            "hover": "rgba(8,10,17,0.97)",
         }
     return {
-        "text": "#102D49",
-        "muted": "#5B7088",
-        "grid": "rgba(74,125,167,0.13)",
-        "surface": "rgba(255,255,255,0.58)",
-        "legend": "rgba(255,255,255,0.72)",
-        "border": "rgba(76,145,201,0.16)",
-        "hover": "rgba(15,39,66,0.96)",
+        "text": "#0B1220",
+        "muted": "#5B6472",
+        "grid": "rgba(15,23,42,0.08)",
+        "surface": "rgba(255,255,255,0.60)",
+        "legend": "rgba(255,255,255,0.78)",
+        "border": "rgba(15,23,42,0.09)",
+        "hover": "rgba(11,18,32,0.96)",
     }
 
 
@@ -159,9 +159,9 @@ def heatmap_figure(
         values="__TileSize",
         color="Variation",
         color_continuous_scale=[
-            [0.0, "#DC2626"],
-            [0.5, "#315A7D"],
-            [1.0, "#059669"],
+            [0.0, "#EA3943"],
+            [0.5, "#3B4358"],
+            [1.0, "#16C784"],
         ],
         color_continuous_midpoint=0,
         custom_data=[
@@ -284,7 +284,7 @@ def _add_plotly_event_markers(
             continue
 
         x_value, y_value = point
-        color = marker.get("color") or "#F59E0B"
+        color = marker.get("color") or "#F5A623"
         short_text = str(marker.get("text") or "N")[:3]
         title = str(
             marker.get("title")
@@ -324,11 +324,11 @@ def _add_plotly_event_markers(
             name="Événements",
             text=texts,
             textposition="top center",
-            textfont={"size": 11, "color": "#F59E0B"},
+            textfont={"size": 11, "color": "#F5A623"},
             marker={
                 "size": 14,
                 "symbol": "diamond",
-                "color": "#F59E0B",
+                "color": "#F5A623",
                 "line": {"width": 1.5, "color": "white"},
             },
             hovertext=hover_texts,
@@ -352,7 +352,7 @@ def _add_plotly_price_lines(
             continue
 
         title = str(line.get("title") or "Niveau")
-        color = str(line.get("color") or "#F59E0B")
+        color = str(line.get("color") or "#F5A623")
 
         fig.add_hline(
             y=price,
@@ -391,10 +391,10 @@ def price_chart(
             low=history["Low"],
             close=history["Close"],
             name=ticker,
-            increasing_line_color="#059669",
-            decreasing_line_color="#DC2626",
-            increasing_fillcolor="#10B981",
-            decreasing_fillcolor="#EF4444",
+            increasing_line_color="#16C784",
+            decreasing_line_color="#EA3943",
+            increasing_fillcolor="#16C784",
+            decreasing_fillcolor="#EA3943",
         ),
         row=1,
         col=1,
@@ -501,12 +501,12 @@ def oscillator_chart(history: pd.DataFrame, ticker: str) -> go.Figure:
         vertical_spacing=0.08,
         subplot_titles=("RSI 14", "MACD"),
     )
-    fig.add_trace(go.Scatter(x=history.index, y=history["RSI14"], name="RSI 14", line={"color": "#2563EB"}), row=1, col=1)
-    fig.add_hline(y=70, line_dash="dash", line_color="#DC2626", opacity=.7, row=1, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color="#059669", opacity=.7, row=1, col=1)
-    fig.add_trace(go.Scatter(x=history.index, y=history["MACD"], name="MACD", line={"color": "#0EA5E9"}), row=2, col=1)
-    fig.add_trace(go.Scatter(x=history.index, y=history["SignalMACD"], name="Signal", line={"color": "#8B5CF6"}), row=2, col=1)
-    fig.add_trace(go.Bar(x=history.index, y=history["HistogrammeMACD"], name="Histogramme", opacity=0.48, marker_color="#93C5FD"), row=2, col=1)
+    fig.add_trace(go.Scatter(x=history.index, y=history["RSI14"], name="RSI 14", line={"color": "#3B5FE0"}), row=1, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color="#EA3943", opacity=.7, row=1, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color="#16C784", opacity=.7, row=1, col=1)
+    fig.add_trace(go.Scatter(x=history.index, y=history["MACD"], name="MACD", line={"color": "#22D3EE"}), row=2, col=1)
+    fig.add_trace(go.Scatter(x=history.index, y=history["SignalMACD"], name="Signal", line={"color": "#7C6CF6"}), row=2, col=1)
+    fig.add_trace(go.Bar(x=history.index, y=history["HistogrammeMACD"], name="Histogramme", opacity=0.48, marker_color="#A5B4FC"), row=2, col=1)
     fig.update_layout(
         margin={"t": 60, "l": 8, "r": 8, "b": 8},
         title=f"Oscillateurs · {ticker}",
@@ -532,9 +532,9 @@ def correlation_chart(correlation: pd.DataFrame) -> go.Figure:
         zmin=-1,
         zmax=1,
         color_continuous_scale=[
-            [0.0, "#DC2626"],
-            [0.5, "#EFF8FF"],
-            [1.0, "#2563EB"],
+            [0.0, "#EA3943"],
+            [0.5, "#EEF0F7"],
+            [1.0, "#3B5FE0"],
         ],
         title="Corrélation des rendements quotidiens",
     )
@@ -581,7 +581,7 @@ def market_breadth_chart(features: pd.DataFrame) -> go.Figure:
         labels={"x": "", "y": "% des titres"},
         title="Largeur technique du marché",
         color=values,
-        color_continuous_scale=["#BFDBFE", "#2563EB"],
+        color_continuous_scale=["#C7D2FE", "#3B5FE0"],
     )
     fig.update_traces(marker_line_width=0, text=[f"{value:.0f}%" for value in values], textposition="outside")
     fig.update_yaxes(range=[0, 108])
@@ -592,7 +592,7 @@ def market_breadth_chart(features: pd.DataFrame) -> go.Figure:
 def sector_performance_chart(features: pd.DataFrame) -> go.Figure:
     change_col = "Variation" if "Variation" in features else "DailyChangeTech"
     sector = features.groupby("Secteur", as_index=False)[change_col].mean().sort_values(change_col)
-    colors = ["#DC2626" if value < 0 else "#059669" for value in sector[change_col]]
+    colors = ["#EA3943" if value < 0 else "#16C784" for value in sector[change_col]]
     fig = px.bar(
         sector,
         x=change_col,
@@ -616,7 +616,7 @@ def rolling_correlation_chart(prices: pd.DataFrame, first: str, second: str, win
         labels={"x": "Date", "y": "Corrélation"},
         title=f"Corrélation mobile {window} séances · {first} / {second}",
     )
-    fig.update_traces(line={"color": "#2563EB", "width": 2.3}, fill="tozeroy", fillcolor="rgba(37,99,235,.08)")
+    fig.update_traces(line={"color": "#3B5FE0", "width": 2.3}, fill="tozeroy", fillcolor="rgba(59,95,224,.10)")
     fig.add_hline(y=0, line_dash="dash", line_color="rgba(15,39,66,.34)")
     fig.update_yaxes(range=[-1, 1])
     fig.update_layout(margin={"t": 58, "l": 8, "r": 8, "b": 8})

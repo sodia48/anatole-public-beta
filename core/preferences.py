@@ -8,7 +8,7 @@ from core.database import get_preferences, set_preferences
 
 
 DEFAULT_PREFERENCES: dict[str, str] = {
-    "theme": "light",
+    "theme": "dark",
     "density": "comfortable",
     "experience_mode": "simple",
     "show_ticker": "true",

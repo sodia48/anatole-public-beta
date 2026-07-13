@@ -33,8 +33,8 @@ def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
                     <defs>
                         <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stop-color="#2563EB"/>
-                            <stop offset="100%" stop-color="#0EA5E9"/>
+                            <stop offset="0%" stop-color="#3B5FE0"/>
+                            <stop offset="100%" stop-color="#7C6CF6"/>
                         </linearGradient>
                     </defs>
                     <rect width="128" height="128" rx="30" fill="url(#g)"/>
@@ -79,7 +79,7 @@ def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
                     setMeta(doc, "application-name", APP_NAME);
                     setMeta(doc, "apple-mobile-web-app-title", APP_NAME);
                     setMeta(doc, "description", "Terminal de marché canadien.");
-                    setMeta(doc, "theme-color", "#2563EB");
+                    setMeta(doc, "theme-color", "#0A0D18");
 
                     const iconHref = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG_ICON);
 
@@ -113,8 +113,8 @@ def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
                             start_url: win.location.origin + win.location.pathname + win.location.search,
                             scope: win.location.origin + "/",
                             display: "standalone",
-                            background_color: "#DDF3FF",
-                            theme_color: "#2563EB",
+                            background_color: "#0A0D18",
+                            theme_color: "#0A0D18",
                             icons: [
                                 {{
                                     src: iconHref,
@@ -302,54 +302,54 @@ def apply_style() -> None:
 
     if dark:
         background = """
-            radial-gradient(circle at 8% 8%, rgba(37,99,235,.18) 0, rgba(37,99,235,0) 30%),
-            radial-gradient(circle at 92% 12%, rgba(14,165,233,.14) 0, rgba(14,165,233,0) 28%),
-            linear-gradient(135deg, #071522 0%, #0B1E2E 46%, #0E263B 100%)
+            radial-gradient(circle at 8% 8%, rgba(59,95,224,.16) 0, rgba(59,95,224,0) 32%),
+            radial-gradient(circle at 92% 12%, rgba(124,108,246,.12) 0, rgba(124,108,246,0) 30%),
+            linear-gradient(135deg, #060810 0%, #0A0D18 46%, #0C111E 100%)
         """
         sidebar_background = """
-            linear-gradient(180deg, rgba(7,21,34,.98) 0%, rgba(10,31,48,.98) 100%)
+            linear-gradient(180deg, rgba(6,8,14,.98) 0%, rgba(9,12,20,.98) 100%)
         """
-        surface = "rgba(15, 39, 59, .82)"
-        surface_strong = "rgba(18, 48, 72, .96)"
-        surface_soft = "rgba(20, 53, 78, .62)"
-        text = "#EAF6FF"
-        muted = "#9AB6CC"
-        border = "rgba(125, 211, 252, .17)"
-        header_bg = "rgba(7, 21, 34, .78)"
-        shadow = "0 20px 55px rgba(0, 0, 0, .28)"
-        shadow_soft = "0 10px 30px rgba(0, 0, 0, .22)"
-        input_bg = "rgba(12, 35, 53, .92)"
+        surface = "rgba(16, 20, 32, .82)"
+        surface_strong = "rgba(19, 24, 38, .97)"
+        surface_soft = "rgba(20, 25, 40, .58)"
+        text = "#EDF1F7"
+        muted = "#8891A5"
+        border = "rgba(148, 158, 190, .14)"
+        header_bg = "rgba(6, 8, 14, .80)"
+        shadow = "0 24px 60px rgba(0, 0, 0, .45)"
+        shadow_soft = "0 12px 32px rgba(0, 0, 0, .32)"
+        input_bg = "rgba(13, 17, 27, .92)"
         hero_bg = """
-            radial-gradient(circle at 88% 18%, rgba(56,189,248,.19), rgba(56,189,248,0) 30%),
-            linear-gradient(135deg, rgba(17,44,67,.98), rgba(12,34,52,.88))
+            radial-gradient(circle at 88% 18%, rgba(124,108,246,.16), rgba(124,108,246,0) 32%),
+            linear-gradient(135deg, rgba(16,20,32,.98), rgba(11,14,23,.90))
         """
-        metric_bg = "linear-gradient(145deg, rgba(18,48,72,.94), rgba(10,31,48,.86))"
-        plot_bg = "rgba(11,31,48,.76)"
+        metric_bg = "linear-gradient(145deg, rgba(19,24,38,.95), rgba(12,15,25,.88))"
+        plot_bg = "rgba(13,17,27,.80)"
     else:
         background = """
-            radial-gradient(circle at 8% 8%, rgba(255,255,255,.96) 0, rgba(255,255,255,0) 30%),
-            radial-gradient(circle at 92% 16%, rgba(125,211,252,.34) 0, rgba(125,211,252,0) 30%),
-            linear-gradient(135deg, #DDF3FF 0%, #F3FBFF 42%, #DCEEFF 100%)
+            radial-gradient(circle at 8% 8%, rgba(255,255,255,.97) 0, rgba(255,255,255,0) 30%),
+            radial-gradient(circle at 92% 16%, rgba(124,108,246,.08) 0, rgba(124,108,246,0) 30%),
+            linear-gradient(135deg, #FFFFFF 0%, #F6F7FB 46%, #EEF0F7 100%)
         """
         sidebar_background = """
-            linear-gradient(180deg, rgba(255,255,255,.95) 0%, rgba(225,244,255,.94) 100%)
+            linear-gradient(180deg, rgba(255,255,255,.97) 0%, rgba(247,248,252,.96) 100%)
         """
-        surface = "rgba(255,255,255,.80)"
-        surface_strong = "rgba(255,255,255,.96)"
-        surface_soft = "rgba(255,255,255,.62)"
-        text = "#0F2742"
-        muted = "#5B7088"
-        border = "rgba(76,145,201,.22)"
-        header_bg = "rgba(226,244,255,.72)"
-        shadow = "0 20px 55px rgba(24, 83, 132, .11)"
-        shadow_soft = "0 10px 30px rgba(35, 92, 138, .09)"
-        input_bg = "rgba(255,255,255,.90)"
+        surface = "rgba(255,255,255,.84)"
+        surface_strong = "rgba(255,255,255,.98)"
+        surface_soft = "rgba(247,248,252,.68)"
+        text = "#0B1220"
+        muted = "#5B6472"
+        border = "rgba(15,23,42,.09)"
+        header_bg = "rgba(255,255,255,.78)"
+        shadow = "0 20px 50px rgba(15, 23, 42, .08)"
+        shadow_soft = "0 10px 26px rgba(15, 23, 42, .06)"
+        input_bg = "rgba(255,255,255,.95)"
         hero_bg = """
-            radial-gradient(circle at 88% 18%, rgba(125,211,252,.36), rgba(125,211,252,0) 30%),
-            linear-gradient(135deg, rgba(255,255,255,.97), rgba(239,249,255,.82))
+            radial-gradient(circle at 88% 18%, rgba(59,95,224,.10), rgba(59,95,224,0) 30%),
+            linear-gradient(135deg, rgba(255,255,255,.98), rgba(246,247,251,.86))
         """
-        metric_bg = "linear-gradient(145deg, rgba(255,255,255,.96), rgba(237,248,255,.82))"
-        plot_bg = "rgba(255,255,255,.76)"
+        metric_bg = "linear-gradient(145deg, rgba(255,255,255,.97), rgba(246,247,251,.85))"
+        plot_bg = "rgba(255,255,255,.82)"
 
     block_padding = ".65rem" if compact else "1.05rem"
     metric_padding = "12px 14px" if compact else "16px 17px"
@@ -357,10 +357,17 @@ def apply_style() -> None:
 
     css = f"""
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Inter+Tight:wght@600;700;800&display=swap');
+
         :root {{
-            --sky-primary: #2563EB;
-            --sky-primary-2: #0EA5E9;
-            --sky-accent: #38BDF8;
+            --sky-primary: #3B5FE0;
+            --sky-primary-2: #7C6CF6;
+            --sky-accent: #22D3EE;
+            --sky-up: #16C784;
+            --sky-up-strong: #0FA968;
+            --sky-down: #EA3943;
+            --sky-down-strong: #C82A34;
+            --sky-gold: #F5A623;
             --sky-text: {text};
             --sky-muted: {muted};
             --sky-surface: {surface};
@@ -371,6 +378,7 @@ def apply_style() -> None:
             --sky-shadow-soft: {shadow_soft};
             --sky-input: {input_bg};
             --sky-plot: {plot_bg};
+            --sky-font: "Inter", "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
         }}
 
         html {{
@@ -380,6 +388,18 @@ def apply_style() -> None:
         html, body, [data-testid="stAppViewContainer"] {{
             background: {background} !important;
             color: var(--sky-text);
+        }}
+
+        html, body, [class*="css"], .stMarkdown, .stButton, .stTextInput, .stSelectbox,
+        [data-testid="stMetricValue"], [data-testid="stMetricLabel"], [data-testid="stMetricDelta"],
+        h1, h2, h3, h4, h5, h6, p, span, div, label, button, input, textarea {{
+            font-family: var(--sky-font) !important;
+        }}
+
+        [data-testid="stMetricValue"], .sky-ticker-item, .sky-home-panel-value,
+        .sky-mobile-stat-value {{
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -.02em;
         }}
 
         [data-testid="stPlotlyChart"] .modebar {{
@@ -449,18 +469,18 @@ def apply_style() -> None:
         }}
 
         [data-testid="stSidebarNav"] a[aria-current="page"] {{
-            background: linear-gradient(135deg, #2563EB, #0EA5E9);
+            background: linear-gradient(135deg, var(--sky-primary), var(--sky-primary-2));
             color: white !important;
-            box-shadow: 0 11px 26px rgba(37,99,235,.26);
+            box-shadow: 0 11px 26px rgba(59,95,224,.26);
         }}
 
         .sky-brand {{
-            background: linear-gradient(135deg, rgba(37,99,235,.99), rgba(14,165,233,.96));
+            background: linear-gradient(135deg, rgba(59,95,224,.99), rgba(124,108,246,.96));
             color: white;
             border-radius: 24px;
             padding: 19px 18px 17px;
             margin: 0 0 15px;
-            box-shadow: 0 18px 42px rgba(37,99,235,.23);
+            box-shadow: 0 18px 42px rgba(59,95,224,.23);
             position: relative;
             overflow: hidden;
             animation: sky-rise .55s ease both;
@@ -542,8 +562,8 @@ def apply_style() -> None:
             border-radius: 11px;
             color: white;
             font-weight: 900;
-            background: linear-gradient(145deg, #2563EB, #38BDF8);
-            box-shadow: 0 8px 20px rgba(37,99,235,.24);
+            background: linear-gradient(145deg, var(--sky-primary), var(--sky-primary-2));
+            box-shadow: 0 8px 20px rgba(59,95,224,.24);
         }}
 
         .sky-terminal-name {{
@@ -564,9 +584,9 @@ def apply_style() -> None:
             gap: 7px;
             padding: 6px 10px;
             border-radius: 999px;
-            color: #047857;
-            background: rgba(16,185,129,.11);
-            border: 1px solid rgba(16,185,129,.22);
+            color: var(--sky-up-strong);
+            background: rgba(22,199,132,.11);
+            border: 1px solid rgba(22,199,132,.22);
             font-size: .75rem;
             font-weight: 850;
             white-space: nowrap;
@@ -576,8 +596,8 @@ def apply_style() -> None:
             width: 7px;
             height: 7px;
             border-radius: 50%;
-            background: #10B981;
-            box-shadow: 0 0 0 0 rgba(16,185,129,.46);
+            background: var(--sky-up);
+            box-shadow: 0 0 0 0 rgba(22,199,132,.46);
             animation: sky-pulse 1.7s infinite;
         }}
 
@@ -610,8 +630,8 @@ def apply_style() -> None:
             inset: 0;
             pointer-events: none;
             background:
-                linear-gradient(110deg, rgba(37,99,235,.06), transparent 42%),
-                radial-gradient(circle at 12% 110%, rgba(14,165,233,.16), transparent 28%);
+                linear-gradient(110deg, rgba(59,95,224,.06), transparent 42%),
+                radial-gradient(circle at 12% 110%, rgba(124,108,246,.16), transparent 28%);
         }}
 
         .sky-hero-copy {{
@@ -625,7 +645,7 @@ def apply_style() -> None:
             gap: 7px;
             padding: 6px 11px;
             border-radius: 999px;
-            color: #1D4ED8;
+            color: var(--sky-primary);
             background: rgba(219,234,254,.76);
             border: 1px solid rgba(96,165,250,.26);
             font-size: .70rem;
@@ -678,8 +698,8 @@ def apply_style() -> None:
             place-items: center;
             border-radius: 28px;
             font-size: 2.35rem;
-            background: linear-gradient(145deg, #2563EB, #38BDF8);
-            box-shadow: 0 20px 42px rgba(37,99,235,.27);
+            background: linear-gradient(145deg, var(--sky-primary), var(--sky-primary-2));
+            box-shadow: 0 20px 42px rgba(59,95,224,.27);
             border: 1px solid rgba(255,255,255,.58);
             animation: sky-float 4.5s ease-in-out infinite;
         }}
@@ -707,8 +727,8 @@ def apply_style() -> None:
 
         [data-testid="stPageLink"] a:hover {{
             transform: translateY(-3px);
-            border-color: rgba(37,99,235,.35);
-            box-shadow: 0 16px 36px rgba(37,99,235,.14);
+            border-color: rgba(59,95,224,.35);
+            box-shadow: 0 16px 36px rgba(59,95,224,.14);
         }}
 
         .sky-ticker-wrap {{
@@ -746,8 +766,8 @@ def apply_style() -> None:
             font-weight: 770;
         }}
 
-        .sky-up {{ color: #059669; }}
-        .sky-down {{ color: #DC2626; }}
+        .sky-up {{ color: var(--sky-up-strong); }}
+        .sky-down {{ color: var(--sky-down-strong); }}
 
 
         .sky-hero-search-card {{
@@ -800,8 +820,8 @@ def apply_style() -> None:
 
         [data-testid="stMetric"]:hover {{
             transform: translateY(-3px);
-            box-shadow: 0 18px 38px rgba(30, 102, 158, .15);
-            border-color: rgba(37,99,235,.34);
+            box-shadow: 0 18px 38px rgba(59,95,224,.15);
+            border-color: rgba(59,95,224,.34);
         }}
 
         [data-testid="stMetricLabel"] {{
@@ -863,16 +883,16 @@ def apply_style() -> None:
         }}
 
         [data-testid="stMultiSelect"] span[data-baseweb="tag"] {{
-            background: linear-gradient(135deg, #2563EB, #0EA5E9) !important;
+            background: linear-gradient(135deg, var(--sky-primary), var(--sky-primary-2)) !important;
             color: white !important;
             border-radius: 999px !important;
             border: none !important;
         }}
 
         [data-testid="stSlider"] [role="slider"] {{
-            background: #2563EB !important;
+            background: var(--sky-primary) !important;
             border: 3px solid white !important;
-            box-shadow: 0 5px 15px rgba(37,99,235,.25);
+            box-shadow: 0 5px 15px rgba(59,95,224,.25);
         }}
 
         .stButton > button,
@@ -880,11 +900,11 @@ def apply_style() -> None:
         [data-testid="stFormSubmitButton"] button {{
             border-radius: 999px !important;
             min-height: 42px;
-            border: 1px solid rgba(37,99,235,.22) !important;
-            background: linear-gradient(135deg, #2563EB, #0EA5E9) !important;
+            border: 1px solid rgba(59,95,224,.22) !important;
+            background: linear-gradient(135deg, var(--sky-primary), var(--sky-primary-2)) !important;
             color: #FFFFFF !important;
             font-weight: 820 !important;
-            box-shadow: 0 9px 22px rgba(37,99,235,.22);
+            box-shadow: 0 9px 22px rgba(59,95,224,.22);
             transition: all .18s ease;
         }}
 
@@ -899,7 +919,7 @@ def apply_style() -> None:
         .stDownloadButton > button:hover,
         [data-testid="stFormSubmitButton"] button:hover {{
             transform: translateY(-2px);
-            box-shadow: 0 14px 30px rgba(37,99,235,.29);
+            box-shadow: 0 14px 30px rgba(59,95,224,.29);
         }}
 
         [data-baseweb="tab-list"] {{
@@ -920,9 +940,9 @@ def apply_style() -> None:
         }}
 
         [aria-selected="true"][data-baseweb="tab"] {{
-            background: linear-gradient(135deg, #2563EB, #0EA5E9);
+            background: linear-gradient(135deg, var(--sky-primary), var(--sky-primary-2));
             color: white !important;
-            box-shadow: 0 8px 18px rgba(37,99,235,.20);
+            box-shadow: 0 8px 18px rgba(59,95,224,.20);
         }}
 
         [data-baseweb="tab-highlight"] {{
@@ -938,8 +958,8 @@ def apply_style() -> None:
             box-shadow: var(--sky-shadow-soft);
         }}
 
-        .market-open {{ color:#10B981; font-weight:850; }}
-        .market-closed {{ color:#EF4444; font-weight:850; }}
+        .market-open {{ color:var(--sky-up); font-weight:850; }}
+        .market-closed {{ color:var(--sky-down); font-weight:850; }}
 
         .sky-footer {{
             margin-top: 30px;
@@ -969,9 +989,9 @@ def apply_style() -> None:
         }}
 
         @keyframes sky-pulse {{
-            0% {{ box-shadow: 0 0 0 0 rgba(16,185,129,.48); }}
-            70% {{ box-shadow: 0 0 0 8px rgba(16,185,129,0); }}
-            100% {{ box-shadow: 0 0 0 0 rgba(16,185,129,0); }}
+            0% {{ box-shadow: 0 0 0 0 rgba(22,199,132,.48); }}
+            70% {{ box-shadow: 0 0 0 8px rgba(22,199,132,0); }}
+            100% {{ box-shadow: 0 0 0 0 rgba(22,199,132,0); }}
         }}
 
         @keyframes sky-scroll {{
@@ -1239,8 +1259,8 @@ def apply_style() -> None:
             }}
             .sky-mobile-nav a.active {{
                 color: #fff !important;
-                background: linear-gradient(135deg, #2563EB, #0EA5E9) !important;
-                box-shadow: 0 8px 20px rgba(37,99,235,.22);
+                background: linear-gradient(135deg, var(--sky-primary), var(--sky-primary-2)) !important;
+                box-shadow: 0 8px 20px rgba(59,95,224,.22);
             }}
             .sky-footer {{
                 margin-bottom: 88px;
@@ -1291,7 +1311,7 @@ def apply_style() -> None:
                 flex:1;text-align:center;text-decoration:none;color:var(--sky-muted);
                 font-size:.68rem;font-weight:800;padding:8px 3px;border-radius:11px;
             }}
-            .sky-mobile-nav a:hover {{ background:rgba(37,99,235,.12);color:var(--sky-text); }}
+            .sky-mobile-nav a:hover {{ background:rgba(59,95,224,.12);color:var(--sky-text); }}
             .sky-hero-icon {{
                 display: none;
             }}
@@ -1347,7 +1367,7 @@ def apply_style() -> None:
                 overflow: hidden !important;
                 border: 1px solid var(--sky-border) !important;
                 box-shadow: 0 18px 44px rgba(15,39,66,.08) !important;
-                background: rgba(255,255,255,.56) !important;
+                background: var(--sky-plot) !important;
                 touch-action: pan-y !important;
             }}
             .stPlotlyChart .modebar,
@@ -1367,7 +1387,7 @@ def apply_style() -> None:
                 border-radius: 999px !important;
                 min-width: max-content !important;
                 padding: 10px 14px !important;
-                background: rgba(255,255,255,.68) !important;
+                background: var(--sky-surface-soft) !important;
                 border: 1px solid var(--sky-border) !important;
                 box-shadow: 0 8px 18px rgba(15,39,66,.05) !important;
             }}
@@ -1460,7 +1480,7 @@ def sidebar_context() -> str:
     st.sidebar.toggle(
         "Mode sombre",
         key="theme_toggle",
-        help="Bascule entre le thème bleu ciel et le terminal sombre.",
+        help="Bascule entre le terminal sombre (par défaut) et le thème clair.",
     )
     st.sidebar.toggle(
         "Affichage compact",
@@ -1562,7 +1582,7 @@ def terminal_topbar() -> None:
         f"""
         <div class="sky-terminal-bar">
             <div class="sky-terminal-left">
-                <div class="sky-terminal-logo">S</div>
+                <div class="sky-terminal-logo">A</div>
                 <div class="sky-terminal-nav">Marchés&nbsp;&nbsp;•&nbsp;&nbsp;Screener&nbsp;&nbsp;•&nbsp;&nbsp;Portefeuille&nbsp;&nbsp;•&nbsp;&nbsp;Actualités</div>
             </div>
             <div class="sky-terminal-right">
