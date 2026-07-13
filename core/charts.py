@@ -193,8 +193,10 @@ def heatmap_figure(
         },
         tiling={"pad": 3, "packing": "squarify"},
         textfont={"size": 12 if not mobile_readable else 13},
-        selected={"marker": {"opacity": 1.0}},
-        unselected={"marker": {"opacity": 0.92}},
+        # Les traces Treemap de Plotly ne supportent pas les propriétés
+        # ``selected`` / ``unselected``. On garde le clic via
+        # st.plotly_chart(on_select="rerun") côté page, sans propriété
+        # de sélection incompatible.
     )
     fig.update_layout(
         height=height,
