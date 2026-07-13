@@ -117,19 +117,166 @@ def render_heatmap_focus_selector(frame: pd.DataFrame, key_prefix: str) -> None:
     if not options:
         return
     selected = st.selectbox(
-        "Ouvrir une fiche depuis la carte",
+        "Recherche rapide dans la carte",
         options,
         index=None,
-        placeholder="Choisir une action…",
+        placeholder="Chercher une action affichée sur la carte…",
         key=f"{key_prefix}_focus_selector",
     )
     if selected:
         ticker = selected.split(" — ", 1)[0].strip()
         match = candidates[candidates["Ticker"].astype(str) == ticker]
         if not match.empty:
-            if st.button("Ouvrir la fiche Focus", key=f"{key_prefix}_open_focus", width="stretch"):
-                st.session_state.selected_ticker = str(match.iloc[0].get("YahooTicker", ticker))
-                st.switch_page("screens/14_Focus.py")
+            row = match.iloc[0]
+            payload = {
+                "ticker": str(row.get("Ticker", ticker)),
+                "yahoo": str(row.get("YahooTicker", ticker)),
+                "name": str(row.get("Nom", "")),
+                "sector": str(row.get("Secteur", "")),
+            }
+            _store_cross_page_ticker(payload)
+            _render_cross_page_actions(payload, key_prefix=f"{key_prefix}_search_actions")
+
+
+def _normalise_symbol(value: object) -> str:
+    """Retourne un symbole lisible pour les communications entre pages."""
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text.replace("-", ".")
+
+
+def _extract_selected_heatmap_ticker(event: object, frame: pd.DataFrame) -> dict[str, str] | None:
+    """Extrait le titre cliqué dans la treemap Plotly, avec fallback robuste."""
+    if event is None or frame is None or frame.empty:
+        return None
+
+    event_dict = event
+    try:
+        if hasattr(event, "to_dict"):
+            event_dict = event.to_dict()
+    except Exception:
+        event_dict = event
+
+    selection = {}
+    if isinstance(event_dict, dict):
+        selection = event_dict.get("selection") or {}
+    else:
+        selection = getattr(event_dict, "selection", {}) or {}
+
+    points = []
+    if isinstance(selection, dict):
+        points = selection.get("points") or []
+    else:
+        points = getattr(selection, "points", []) or []
+    if not points:
+        return None
+
+    work = frame.copy()
+    if "Ticker" not in work:
+        return None
+    work["__TickerClean"] = work["Ticker"].map(_normalise_symbol)
+    work["__YahooClean"] = work.get("YahooTicker", work["Ticker"]).map(_normalise_symbol)
+
+    for point in points:
+        if not isinstance(point, dict):
+            try:
+                point = dict(point)
+            except Exception:
+                continue
+        candidates: list[str] = []
+        custom = point.get("customdata") or point.get("custom_data") or []
+        if isinstance(custom, (list, tuple)):
+            for item in custom:
+                candidates.append(str(item or ""))
+        for key in ["label", "id", "parent", "entry", "pointNumber"]:
+            if key in point:
+                candidates.append(str(point.get(key) or ""))
+        for raw in candidates:
+            # Une treemap peut renvoyer des ids du type "Financials/RY".
+            for part in str(raw).replace("\\", "/").split("/"):
+                token = _normalise_symbol(part)
+                if not token:
+                    continue
+                match = work[(work["__TickerClean"] == token) | (work["__YahooClean"] == token)]
+                if not match.empty:
+                    row = match.iloc[0]
+                    return {
+                        "ticker": str(row.get("Ticker", token)),
+                        "yahoo": str(row.get("YahooTicker", row.get("Ticker", token))),
+                        "name": str(row.get("Nom", "")),
+                        "sector": str(row.get("Secteur", "")),
+                    }
+    return None
+
+
+def _store_cross_page_ticker(payload: dict[str, str]) -> None:
+    """Alimente les pages cibles avec le titre choisi."""
+    ticker = str(payload.get("ticker") or "").strip()
+    yahoo = str(payload.get("yahoo") or ticker).strip()
+    if not ticker:
+        return
+    st.session_state["anatole_bridge_ticker"] = ticker
+    st.session_state["anatole_bridge_yahoo"] = yahoo
+    st.session_state["anatole_bridge_name"] = str(payload.get("name") or "")
+    st.session_state["anatole_bridge_sector"] = str(payload.get("sector") or "")
+
+    # Clés déjà utilisées ou faciles à consommer par les pages existantes.
+    st.session_state["selected_ticker"] = yahoo
+    st.session_state["focus_ticker"] = yahoo
+    st.session_state["screener_symbol_query"] = ticker
+    st.session_state["insider_symbol_query"] = ticker
+    st.session_state["alert_prefill_ticker"] = yahoo
+    st.session_state["watchlist_prefill_ticker"] = yahoo
+
+
+def _switch_to_ticker_destination(destination: str, payload: dict[str, str]) -> None:
+    _store_cross_page_ticker(payload)
+    destinations = {
+        "Screener": "screens/1_Screener.py",
+        "Focus": "screens/14_Focus.py",
+        "Insiders": "screens/25_Insiders.py",
+        "Alertes": "screens/4_Alertes.py",
+        "Watchlist": "screens/9_Watchlist.py",
+    }
+    path = destinations.get(destination, "screens/1_Screener.py")
+    try:
+        st.switch_page(path)
+    except Exception:
+        st.info("Le titre est mémorisé. Ouvre la section souhaitée depuis la navigation pour continuer l’analyse.")
+
+
+def _render_cross_page_actions(payload: dict[str, str], key_prefix: str) -> None:
+    """Affiche une barre d’actions quand une action est sélectionnée."""
+    if not payload:
+        return
+    ticker = str(payload.get("ticker") or "").strip()
+    name = str(payload.get("name") or "").strip()
+    sector = str(payload.get("sector") or "").strip()
+    if not ticker:
+        return
+    st.success(
+        f"{ticker} sélectionné" + (f" · {name}" if name else "") + (f" · {sector}" if sector else "")
+    )
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        if st.button("Ouvrir Screener", key=f"{key_prefix}_go_screener", width="stretch"):
+            _switch_to_ticker_destination("Screener", payload)
+    with c2:
+        if st.button("Mode Focus", key=f"{key_prefix}_go_focus", width="stretch"):
+            _switch_to_ticker_destination("Focus", payload)
+    with c3:
+        if st.button("Insiders", key=f"{key_prefix}_go_insiders", width="stretch"):
+            _switch_to_ticker_destination("Insiders", payload)
+    with c4:
+        if st.button("Alerte", key=f"{key_prefix}_go_alertes", width="stretch"):
+            _switch_to_ticker_destination("Alertes", payload)
+    with c5:
+        if st.button("Liste", key=f"{key_prefix}_go_watchlist", width="stretch"):
+            _switch_to_ticker_destination("Watchlist", payload)
+
 
 
 configure_page("Vue d'ensemble", "📈")
@@ -323,7 +470,7 @@ def live_cockpit() -> None:
     st.subheader("Carte du marché")
     with st.expander("Filtres de la carte", expanded=False):
         all_sectors = sorted(market["Secteur"].dropna().unique().tolist())
-        c1, c2, c3 = st.columns([2, 1, 1])
+        c1, c2, c3, c4 = st.columns([2.1, 1, 1, 1.25])
         with c1:
             selected_sectors = st.multiselect(
                 "Secteurs",
@@ -342,6 +489,16 @@ def live_cockpit() -> None:
             )
         with c3:
             cinema = st.toggle("Vue agrandie", value=False, key="minimal_heatmap_cinema")
+        with c4:
+            readable_default = 0 if mobile_is_lite() else 1
+            size_choice = st.radio(
+                "Taille des cases",
+                ["Lisible", "Pondérée"],
+                index=readable_default,
+                horizontal=True,
+                key="minimal_heatmap_size_mode",
+                help="Lisible donne une case visible à chaque action. Pondérée reflète davantage le poids indicatif du titre.",
+            )
 
     filtered = market[
         market["Secteur"].isin(selected_sectors)
@@ -349,19 +506,78 @@ def live_cockpit() -> None:
     ].copy()
     if filtered.empty:
         st.info("Aucun titre ne correspond aux filtres.")
-    elif mobile_is_lite():
-        render_mobile_market_map(filtered)
     else:
-        height = mobile_chart_height(760 if cinema else 580, 430)
-        figure = heatmap_figure(filtered, height=height)
-        st.plotly_chart(
-            figure,
-            width="stretch",
-            key=f"minimal_heatmap_{universe_key}",
-            config=plotly_mobile_config(),
+        # La carte reste la vraie treemap sur mobile comme sur ordinateur.
+        # Sur téléphone, on agrandit la hauteur et on verrouille les gestes de
+        # zoom/pan pour éviter les déplacements irrécupérables.
+        is_mobile_map = mobile_is_lite()
+        mobile_count_height = int(max(980, min(2600, len(filtered) * 11)))
+        desktop_height = 820 if cinema else 620
+        height = mobile_count_height if is_mobile_map else desktop_height
+        readable_mode = (size_choice == "Lisible")
+        figure = heatmap_figure(
+            filtered,
+            height=height,
+            mobile_readable=is_mobile_map or readable_mode,
+            size_mode="equal" if readable_mode else "weight",
         )
-        st.caption("Carte stabilisée : pas de zoom involontaire. Utilise le sélecteur ci-dessous pour ouvrir une fiche.")
+        action_col, hint_col = st.columns([1, 2.2])
+        with action_col:
+            click_destination = st.selectbox(
+                "Action au clic",
+                ["Screener", "Focus", "Insiders", "Alertes", "Watchlist"],
+                index=0,
+                key=f"minimal_heatmap_click_destination_{universe_key}",
+                help="Choisis où Anatole doit t’amener quand tu touches une action sur la carte.",
+            )
+        with hint_col:
+            st.caption(
+                "Touchez une case d’action pour l’envoyer vers la section choisie. "
+                "Le zoom est désactivé; la carte reste consultable en faisant défiler la page."
+            )
+
+        plotly_event = None
+        chart_key = f"minimal_heatmap_{universe_key}_{len(filtered)}_{size_choice}_clickable"
+        try:
+            plotly_event = st.plotly_chart(
+                figure,
+                width="stretch",
+                key=chart_key,
+                config=plotly_mobile_config(interactive=True),
+                on_select="rerun",
+                selection_mode="points",
+            )
+        except TypeError:
+            st.plotly_chart(
+                figure,
+                width="stretch",
+                key=chart_key,
+                config=plotly_mobile_config(interactive=True),
+            )
+
+        selected_payload = _extract_selected_heatmap_ticker(plotly_event, filtered)
+        if selected_payload:
+            _switch_to_ticker_destination(str(click_destination), selected_payload)
+
+        st.caption(
+            f"Carte complète : {len(filtered)} titres affichés selon l’univers et les filtres actifs. "
+            "Si ton navigateur ne transmet pas le clic sur la carte, utilise la recherche rapide ci-dessous."
+        )
         render_heatmap_focus_selector(filtered, key_prefix=f"minimal_heatmap_{universe_key}")
+        last_payload = None
+        last_ticker = st.session_state.get("anatole_bridge_ticker")
+        if last_ticker:
+            matched = filtered[filtered["Ticker"].astype(str).str.upper() == str(last_ticker).upper()]
+            if not matched.empty:
+                row = matched.iloc[0]
+                last_payload = {
+                    "ticker": str(row.get("Ticker", last_ticker)),
+                    "yahoo": str(row.get("YahooTicker", row.get("Ticker", last_ticker))),
+                    "name": str(row.get("Nom", "")),
+                    "sector": str(row.get("Secteur", "")),
+                }
+        if last_payload:
+            _render_cross_page_actions(last_payload, key_prefix=f"minimal_heatmap_last_{universe_key}")
 
     with st.expander("Principaux mouvements", expanded=False):
         left, right = st.columns(2)

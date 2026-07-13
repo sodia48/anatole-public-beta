@@ -12,6 +12,67 @@ from core.runtime import load_market_bundle
 from core.universe import current_universe, current_universe_key
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
 
+
+
+def _clean_symbol(value: object) -> str:
+    text = str(value or "").strip().upper()
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text.replace("-", ".")
+
+
+def _incoming_screener_symbol() -> str:
+    candidates = [
+        st.session_state.get("screener_symbol_query"),
+        st.session_state.get("anatole_bridge_ticker"),
+        st.session_state.get("selected_ticker"),
+    ]
+    try:
+        raw = st.query_params.get("ticker")
+        if isinstance(raw, list):
+            raw = raw[0] if raw else ""
+        candidates.append(raw)
+    except Exception:
+        pass
+    for candidate in candidates:
+        cleaned = _clean_symbol(candidate)
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _sync_screener_search_from_bridge() -> None:
+    incoming = _incoming_screener_symbol()
+    if not incoming:
+        return
+    marker = st.session_state.get("_last_screener_bridge_symbol")
+    if marker != incoming:
+        st.session_state["screener_symbol_search"] = incoming
+        st.session_state["_last_screener_bridge_symbol"] = incoming
+
+
+def _route_symbol(symbol: str, yahoo: str, page: str) -> None:
+    symbol = _clean_symbol(symbol)
+    yahoo = str(yahoo or symbol).strip()
+    if symbol:
+        st.session_state["anatole_bridge_ticker"] = symbol
+        st.session_state["screener_symbol_query"] = symbol
+        st.session_state["selected_ticker"] = yahoo
+        st.session_state["focus_ticker"] = yahoo
+        st.session_state["insider_symbol_query"] = symbol
+        st.session_state["alert_prefill_ticker"] = yahoo
+    targets = {
+        "Focus": "screens/14_Focus.py",
+        "Insiders": "screens/25_Insiders.py",
+        "Alertes": "screens/4_Alertes.py",
+        "Watchlist": "screens/9_Watchlist.py",
+    }
+    try:
+        st.switch_page(targets[page])
+    except Exception:
+        st.info("Le titre est mémorisé. Ouvre la section souhaitée depuis la navigation pour continuer.")
+
+
 configure_page("Screener", "🔎")
 apply_style()
 profile = sidebar_context()
@@ -20,6 +81,8 @@ page_header(
     "Filtre les titres selon le momentum, la tendance, le RSI, le volume et, en option, les fondamentaux.",
     "🔎",
 )
+
+_sync_screener_search_from_bridge()
 
 with load_timer("screener"):
     constituents, diagnostics, snapshot, features = load_market_bundle()
@@ -45,6 +108,51 @@ for column in REQUIRED_TECHNICAL_COLUMNS:
 render_data_quality_strip(snapshot, diagnostics, compact=True)
 perf_caption("screener", threshold=2.5)
 features["Signal"] = features.apply(technical_signal, axis=1)
+
+features["__TickerClean"] = features["Ticker"].map(_clean_symbol)
+features["__YahooClean"] = features.get("YahooTicker", features["Ticker"]).map(_clean_symbol)
+
+bridge_symbol = _incoming_screener_symbol()
+if bridge_symbol:
+    matched_bridge = features[
+        (features["__TickerClean"] == bridge_symbol)
+        | (features["__YahooClean"] == bridge_symbol)
+    ].head(1)
+    if not matched_bridge.empty:
+        bridge_row = matched_bridge.iloc[0]
+        st.success(
+            f"{bridge_row.get('Ticker', bridge_symbol)} ouvert depuis une autre section · "
+            f"{bridge_row.get('Nom', '')}"
+        )
+        b1, b2, b3, b4 = st.columns(4)
+        with b1:
+            if st.button("Mode Focus", key="screener_bridge_focus", width="stretch"):
+                _route_symbol(str(bridge_row.get("Ticker", bridge_symbol)), str(bridge_row.get("YahooTicker", bridge_symbol)), "Focus")
+        with b2:
+            if st.button("Insiders", key="screener_bridge_insiders", width="stretch"):
+                _route_symbol(str(bridge_row.get("Ticker", bridge_symbol)), str(bridge_row.get("YahooTicker", bridge_symbol)), "Insiders")
+        with b3:
+            if st.button("Créer une alerte", key="screener_bridge_alert", width="stretch"):
+                _route_symbol(str(bridge_row.get("Ticker", bridge_symbol)), str(bridge_row.get("YahooTicker", bridge_symbol)), "Alertes")
+        with b4:
+            if st.button("Ajouter à la liste", key="screener_bridge_watchlist", width="stretch"):
+                _route_symbol(str(bridge_row.get("Ticker", bridge_symbol)), str(bridge_row.get("YahooTicker", bridge_symbol)), "Watchlist")
+
+search_cols = st.columns([2.2, 1])
+with search_cols[0]:
+    symbol_search = st.text_input(
+        "Rechercher dans le screener",
+        key="screener_symbol_search",
+        placeholder="RY, TD, Shopify, énergie, banques…",
+        help="Recherche par symbole, nom ou secteur. Les actions cliquées dans la carte arrivent automatiquement ici.",
+    ).strip()
+with search_cols[1]:
+    exact_symbol_only = st.toggle(
+        "Symbole exact",
+        value=bool(bridge_symbol),
+        key="screener_exact_symbol_only",
+        help="Active un filtre strict sur le symbole quand tu arrives depuis la carte du marché.",
+    )
 
 if mobile_is_lite():
     st.info(
@@ -113,6 +221,19 @@ result = features[
     & (features["Momentum1M"].fillna(-999) >= min_momentum_1m)
     & (features["Volatilite20"].fillna(0) <= max_volatility)
 ].copy()
+
+if symbol_search:
+    query = _clean_symbol(symbol_search)
+    raw_query = str(symbol_search).strip().lower()
+    if exact_symbol_only and query:
+        result = result[(result["__TickerClean"] == query) | (result["__YahooClean"] == query)].copy()
+    else:
+        result = result[
+            result["Ticker"].astype(str).str.lower().str.contains(raw_query, na=False)
+            | result.get("YahooTicker", result["Ticker"]).astype(str).str.lower().str.contains(raw_query, na=False)
+            | result["Nom"].astype(str).str.lower().str.contains(raw_query, na=False)
+            | result["Secteur"].astype(str).str.lower().str.contains(raw_query, na=False)
+        ].copy()
 
 if above_sma50:
     result = result[result["AboveSMA50"]]
@@ -187,6 +308,39 @@ st.dataframe(
         "MarketCap": st.column_config.NumberColumn("Capitalisation", format="compact"),
     },
 )
+
+if not display_result.empty:
+    st.markdown("#### Continuer l’analyse")
+    action_options = [
+        f"{row.get('Ticker', '')} — {row.get('Nom', '')}"
+        for _, row in display_result.head(80).iterrows()
+    ]
+    selected_action = st.selectbox(
+        "Choisir un titre dans les résultats",
+        action_options,
+        index=0 if bridge_symbol and action_options else None,
+        placeholder="Sélectionner un titre…",
+        key="screener_continue_action_selector",
+    )
+    if selected_action:
+        selected_symbol = selected_action.split(" — ", 1)[0].strip()
+        selected_row = display_result[display_result["Ticker"].astype(str) == selected_symbol].head(1)
+        if not selected_row.empty:
+            row = selected_row.iloc[0]
+            yahoo = str(row.get("YahooTicker", selected_symbol)) if "YahooTicker" in row.index else selected_symbol
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                if st.button("Mode Focus", key="screener_continue_focus", width="stretch"):
+                    _route_symbol(selected_symbol, yahoo, "Focus")
+            with c2:
+                if st.button("Insiders", key="screener_continue_insiders", width="stretch"):
+                    _route_symbol(selected_symbol, yahoo, "Insiders")
+            with c3:
+                if st.button("Alerte", key="screener_continue_alert", width="stretch"):
+                    _route_symbol(selected_symbol, yahoo, "Alertes")
+            with c4:
+                if st.button("Liste", key="screener_continue_watchlist", width="stretch"):
+                    _route_symbol(selected_symbol, yahoo, "Watchlist")
 
 st.download_button(
     "Télécharger les résultats",
