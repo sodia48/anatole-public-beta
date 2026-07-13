@@ -12,64 +12,98 @@ logger = configure_logging()
 beta = bootstrap_public_beta()
 st.session_state["_navigation_entrypoint"] = True
 
+
+MOBILE_NAV_DEFAULTS = {
+    "accueil": "cockpit",
+    "home": "cockpit",
+    "cockpit": "cockpit",
+    "recherche": "recherche",
+    "search": "recherche",
+    "screener": "screener",
+    "focus": "focus",
+    "liste": "watchlist",
+    "watchlist": "watchlist",
+}
+
+
+def _requested_mobile_default() -> str | None:
+    """Retourne la page demandée par la navigation mobile sans route brute."""
+    try:
+        raw_value = st.query_params.get("nav")
+    except Exception:
+        return None
+    if isinstance(raw_value, list):
+        raw_value = raw_value[0] if raw_value else ""
+    key = str(raw_value or "").strip().lower()
+    return MOBILE_NAV_DEFAULTS.get(key)
+
+
+REQUESTED_MOBILE_DEFAULT = _requested_mobile_default()
+
+
+def _nav_page(path: str, *, title: str, icon: str, url_path: str, default: bool = False):
+    """Crée une page Streamlit avec un défaut dynamique pour la navigation mobile."""
+    is_default = (url_path == REQUESTED_MOBILE_DEFAULT) or (REQUESTED_MOBILE_DEFAULT is None and default)
+    return _nav_page(path, title=title, icon=icon, url_path=url_path, default=is_default)
+
 pages = {
     "MARCHÉS": [
-        st.Page(
+        _nav_page(
             "screens/0_Accueil.py",
             title="Cockpit",
             icon="🏠",
             default=True,
             url_path="cockpit",
         ),
-        st.Page(
+        _nav_page(
             "screens/22_Recherche.py",
             title="Recherche",
             icon="🔍",
             url_path="recherche",
         ),
-        st.Page(
+        _nav_page(
             "screens/1_Screener.py",
             title="Screener",
             icon="🔎",
             url_path="screener",
         ),
-        st.Page(
+        _nav_page(
             "screens/5_Actualites.py",
             title="Actualités",
             icon="📰",
             url_path="actualites",
         ),
-        st.Page(
+        _nav_page(
             "screens/6_Calendrier.py",
             title="Calendrier",
             icon="🗓️",
             url_path="calendrier",
         ),
-        st.Page(
+        _nav_page(
             "screens/26_ETF.py",
             title="ETF sectoriels",
             icon="🧺",
             url_path="etf-sectoriels",
         ),
-        st.Page(
+        _nav_page(
             "screens/24_IPO.py",
             title="IPO à venir",
             icon="🚀",
             url_path="ipo",
         ),
-        st.Page(
+        _nav_page(
             "screens/25_Insiders.py",
             title="Transactions d’initiés",
             icon="🕵️",
             url_path="insiders",
         ),
-        st.Page(
+        _nav_page(
             "screens/15_Market_Drivers.py",
             title="Moteurs du marché",
             icon="🧭",
             url_path="moteurs-marche",
         ),
-        st.Page(
+        _nav_page(
             "screens/23_Psychologie.py",
             title="Psychologie",
             icon="🧠",
@@ -77,25 +111,25 @@ pages = {
         ),
     ],
     "ANALYSE": [
-        st.Page(
+        _nav_page(
             "screens/14_Focus.py",
             title="Mode Focus",
             icon="🎯",
             url_path="focus",
         ),
-        st.Page(
+        _nav_page(
             "screens/2_Comparateur.py",
             title="Comparateur",
             icon="⚖️",
             url_path="comparateur",
         ),
-        st.Page(
+        _nav_page(
             "screens/7_Backtesting.py",
             title="Backtesting",
             icon="🧪",
             url_path="backtesting",
         ),
-        st.Page(
+        _nav_page(
             "screens/8_Correlations.py",
             title="Corrélations",
             icon="🧩",
@@ -103,37 +137,37 @@ pages = {
         ),
     ],
     "MON ESPACE": [
-        st.Page(
+        _nav_page(
             "screens/3_Portefeuille.py",
             title="Portefeuille",
             icon="💼",
             url_path="portefeuille",
         ),
-        st.Page(
+        _nav_page(
             "screens/9_Watchlist.py",
             title="Watchlist",
             icon="⭐",
             url_path="watchlist",
         ),
-        st.Page(
+        _nav_page(
             "screens/4_Alertes.py",
             title="Alertes",
             icon="🔔",
             url_path="alertes",
         ),
-        st.Page(
+        _nav_page(
             "screens/11_Workspaces.py",
             title="Espaces de travail",
             icon="🧱",
             url_path="espaces",
         ),
-        st.Page(
+        _nav_page(
             "screens/12_Reports.py",
             title="Rapports",
             icon="📄",
             url_path="rapports",
         ),
-        st.Page(
+        _nav_page(
             "screens/17_Preferences.py",
             title="Préférences",
             icon="⚙️",
@@ -141,13 +175,13 @@ pages = {
         ),
     ],
     "INTELLIGENCE": [
-        st.Page(
+        _nav_page(
             "screens/13_Assistant.py",
             title="Assistant contextuel",
             icon="✨",
             url_path="assistant",
         ),
-        st.Page(
+        _nav_page(
             "screens/16_Notifications.py",
             title="Centre de notifications",
             icon="🔔",
@@ -155,25 +189,25 @@ pages = {
         ),
     ],
     "BÊTA PUBLIQUE": [
-        st.Page(
+        _nav_page(
             "screens/18_Feedback.py",
             title="Donner mon avis",
             icon="💬",
             url_path="feedback",
         ),
-        st.Page(
+        _nav_page(
             "screens/19_Confidentialite.py",
             title="Confidentialité",
             icon="🔒",
             url_path="confidentialite",
         ),
-        st.Page(
+        _nav_page(
             "screens/20_Conditions.py",
             title="Conditions",
             icon="📜",
             url_path="conditions",
         ),
-        st.Page(
+        _nav_page(
             "screens/21_Beta_Status.py",
             title="État de la bêta",
             icon="🧪",
@@ -184,7 +218,7 @@ pages = {
 
 if beta.is_admin:
     pages["ADMINISTRATION"] = [
-        st.Page(
+        _nav_page(
             "screens/10_Diagnostics.py",
             title="Diagnostics",
             icon="🛠️",
