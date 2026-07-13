@@ -1798,27 +1798,32 @@ def plotly_mobile_config(*, interactive: bool = False) -> dict:
     return config
 
 def mobile_navigation() -> None:
-    """Navigation mobile stable.
+    """Navigation mobile stable et sans routes directes fragiles.
 
-    Chaque lien ci-dessous correspond à un ``url_path`` déclaré dans ``app.py``.
-    Cela évite le message Streamlit « Page not found » sur mobile.
+    Les liens pointent vers la racine avec un paramètre ``nav``. ``app.py``
+    choisit ensuite la bonne page Streamlit. Cela évite les modales
+    "Page not found" sur Render/iOS, même quand le navigateur recharge une
+    page interne directement.
     """
     st.markdown(
         """
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a data-path="cockpit" href="/cockpit" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
-          <a data-path="recherche" href="/recherche" target="_self" aria-label="Recherche">🔍<br>Recherche</a>
-          <a data-path="screener" href="/screener" target="_self" aria-label="Screener">🔎<br>Screener</a>
-          <a data-path="focus" href="/focus" target="_self" aria-label="Focus">🎯<br>Focus</a>
-          <a data-path="watchlist" href="/watchlist" target="_self" aria-label="Liste">⭐<br>Liste</a>
+          <a data-path="cockpit" href="/?nav=cockpit" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
+          <a data-path="recherche" href="/?nav=recherche" target="_self" aria-label="Recherche">🔍<br>Recherche</a>
+          <a data-path="screener" href="/?nav=screener" target="_self" aria-label="Screener">🔎<br>Screener</a>
+          <a data-path="focus" href="/?nav=focus" target="_self" aria-label="Focus">🎯<br>Focus</a>
+          <a data-path="watchlist" href="/?nav=watchlist" target="_self" aria-label="Liste">⭐<br>Liste</a>
         </nav>
         <script>
         (function() {
           try {
-            const path = window.location.pathname.toLowerCase().replace(/^\\//, '');
+            const params = new URLSearchParams(window.location.search || '');
+            const nav = (params.get('nav') || '').toLowerCase();
+            const path = window.location.pathname.toLowerCase().replace(/^\//, '');
             document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
               const target = (node.getAttribute('data-path') || '').toLowerCase();
-              node.classList.toggle('active', Boolean(target && path.startsWith(target)));
+              const active = target && (nav === target || path.startsWith(target) || (!nav && !path && target === 'cockpit'));
+              node.classList.toggle('active', Boolean(active));
             });
           } catch (error) {}
         })();
@@ -1826,7 +1831,6 @@ def mobile_navigation() -> None:
         """,
         unsafe_allow_html=True,
     )
-
 
 def skeleton_cards(count: int = 4, height: int = 110) -> None:
     columns = st.columns(count)
