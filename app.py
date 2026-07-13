@@ -41,69 +41,69 @@ def _requested_mobile_default() -> str | None:
 REQUESTED_MOBILE_DEFAULT = _requested_mobile_default()
 
 
-def _nav_page(path: str, *, title: str, icon: str, url_path: str, default: bool = False):
+def _make_page(path: str, *, title: str, icon: str, url_path: str, default: bool = False):
     """Crée une page Streamlit avec un défaut dynamique pour la navigation mobile."""
     is_default = (url_path == REQUESTED_MOBILE_DEFAULT) or (REQUESTED_MOBILE_DEFAULT is None and default)
-    return _nav_page(path, title=title, icon=icon, url_path=url_path, default=is_default)
+    return st.Page(path, title=title, icon=icon, url_path=url_path, default=is_default)
 
 pages = {
     "MARCHÉS": [
-        _nav_page(
+        _make_page(
             "screens/0_Accueil.py",
             title="Cockpit",
             icon="🏠",
             default=True,
             url_path="cockpit",
         ),
-        _nav_page(
+        _make_page(
             "screens/22_Recherche.py",
             title="Recherche",
             icon="🔍",
             url_path="recherche",
         ),
-        _nav_page(
+        _make_page(
             "screens/1_Screener.py",
             title="Screener",
             icon="🔎",
             url_path="screener",
         ),
-        _nav_page(
+        _make_page(
             "screens/5_Actualites.py",
             title="Actualités",
             icon="📰",
             url_path="actualites",
         ),
-        _nav_page(
+        _make_page(
             "screens/6_Calendrier.py",
             title="Calendrier",
             icon="🗓️",
             url_path="calendrier",
         ),
-        _nav_page(
+        _make_page(
             "screens/26_ETF.py",
             title="ETF sectoriels",
             icon="🧺",
             url_path="etf-sectoriels",
         ),
-        _nav_page(
+        _make_page(
             "screens/24_IPO.py",
             title="IPO à venir",
             icon="🚀",
             url_path="ipo",
         ),
-        _nav_page(
+        _make_page(
             "screens/25_Insiders.py",
             title="Transactions d’initiés",
             icon="🕵️",
             url_path="insiders",
         ),
-        _nav_page(
+        _make_page(
             "screens/15_Market_Drivers.py",
             title="Moteurs du marché",
             icon="🧭",
             url_path="moteurs-marche",
         ),
-        _nav_page(
+        _make_page(
             "screens/23_Psychologie.py",
             title="Psychologie",
             icon="🧠",
@@ -111,25 +111,25 @@ pages = {
         ),
     ],
     "ANALYSE": [
-        _nav_page(
+        _make_page(
             "screens/14_Focus.py",
             title="Mode Focus",
             icon="🎯",
             url_path="focus",
         ),
-        _nav_page(
+        _make_page(
             "screens/2_Comparateur.py",
             title="Comparateur",
             icon="⚖️",
             url_path="comparateur",
         ),
-        _nav_page(
+        _make_page(
             "screens/7_Backtesting.py",
             title="Backtesting",
             icon="🧪",
             url_path="backtesting",
         ),
-        _nav_page(
+        _make_page(
             "screens/8_Correlations.py",
             title="Corrélations",
             icon="🧩",
@@ -137,37 +137,37 @@ pages = {
         ),
     ],
     "MON ESPACE": [
-        _nav_page(
+        _make_page(
             "screens/3_Portefeuille.py",
             title="Portefeuille",
             icon="💼",
             url_path="portefeuille",
         ),
-        _nav_page(
+        _make_page(
             "screens/9_Watchlist.py",
             title="Watchlist",
             icon="⭐",
             url_path="watchlist",
         ),
-        _nav_page(
+        _make_page(
             "screens/4_Alertes.py",
             title="Alertes",
             icon="🔔",
             url_path="alertes",
         ),
-        _nav_page(
+        _make_page(
             "screens/11_Workspaces.py",
             title="Espaces de travail",
             icon="🧱",
             url_path="espaces",
         ),
-        _nav_page(
+        _make_page(
             "screens/12_Reports.py",
             title="Rapports",
             icon="📄",
             url_path="rapports",
         ),
-        _nav_page(
+        _make_page(
             "screens/17_Preferences.py",
             title="Préférences",
             icon="⚙️",
@@ -175,13 +175,13 @@ pages = {
         ),
     ],
     "INTELLIGENCE": [
-        _nav_page(
+        _make_page(
             "screens/13_Assistant.py",
             title="Assistant contextuel",
             icon="✨",
             url_path="assistant",
         ),
-        _nav_page(
+        _make_page(
             "screens/16_Notifications.py",
             title="Centre de notifications",
             icon="🔔",
@@ -189,25 +189,25 @@ pages = {
         ),
     ],
     "BÊTA PUBLIQUE": [
-        _nav_page(
+        _make_page(
             "screens/18_Feedback.py",
             title="Donner mon avis",
             icon="💬",
             url_path="feedback",
         ),
-        _nav_page(
+        _make_page(
             "screens/19_Confidentialite.py",
             title="Confidentialité",
             icon="🔒",
             url_path="confidentialite",
         ),
-        _nav_page(
+        _make_page(
             "screens/20_Conditions.py",
             title="Conditions",
             icon="📜",
             url_path="conditions",
         ),
-        _nav_page(
+        _make_page(
             "screens/21_Beta_Status.py",
             title="État de la bêta",
             icon="🧪",
@@ -218,7 +218,7 @@ pages = {
 
 if beta.is_admin:
     pages["ADMINISTRATION"] = [
-        _nav_page(
+        _make_page(
             "screens/10_Diagnostics.py",
             title="Diagnostics",
             icon="🛠️",
