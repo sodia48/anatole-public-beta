@@ -38,6 +38,55 @@ def _set_query_param_value(name: str, value: str) -> None:
         pass
 
 
+def _safe_urlencode(pairs: dict[str, str]) -> str:
+    """Encode une petite série de query params sans dépendance externe."""
+    try:
+        from urllib.parse import urlencode
+
+        return urlencode({k: v for k, v in pairs.items() if str(v or "").strip()})
+    except Exception:
+        # Fallback minimal : les valeurs générées par Anatole sont déjà sûres
+        # ou très contrôlées. On échappe quand même les caractères HTML au rendu.
+        return "&".join(
+            f"{str(k).strip()}={html.escape(str(v).strip(), quote=True)}"
+            for k, v in pairs.items()
+            if str(v or "").strip()
+        )
+
+
+def _navigation_query_suffix(*, nav: str | None = None) -> str:
+    """Préserve les paramètres essentiels lors de la navigation interne.
+
+    Sans cette couche, un clic sur une section Streamlit peut perdre
+    l'acceptation de la bêta, le profil invité ou le thème. C'est ce qui
+    donnait l'impression de recommencer à zéro à chaque changement de page.
+    """
+    params: dict[str, str] = {}
+    if nav:
+        params["nav"] = str(nav)
+
+    keys = [
+        "anatole_guest",
+        "anatole_guest_mode",
+        "anatole_accepted",
+        "anatole_theme",
+        "universe",
+        "ticker",
+        "symbol",
+    ]
+    for key in keys:
+        value = _query_param_value(key)
+        if value:
+            params[key] = value
+
+    # Sombre par défaut : même sans query param, on transporte l'état actif.
+    if "anatole_theme" not in params:
+        params["anatole_theme"] = _normalized_theme(st.session_state.get("_anatole_theme")) or _theme_from_session()
+
+    encoded = _safe_urlencode(params)
+    return f"?{encoded}" if encoded else ""
+
+
 def _normalized_theme(value: object) -> str:
     raw = str(value or "").strip().lower()
     if raw in VALID_THEME_VALUES:
@@ -66,7 +115,7 @@ def _apply_theme_choice(profile: str, theme: str, *, save: bool = True) -> None:
 
 
 def _install_theme_persistence_bridge(current_theme: str) -> None:
-    """Persiste le thème côté navigateur et préserve le thème dans les liens internes."""
+    """Persiste le thème et les paramètres bêta dans tous les liens internes."""
     theme = _normalized_theme(current_theme) or "dark"
     try:
         components.html(
@@ -74,47 +123,84 @@ def _install_theme_persistence_bridge(current_theme: str) -> None:
             <script>
             (function() {{
                 try {{
-                    const KEY = {THEME_STORAGE_KEY!r};
-                    const PARAM = {THEME_QUERY_PARAM!r};
-                    const CURRENT = {theme!r};
+                    const THEME_KEY = {THEME_STORAGE_KEY!r};
+                    const THEME_PARAM = {THEME_QUERY_PARAM!r};
+                    const CURRENT_THEME = {theme!r};
                     const win = window.parent || window;
                     const doc = win.document;
+                    if (!doc) return;
                     const url = new URL(win.location.href);
-                    const valid = new Set(["light", "dark"]);
+                    const validThemes = new Set(["light", "dark"]);
+                    const PARAMS_TO_KEEP = [
+                        "anatole_guest",
+                        "anatole_guest_mode",
+                        "anatole_accepted",
+                        "anatole_theme",
+                        "universe",
+                        "ticker",
+                        "symbol"
+                    ];
+                    const STORAGE_MAP = {{
+                        "anatole_guest": "anatole_guest_profile",
+                        "anatole_guest_mode": "anatole_guest_mode",
+                        "anatole_accepted": "anatole_legal_acceptance_version",
+                        "anatole_theme": THEME_KEY
+                    }};
 
-                    const inUrl = url.searchParams.get(PARAM);
-
-                    // V5.8.4 : le terminal sombre est le thème par défaut.
-                    // Une ancienne préférence navigateur "light" ne doit plus réactiver le bleu ciel toute seule.
-                    if (!valid.has(inUrl)) {{
-                        url.searchParams.set(PARAM, CURRENT);
-                        try {{ win.history.replaceState({{}}, "", url.toString()); }} catch (e) {{}}
+                    function getStorage() {{
+                        try {{ return win.localStorage; }} catch (e) {{ return null; }}
                     }}
 
-                    try {{ win.localStorage.setItem(KEY, CURRENT); }} catch (e) {{}}
+                    const store = getStorage();
+                    let changed = false;
 
-                    if (valid.has(inUrl)) {{
-                        try {{ win.localStorage.setItem(KEY, inUrl); }} catch (e) {{}}
+                    // Le terminal sombre est la base. Le bleu ciel n'est conservé que s'il est explicitement demandé.
+                    if (!validThemes.has(url.searchParams.get(THEME_PARAM))) {{
+                        url.searchParams.set(THEME_PARAM, CURRENT_THEME);
+                        changed = true;
+                    }}
+                    if (store) {{
+                        try {{ store.setItem(THEME_KEY, url.searchParams.get(THEME_PARAM) || CURRENT_THEME); }} catch (e) {{}}
+                        PARAMS_TO_KEEP.forEach((param) => {{
+                            const value = url.searchParams.get(param);
+                            const key = STORAGE_MAP[param];
+                            if (key && value) {{ try {{ store.setItem(key, value); }} catch (e) {{}} }}
+                        }});
+                        // Si un lien interne a perdu les paramètres de bêta, on les restaure depuis le navigateur.
+                        PARAMS_TO_KEEP.forEach((param) => {{
+                            if (url.searchParams.get(param)) return;
+                            const key = STORAGE_MAP[param];
+                            if (!key) return;
+                            let stored = null;
+                            try {{ stored = store.getItem(key); }} catch (e) {{ stored = null; }}
+                            if (stored) {{
+                                url.searchParams.set(param, stored);
+                                changed = true;
+                            }}
+                        }});
+                    }}
+                    if (changed) {{
+                        try {{ win.history.replaceState({{}}, "", url.toString()); }} catch (e) {{}}
                     }}
 
                     function patchLinks() {{
                         try {{
-                            const activeTheme = (function() {{
-                                const currentUrl = new URL(win.location.href);
-                                const q = currentUrl.searchParams.get(PARAM);
-                                if (valid.has(q)) return q;
-                                return CURRENT;
-                            }})();
-
+                            const current = new URL(win.location.href);
                             doc.querySelectorAll('a[href]').forEach((anchor) => {{
                                 const href = anchor.getAttribute('href') || '';
                                 if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
                                 const target = new URL(anchor.href, win.location.origin);
                                 if (target.origin !== win.location.origin) return;
-                                if (!target.searchParams.get(PARAM)) {{
-                                    target.searchParams.set(PARAM, activeTheme);
-                                    anchor.href = target.toString();
+                                PARAMS_TO_KEEP.forEach((param) => {{
+                                    const value = current.searchParams.get(param);
+                                    if (value && !target.searchParams.get(param)) {{
+                                        target.searchParams.set(param, value);
+                                    }}
+                                }});
+                                if (!target.searchParams.get(THEME_PARAM)) {{
+                                    target.searchParams.set(THEME_PARAM, CURRENT_THEME);
                                 }}
+                                anchor.href = target.toString();
                                 anchor.setAttribute('target', '_self');
                                 anchor.removeAttribute('rel');
                             }});
@@ -122,9 +208,12 @@ def _install_theme_persistence_bridge(current_theme: str) -> None:
                     }}
 
                     patchLinks();
-                    setTimeout(patchLinks, 200);
-                    setTimeout(patchLinks, 1000);
-                    win.setInterval(patchLinks, 2500);
+                    setTimeout(patchLinks, 120);
+                    setTimeout(patchLinks, 450);
+                    setTimeout(patchLinks, 1200);
+                    if (!win.__anatolePersistentLinkBridge) {{
+                        win.__anatolePersistentLinkBridge = win.setInterval(patchLinks, 700);
+                    }}
                 }} catch (e) {{}}
             }})();
             </script>
@@ -134,170 +223,6 @@ def _install_theme_persistence_bridge(current_theme: str) -> None:
         )
     except Exception:
         pass
-
-
-def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
-    """Force un branding navigateur Anatole sans bloquer le rendu.
-
-    Version sûre : pas d'observation globale du DOM, pas de réécriture massive.
-    Cela évite les pages blanches sur mobile/Chrome tout en gardant le titre,
-    le favicon et le manifest Anatole après le premier rendu.
-    """
-    safe_title = page_title if page_title and "Anatole" in page_title else "Anatole"
-    components.html(
-        f"""
-        <script>
-        (function() {{
-            const BRAND_TITLE = {safe_title!r};
-            const APP_NAME = "Anatole";
-            const SVG_ICON = `
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-                    <defs>
-                        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stop-color="#2563EB"/>
-                            <stop offset="100%" stop-color="#0EA5E9"/>
-                        </linearGradient>
-                    </defs>
-                    <rect width="128" height="128" rx="30" fill="url(#g)"/>
-                    <path d="M31 78 L48 62 L61 70 L92 37" fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M30 94 H98" stroke="rgba(255,255,255,.58)" stroke-width="7" stroke-linecap="round"/>
-                </svg>
-            `.trim();
-
-            function parentWindow() {{
-                try {{
-                    return window.parent || window;
-                }} catch (e) {{
-                    return window;
-                }}
-            }}
-
-            function setMeta(doc, name, content) {{
-                let node = doc.querySelector(`meta[name="${{name}}"]`);
-                if (!node) {{
-                    node = doc.createElement("meta");
-                    node.setAttribute("name", name);
-                    doc.head.appendChild(node);
-                }}
-                node.setAttribute("content", content);
-            }}
-
-            function setBrand() {{
-                try {{
-                    const win = parentWindow();
-                    const doc = win.document;
-                    if (!doc || !doc.head) return;
-
-                    doc.title = BRAND_TITLE;
-
-                    let titleNode = doc.querySelector("head > title");
-                    if (!titleNode) {{
-                        titleNode = doc.createElement("title");
-                        doc.head.appendChild(titleNode);
-                    }}
-                    titleNode.textContent = BRAND_TITLE;
-
-                    setMeta(doc, "application-name", APP_NAME);
-                    setMeta(doc, "apple-mobile-web-app-title", APP_NAME);
-                    setMeta(doc, "description", "Terminal de marché canadien.");
-                    setMeta(doc, "theme-color", "#2563EB");
-
-                    const iconHref = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG_ICON);
-
-                    [
-                        "link[rel='icon']",
-                        "link[rel='shortcut icon']",
-                        "link[rel='apple-touch-icon']",
-                        "link[rel='mask-icon']"
-                    ].forEach((selector) => {{
-                        doc.querySelectorAll(selector).forEach((node) => node.remove());
-                    }});
-
-                    [
-                        ["icon", "image/svg+xml"],
-                        ["shortcut icon", "image/svg+xml"],
-                        ["apple-touch-icon", "image/svg+xml"]
-                    ].forEach(([rel, type]) => {{
-                        const link = doc.createElement("link");
-                        link.rel = rel;
-                        link.type = type;
-                        link.href = iconHref;
-                        doc.head.appendChild(link);
-                    }});
-
-                    doc.querySelectorAll("link[rel='manifest']").forEach((node) => node.remove());
-                    try {{
-                        const manifest = {{
-                            name: APP_NAME,
-                            short_name: APP_NAME,
-                            description: "Terminal de marché canadien",
-                            start_url: win.location.origin + win.location.pathname + win.location.search,
-                            scope: win.location.origin + "/",
-                            display: "standalone",
-                            background_color: "#DDF3FF",
-                            theme_color: "#2563EB",
-                            icons: [
-                                {{
-                                    src: iconHref,
-                                    sizes: "128x128",
-                                    type: "image/svg+xml",
-                                    purpose: "any maskable"
-                                }}
-                            ]
-                        }};
-                        const blob = new Blob([JSON.stringify(manifest)], {{ type: "application/manifest+json" }});
-                        const manifestUrl = URL.createObjectURL(blob);
-                        const manifestLink = doc.createElement("link");
-                        manifestLink.rel = "manifest";
-                        manifestLink.href = manifestUrl;
-                        doc.head.appendChild(manifestLink);
-                    }} catch (e) {{}}
-
-                    let style = doc.getElementById("anatole-safe-branding-css");
-                    if (!style) {{
-                        style = doc.createElement("style");
-                        style.id = "anatole-safe-branding-css";
-                        doc.head.appendChild(style);
-                    }}
-                    style.textContent = `
-                        div[data-testid="stStatusWidget"],
-                        div[data-testid="stStatusWidget"] *,
-                        div[data-testid="stToolbar"],
-                        div[data-testid="stDecoration"],
-                        div[data-testid="stDeployButton"],
-                        #MainMenu,
-                        .stStatusWidget,
-                        .stDeployButton {{
-                            display: none !important;
-                            visibility: hidden !important;
-                            opacity: 0 !important;
-                            pointer-events: none !important;
-                            width: 0 !important;
-                            height: 0 !important;
-                            max-width: 0 !important;
-                            max-height: 0 !important;
-                            overflow: hidden !important;
-                        }}
-                    `;
-
-                    doc.documentElement.setAttribute("data-anatole-branded", "true");
-                }} catch (e) {{}}
-            }}
-
-            setBrand();
-            setTimeout(setBrand, 150);
-            setTimeout(setBrand, 700);
-            setTimeout(setBrand, 1800);
-
-            if (!window.__anatoleSafeBrandingInterval) {{
-                window.__anatoleSafeBrandingInterval = setInterval(setBrand, 4000);
-            }}
-        }})();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
 
 
 def configure_page(title: str, icon: str = "📈") -> None:
@@ -311,7 +236,7 @@ def configure_page(title: str, icon: str = "📈") -> None:
             menu_items={
                 "Get help": None,
                 "Report a bug": None,
-                "About": "Anatole — terminal canadien d'analyse de marché.",
+                "About": None,
             },
         )
         st.session_state["_page_configured"] = True
@@ -322,12 +247,7 @@ def configure_page(title: str, icon: str = "📈") -> None:
 
 
 def enforce_same_tab_navigation() -> None:
-    """Force les liens internes à rester dans le même onglet/fenêtre.
-
-    Certains navigateurs mobiles ou vues intégrées peuvent interpréter des liens
-    Streamlit comme une nouvelle fenêtre. Ce garde enlève target=_blank pour les
-    liens internes et intercepte les clics same-origin.
-    """
+    """Force les liens internes à rester dans le même onglet et à garder l'état bêta."""
     components.html(
         """
         <script>
@@ -335,8 +255,17 @@ def enforce_same_tab_navigation() -> None:
           try {
             const win = window.parent || window;
             const doc = win.document;
-            if (!doc || doc.__anatoleSameTabInstalled) return;
-            doc.__anatoleSameTabInstalled = true;
+            if (!doc || doc.__anatoleSameTabInstalledV2) return;
+            doc.__anatoleSameTabInstalledV2 = true;
+            const KEEP = [
+              "anatole_guest",
+              "anatole_guest_mode",
+              "anatole_accepted",
+              "anatole_theme",
+              "universe",
+              "ticker",
+              "symbol"
+            ];
 
             function isInternalLink(anchor) {
               if (!anchor || !anchor.href) return false;
@@ -348,9 +277,22 @@ def enforce_same_tab_navigation() -> None:
               }
             }
 
+            function patchedHref(anchor) {
+              const current = new URL(win.location.href);
+              const target = new URL(anchor.href, win.location.href);
+              KEEP.forEach((param) => {
+                const value = current.searchParams.get(param);
+                if (value && !target.searchParams.get(param)) {
+                  target.searchParams.set(param, value);
+                }
+              });
+              return target.toString();
+            }
+
             function patchLinks() {
-              doc.querySelectorAll('a').forEach((anchor) => {
+              doc.querySelectorAll('a[href]').forEach((anchor) => {
                 if (isInternalLink(anchor)) {
+                  anchor.href = patchedHref(anchor);
                   anchor.setAttribute('target', '_self');
                   anchor.removeAttribute('rel');
                 }
@@ -360,16 +302,18 @@ def enforce_same_tab_navigation() -> None:
             doc.addEventListener('click', function(event) {
               const anchor = event.target && event.target.closest ? event.target.closest('a') : null;
               if (!isInternalLink(anchor)) return;
-              if (anchor.target && anchor.target !== '_self') {
+              const destination = patchedHref(anchor);
+              if (anchor.href !== destination || (anchor.target && anchor.target !== '_self')) {
                 event.preventDefault();
-                win.location.href = anchor.href;
+                win.location.href = destination;
               }
             }, true);
 
             patchLinks();
-            setTimeout(patchLinks, 200);
-            setTimeout(patchLinks, 900);
-            setInterval(patchLinks, 2500);
+            setTimeout(patchLinks, 100);
+            setTimeout(patchLinks, 450);
+            setTimeout(patchLinks, 1000);
+            win.setInterval(patchLinks, 900);
           } catch (error) {}
         })();
         </script>
@@ -403,7 +347,7 @@ def install_sidebar_rescue_navigation() -> None:
         ("⚙️", "Préférences", "preferences"),
     ]
     links = "".join(
-        f'<a href="/?nav={html.escape(nav)}&anatole_theme={html.escape(theme)}" target="_self" title="{html.escape(label)}">'
+        f'<a href="/{html.escape(_navigation_query_suffix(nav=nav), quote=True)}" target="_self" title="{html.escape(label)}">'
         f'<span class="sky-rescue-icon">{html.escape(icon)}</span><span>{html.escape(label)}</span></a>'
         for icon, label, nav in nav_items
     )
@@ -579,32 +523,115 @@ def install_sidebar_rescue_navigation() -> None:
 
 
 def hide_streamlit_chrome() -> None:
-    """Masque les éléments natifs qui nuisent au rendu produit."""
+    """Masque le menu natif Streamlit et son popover publicitaire."""
     st.markdown(
         """
         <style>
+            #MainMenu,
+            #MainMenu *,
+            header[data-testid="stHeader"],
+            div[data-testid="stToolbar"],
+            div[data-testid="stToolbar"] *,
             div[data-testid="stStatusWidget"],
             div[data-testid="stStatusWidget"] *,
-            div[data-testid="stToolbar"],
             div[data-testid="stDecoration"],
             div[data-testid="stDeployButton"],
-            div[title="Streamlit"],
+            div[data-testid="stMainMenu"],
+            div[data-testid="stMainMenu"] *,
+            div[data-testid="stActionButton"],
+            div[data-testid="stActionButton"] *,
+            button[title="View fullscreen"],
+            button[title="Exit fullscreen"],
+            button[aria-label="Main menu"],
+            button[aria-label="Open menu"],
+            button[aria-label="More"],
+            button[kind="header"],
             a[title="Streamlit"],
+            div[title="Streamlit"],
             img[alt="Streamlit"],
-            #MainMenu,
-            .stStatusWidget,
-            .stDeployButton {
+            footer,
+            footer * {
                 display: none !important;
                 visibility: hidden !important;
                 opacity: 0 !important;
                 pointer-events: none !important;
                 width: 0 !important;
                 height: 0 !important;
+                max-width: 0 !important;
+                max-height: 0 !important;
+                overflow: hidden !important;
+            }
+            .stApp > header {
+                display: none !important;
+                height: 0 !important;
+            }
+            .stApp {
+                margin-top: 0 !important;
             }
         </style>
         """,
         unsafe_allow_html=True,
     )
+    try:
+        components.html(
+            """
+            <script>
+            (function() {
+                try {
+                    const win = window.parent || window;
+                    const doc = win.document;
+                    if (!doc) return;
+                    const selectors = [
+                        '#MainMenu',
+                        '[data-testid="stToolbar"]',
+                        '[data-testid="stStatusWidget"]',
+                        '[data-testid="stDecoration"]',
+                        '[data-testid="stDeployButton"]',
+                        '[data-testid="stMainMenu"]',
+                        '[aria-label="Main menu"]',
+                        '[aria-label="Open menu"]',
+                        'button[title="View fullscreen"]',
+                        'button[title="Exit fullscreen"]',
+                        'footer'
+                    ];
+                    function hideNode(node) {
+                        if (!node) return;
+                        node.style.setProperty('display', 'none', 'important');
+                        node.style.setProperty('visibility', 'hidden', 'important');
+                        node.style.setProperty('opacity', '0', 'important');
+                        node.style.setProperty('pointer-events', 'none', 'important');
+                        node.style.setProperty('width', '0px', 'important');
+                        node.style.setProperty('height', '0px', 'important');
+                        node.setAttribute('aria-hidden', 'true');
+                    }
+                    function hideByText() {
+                        doc.querySelectorAll('div, section, aside, ul').forEach((node) => {
+                            const text = (node.innerText || '').trim();
+                            if (text.includes('Made with Streamlit') || (text.includes('Record screen') && text.includes('About'))) {
+                                hideNode(node);
+                            }
+                        });
+                    }
+                    function apply() {
+                        selectors.forEach((selector) => doc.querySelectorAll(selector).forEach(hideNode));
+                        hideByText();
+                    }
+                    apply();
+                    setTimeout(apply, 100);
+                    setTimeout(apply, 500);
+                    setTimeout(apply, 1200);
+                    if (!win.__anatoleHideStreamlitChrome) {
+                        win.__anatoleHideStreamlitChrome = win.setInterval(apply, 600);
+                    }
+                } catch (e) {}
+            })();
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
+    except Exception:
+        pass
 
 
 def _hydrate_preferences_for_current_page() -> None:
@@ -2209,16 +2236,14 @@ def mobile_navigation() -> None:
     """Navigation mobile stable qui conserve aussi le thème actif."""
     if not bool(st.session_state.get("show_mobile_nav", True)):
         return
-    theme = _normalized_theme(st.session_state.get("_anatole_theme")) or _theme_from_session()
-    suffix = f"&{THEME_QUERY_PARAM}={theme}"
     st.markdown(
         f"""
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a data-path="cockpit" href="/?nav=cockpit{suffix}" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
-          <a data-path="terminal" href="/?nav=terminal{suffix}" target="_self" aria-label="Terminal Pro">💎<br>Terminal</a>
-          <a data-path="screener" href="/?nav=screener{suffix}" target="_self" aria-label="Screener">🔎<br>Screener</a>
-          <a data-path="focus" href="/?nav=focus{suffix}" target="_self" aria-label="Focus">🎯<br>Focus</a>
-          <a data-path="watchlist" href="/?nav=watchlist{suffix}" target="_self" aria-label="Liste">⭐<br>Liste</a>
+          <a data-path="cockpit" href="/{html.escape(_navigation_query_suffix(nav='cockpit'), quote=True)}" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
+          <a data-path="terminal" href="/{html.escape(_navigation_query_suffix(nav='terminal'), quote=True)}" target="_self" aria-label="Terminal Pro">💎<br>Terminal</a>
+          <a data-path="screener" href="/{html.escape(_navigation_query_suffix(nav='screener'), quote=True)}" target="_self" aria-label="Screener">🔎<br>Screener</a>
+          <a data-path="focus" href="/{html.escape(_navigation_query_suffix(nav='focus'), quote=True)}" target="_self" aria-label="Focus">🎯<br>Focus</a>
+          <a data-path="watchlist" href="/{html.escape(_navigation_query_suffix(nav='watchlist'), quote=True)}" target="_self" aria-label="Liste">⭐<br>Liste</a>
         </nav>
         <script>
         (function() {{

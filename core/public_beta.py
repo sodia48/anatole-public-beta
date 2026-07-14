@@ -264,7 +264,10 @@ def _inject_mobile_persistence_bridge() -> None:
                             "anatole_guest",
                             GUEST_MODE,
                             LEGAL_QUERY,
-                            "universe"
+                            "anatole_theme",
+                            "universe",
+                            "ticker",
+                            "symbol"
                         ];
 
                         win.document.querySelectorAll("a[href]").forEach((anchor) => {{
@@ -298,8 +301,33 @@ def _inject_mobile_persistence_bridge() -> None:
                     }} catch (e) {{}}
                 }}
 
+                function patchClickNavigation() {{
+                    try {{
+                        if (win.__anatoleLegalClickBridge) return;
+                        win.__anatoleLegalClickBridge = true;
+                        win.document.addEventListener("click", function(event) {{
+                            const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+                            if (!anchor) return;
+                            const target = new URL(anchor.href, win.location.origin);
+                            if (target.origin !== win.location.origin) return;
+                            const current = new URL(win.location.href);
+                            paramsToKeep.forEach((param) => {{
+                                const value = current.searchParams.get(param);
+                                if (value && !target.searchParams.get(param)) {{
+                                    target.searchParams.set(param, value);
+                                }}
+                            }});
+                            if (target.toString() !== anchor.href) {{
+                                event.preventDefault();
+                                win.location.href = target.toString();
+                            }}
+                        }}, true);
+                    }} catch (e) {{}}
+                }}
+
                 patchInternalLinks();
-                win.setInterval(patchInternalLinks, 900);
+                patchClickNavigation();
+                win.setInterval(patchInternalLinks, 700);
             }})();
             </script>
             """,
