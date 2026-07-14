@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import traceback
+
 import streamlit as st
 
 from core.logging_config import configure_logging
@@ -17,8 +20,8 @@ MOBILE_NAV_DEFAULTS = {
     "accueil": "cockpit",
     "home": "cockpit",
     "cockpit": "cockpit",
-    "recherche": "recherche",
-    "search": "recherche",
+    "recherche": "cockpit",
+    "search": "cockpit",
     "screener": "screener",
     "focus": "focus",
     "liste": "watchlist",
@@ -56,12 +59,6 @@ pages = {
             icon="🏠",
             default=True,
             url_path="cockpit",
-        ),
-        _make_page(
-            "screens/22_Recherche.py",
-            title="Recherche",
-            icon="🔍",
-            url_path="recherche",
         ),
         _make_page(
             "screens/1_Screener.py",
@@ -243,4 +240,14 @@ logger.info(
 )
 
 navigation = st.navigation(pages, position="sidebar", expanded=True)
-navigation.run()
+
+try:
+    navigation.run()
+except Exception as exc:
+    logging.exception("anatole_page_runtime_error")
+    st.error("Cette section est temporairement indisponible. Anatole reste accessible : retournez à l’accueil ou ouvrez une autre section depuis le menu.")
+    st.markdown("### Revenir au cockpit")
+    st.page_link("screens/0_Accueil.py", label="Ouvrir l’accueil", icon="🏠")
+    if beta.is_admin:
+        with st.expander("Détail technique administrateur", expanded=False):
+            st.code("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
