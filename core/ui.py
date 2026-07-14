@@ -287,17 +287,41 @@ def hide_streamlit_chrome() -> None:
     )
 
 
+def _hydrate_preferences_for_current_page() -> None:
+    """Charge les préférences avant le rendu visuel de chaque page.
+
+    Streamlit exécute `apply_style()` au début de chaque section, souvent
+    avant que la barre latérale ait eu le temps de réhydrater le profil.
+    Sans cette étape, le thème sombre peut sembler fonctionner sur une page
+    puis revenir au thème clair lors du changement de section.
+    """
+    try:
+        init_db()
+        from core.public_beta import current_context
+
+        context = current_context()
+        profile = str(getattr(context, "profile", "") or st.session_state.get("profile") or DEFAULT_PROFILE)
+        profile = ensure_profile(profile)
+        st.session_state["profile"] = profile
+        hydrate_preferences(profile)
+    except Exception:
+        # Le style ne doit jamais empêcher l'application de charger.
+        pass
+
+
 def is_dark_mode() -> bool:
+    _hydrate_preferences_for_current_page()
     return bool(st.session_state.get("theme_toggle", False))
 
 
 def apply_style() -> None:
+    _hydrate_preferences_for_current_page()
     try:
         from core.device import bootstrap_mobile_mode
         bootstrap_mobile_mode()
     except Exception:
         pass
-    dark = is_dark_mode()
+    dark = bool(st.session_state.get("theme_toggle", False))
     compact = bool(st.session_state.get("compact_toggle", False))
 
     if dark:
