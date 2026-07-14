@@ -379,6 +379,205 @@ def enforce_same_tab_navigation() -> None:
     )
 
 
+def install_sidebar_rescue_navigation() -> None:
+    """Garde une navigation utilisable quand Streamlit replie ou masque la sidebar.
+
+    Streamlit peut conserver l'état "sidebar collapsed" dans le navigateur. Sur
+    Render, après redimensionnement ou changement de session, cela donne une app
+    fonctionnelle mais sans sections à gauche. Ce garde fait deux choses :
+    1) il tente de rouvrir la sidebar officielle sur desktop;
+    2) s'il ne la voit toujours pas, il affiche un rail Anatole de secours.
+    """
+    theme = _normalized_theme(str(st.session_state.get("_anatole_theme", "dark"))) or "dark"
+    nav_items = [
+        ("🏠", "Cockpit", "accueil"),
+        ("⚡", "Aujourd’hui", "aujourdhui"),
+        ("🔎", "Screener", "screener"),
+        ("🎯", "Focus", "focus"),
+        ("⭐", "Liste", "watchlist"),
+        ("🧠", "Psychologie", "psychologie"),
+        ("🧺", "ETF", "etf"),
+        ("🚀", "IPO", "ipo"),
+        ("🕵️", "Insiders", "insiders"),
+        ("💎", "Terminal", "terminal"),
+        ("⚙️", "Préférences", "preferences"),
+    ]
+    links = "".join(
+        f'<a href="/?nav={html.escape(nav)}&anatole_theme={html.escape(theme)}" target="_self" title="{html.escape(label)}">'
+        f'<span class="sky-rescue-icon">{html.escape(icon)}</span><span>{html.escape(label)}</span></a>'
+        for icon, label, nav in nav_items
+    )
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            try {{
+                const win = window.parent || window;
+                const doc = win.document;
+                if (!doc) return;
+
+                const NAV_ID = "anatole-sidebar-rescue-nav";
+                const STYLE_ID = "anatole-sidebar-rescue-style";
+
+                function isTouchMobile() {{
+                    try {{
+                        return win.matchMedia("(max-width: 760px) and (hover: none) and (pointer: coarse)").matches;
+                    }} catch (e) {{ return false; }}
+                }}
+
+                function sidebarVisible() {{
+                    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+                    if (!sidebar) return false;
+                    const rect = sidebar.getBoundingClientRect();
+                    const style = win.getComputedStyle(sidebar);
+                    return (
+                        style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        rect.width >= 165 &&
+                        rect.right > 120 &&
+                        rect.left > -80
+                    );
+                }}
+
+                function clickFirst(selectors) {{
+                    for (const selector of selectors) {{
+                        const node = doc.querySelector(selector);
+                        if (node && typeof node.click === "function") {{
+                            node.click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+
+                function tryOpenOfficialSidebar() {{
+                    if (isTouchMobile() || sidebarVisible()) return;
+                    clickFirst([
+                        '[data-testid="collapsedControl"] button',
+                        '[data-testid="collapsedControl"]',
+                        '[data-testid="stSidebarCollapsedControl"] button',
+                        '[data-testid="stSidebarCollapsedControl"]',
+                        'button[aria-label*="sidebar" i]',
+                        'button[title*="sidebar" i]',
+                        'button[aria-label*="menu" i]',
+                        'button[title*="menu" i]'
+                    ]);
+                }}
+
+                function ensureStyle() {{
+                    if (doc.getElementById(STYLE_ID)) return;
+                    const style = doc.createElement("style");
+                    style.id = STYLE_ID;
+                    style.textContent = `
+                        @media (min-width: 761px) {{
+                            html.anatole-sidebar-missing [data-testid="stSidebarCollapsedControl"],
+                            html.anatole-sidebar-missing [data-testid="collapsedControl"] {{
+                                display: block !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                            }}
+                            .sky-desktop-rescue-nav {{
+                                position: fixed;
+                                z-index: 999999;
+                                left: 14px;
+                                top: 96px;
+                                width: 206px;
+                                max-height: calc(100vh - 122px);
+                                overflow-y: auto;
+                                display: none;
+                                flex-direction: column;
+                                gap: 6px;
+                                padding: 12px;
+                                border-radius: 22px;
+                                background: rgba(7, 23, 39, .92);
+                                border: 1px solid rgba(96, 165, 250, .26);
+                                box-shadow: 0 22px 70px rgba(0,0,0,.36);
+                                backdrop-filter: blur(24px) saturate(1.1);
+                            }}
+                            html.anatole-sidebar-missing .sky-desktop-rescue-nav {{
+                                display: flex !important;
+                            }}
+                            .sky-desktop-rescue-nav .sky-rescue-title {{
+                                color: #EAF6FF;
+                                font: 900 13px/1.1 system-ui, -apple-system, Segoe UI, sans-serif;
+                                letter-spacing: .08em;
+                                text-transform: uppercase;
+                                padding: 5px 8px 9px;
+                                opacity: .92;
+                            }}
+                            .sky-desktop-rescue-nav a {{
+                                display: flex;
+                                align-items: center;
+                                gap: 9px;
+                                text-decoration: none;
+                                color: #BFD3E6;
+                                font: 800 13px/1.2 system-ui, -apple-system, Segoe UI, sans-serif;
+                                padding: 10px 10px;
+                                border-radius: 15px;
+                                border: 1px solid transparent;
+                                transition: all .16s ease;
+                            }}
+                            .sky-desktop-rescue-nav a:hover {{
+                                color: #FFFFFF;
+                                background: rgba(37,99,235,.18);
+                                border-color: rgba(96,165,250,.28);
+                                transform: translateX(2px);
+                            }}
+                            .sky-desktop-rescue-nav .sky-rescue-icon {{
+                                width: 26px;
+                                height: 26px;
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                border-radius: 10px;
+                                background: rgba(255,255,255,.08);
+                            }}
+                            html.anatole-sidebar-missing .block-container {{
+                                padding-left: min(240px, 18vw) !important;
+                            }}
+                        }}
+                        @media (max-width: 760px) {{
+                            .sky-desktop-rescue-nav {{ display: none !important; }}
+                        }}
+                    `;
+                    doc.head.appendChild(style);
+                }}
+
+                function ensureNav() {{
+                    if (doc.getElementById(NAV_ID)) return;
+                    const nav = doc.createElement("nav");
+                    nav.id = NAV_ID;
+                    nav.className = "sky-desktop-rescue-nav";
+                    nav.setAttribute("aria-label", "Navigation Anatole de secours");
+                    nav.innerHTML = `<div class="sky-rescue-title">Anatole</div>{links}`;
+                    doc.body.appendChild(nav);
+                }}
+
+                function refresh() {{
+                    ensureStyle();
+                    ensureNav();
+                    tryOpenOfficialSidebar();
+                    const missing = !isTouchMobile() && !sidebarVisible();
+                    doc.documentElement.classList.toggle("anatole-sidebar-missing", missing);
+                }}
+
+                refresh();
+                setTimeout(refresh, 250);
+                setTimeout(refresh, 900);
+                setTimeout(refresh, 1800);
+                if (!win.__anatoleSidebarRescueInterval) {{
+                    win.__anatoleSidebarRescueInterval = win.setInterval(refresh, 2200);
+                }}
+                win.addEventListener("resize", function() {{ setTimeout(refresh, 80); }});
+            }} catch (error) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
 def hide_streamlit_chrome() -> None:
     """Masque les éléments natifs qui nuisent au rendu produit."""
     st.markdown(
@@ -593,9 +792,18 @@ def apply_style() -> None:
             padding-top: .75rem;
         }}
 
-        /* V5.9.4 — garde-fou visibilité sidebar desktop */
-        @media (min-width: 651px) {{
+        /* V5.9.5 — garde-fou robuste : sidebar desktop visible + rail de secours */
+        @media (min-width: 761px) {{
             [data-testid="stSidebar"] {{
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }}
+            [data-testid="stSidebar"] > div:first-child {{
+                display: block !important;
+                visibility: visible !important;
+            }}
+            [data-testid="stSidebarNav"] {{
                 display: block !important;
                 visibility: visible !important;
             }}
@@ -1578,6 +1786,7 @@ def apply_style() -> None:
     hide_streamlit_chrome()
     force_anatole_browser_brand(str(st.session_state.get("_anatole_page_title", "Anatole")))
     enforce_same_tab_navigation()
+    install_sidebar_rescue_navigation()
     _install_theme_persistence_bridge(str(st.session_state.get("_anatole_theme", current_theme)))
     try:
         from core.mobile_experience import install_mobile_viewport_probe
