@@ -636,6 +636,11 @@ def build_context(
 
 def suggested_questions() -> dict[str, list[str]]:
     return {
+        "Brief quotidien": [
+            "Fais-moi le brief du jour Anatole.",
+            "Qu’est-ce qui a changé aujourd’hui sur le marché ?",
+            "Quels titres et secteurs méritent mon attention ce matin ?",
+        ],
         "Marché": [
             "Pourquoi le marché bouge aujourd’hui ? Donne-moi les secteurs et titres qui expliquent le mouvement.",
             "Est-ce que la baisse actuelle est large ou concentrée dans quelques secteurs ?",
@@ -664,6 +669,14 @@ def suggested_questions() -> dict[str, list[str]]:
     }
 
 
+
+
+def _daily_brief_answer(question: str, market: pd.DataFrame, watchlist: list[str] | None = None) -> str:
+    try:
+        from core.retention_engine import build_today_markdown
+        return build_today_markdown(market, watchlist)
+    except Exception:
+        return _deep_market_answer(market)
 
 
 def _premium_terminal_answer(question: str, market: pd.DataFrame) -> str:
@@ -716,6 +729,8 @@ def local_answer(
         return _compare_answer(market, tickers)
     if tickers:
         return _stock_answer(question, market, tickers[0])
+    if any(term in q for term in ["brief", "aujourd", "ce matin", "quotidien", "séance", "ce qui a changé", "changé aujourd"]):
+        return _daily_brief_answer(question, market, watchlist)
     if any(term in q for term in ["marché", "bouge", "secteur", "largeur", "pourquoi", "tsx"]):
         return _deep_market_answer(market)
     if any(term in q for term in ["portefeuille", "position", "concentration", "risque"]):

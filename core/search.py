@@ -13,6 +13,7 @@ RECENT_SEARCHES_KEY = "_anatole_recent_searches"
 
 PAGE_COMMANDS = [
     ("Vue d'ensemble", "screens/0_Accueil.py", "marché accueil cockpit dashboard"),
+    ("Aujourd’hui", "screens/28_AujourdHui.py", "brief quotidien aujourd hui séance marché ce qui change daily retention ouverture"),
     ("Screener", "screens/1_Screener.py", "filtre actions rsi dividende"),
     ("Actualités", "screens/5_Actualites.py", "news sentiment manchettes"),
     ("Psychologie", "screens/23_Psychologie.py", "fear greed sentiment psychologie marché humeur risque confiance anxiété breadth rsi momentum"),
