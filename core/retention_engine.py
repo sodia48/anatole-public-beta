@@ -30,6 +30,22 @@ def _num(value: Any, decimals: int = 1) -> str:
     return f"{number:,.{decimals}f}".replace(",", " ").replace(".", ",")
 
 
+
+def _numeric_series(frame: pd.DataFrame, column: str, default: float = np.nan) -> pd.Series:
+    """Return a numeric Series even when a column is missing.
+
+    Pandas returns scalars for some ``DataFrame.get`` calls when a column is
+    absent; calling ``fillna`` on that scalar caused the Aujourd'hui page to
+    fail when optional fields such as Score Anatole or PoidsIndice were not
+    present. This helper keeps the daily brief resilient across all universes.
+    """
+    if frame is None or frame.empty:
+        return pd.Series(dtype=float)
+    if column not in frame.columns:
+        return pd.Series(default, index=frame.index, dtype=float)
+    return pd.to_numeric(frame[column], errors="coerce")
+
+
 def _clean_symbol(value: Any) -> str:
     text = str(value or "").strip().upper()
     return text.replace(".TO", "")
@@ -132,10 +148,10 @@ def _action_score(work: pd.DataFrame) -> pd.DataFrame:
     if work.empty:
         return pd.DataFrame()
     result = work.copy()
-    variation_abs = pd.to_numeric(result.get("Variation"), errors="coerce").abs().fillna(0)
-    volume_rel = pd.to_numeric(result.get("VolumeRelatif"), errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(1.0)
-    rsi = pd.to_numeric(result.get("RSI14"), errors="coerce")
-    score_anatole = pd.to_numeric(result.get("Score Anatole"), errors="coerce").fillna(50)
+    variation_abs = _numeric_series(result, "Variation").abs().fillna(0)
+    volume_rel = _numeric_series(result, "VolumeRelatif", 1.0).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+    rsi = _numeric_series(result, "RSI14")
+    score_anatole = _numeric_series(result, "Score Anatole", 50.0).fillna(50)
     rsi_extreme = (rsi - 50).abs().fillna(0)
     result["Priorité"] = (variation_abs * 12 + (volume_rel - 1).clip(lower=0) * 20 + rsi_extreme * 0.35 + score_anatole * 0.20).clip(0, 100).round(1)
     def reason(row: pd.Series) -> str:
@@ -177,7 +193,7 @@ def build_today_brief(market: pd.DataFrame | None, watchlist: list[str] | tuple[
             actions=pd.DataFrame(),
         )
 
-    variation = pd.to_numeric(work.get("Variation"), errors="coerce")
+    variation = _numeric_series(work, "Variation")
     valid = work.loc[variation.notna()].copy()
     valid["Variation"] = variation.loc[valid.index]
     advancers = int((valid["Variation"] > 0).sum())
@@ -185,7 +201,7 @@ def build_today_brief(market: pd.DataFrame | None, watchlist: list[str] | tuple[
     unchanged = int((valid["Variation"] == 0).sum())
     breadth = advancers / max(advancers + decliners, 1)
     avg_change = float(valid["Variation"].mean()) if not valid.empty else np.nan
-    weights = pd.to_numeric(valid.get("PoidsIndice"), errors="coerce").fillna(0) if not valid.empty else pd.Series(dtype=float)
+    weights = _numeric_series(valid, "PoidsIndice", 0.0).fillna(0) if not valid.empty else pd.Series(dtype=float)
     weighted_change = float(np.average(valid["Variation"], weights=weights)) if not valid.empty and weights.sum() > 0 else avg_change
     label, tone, interpretation = _choose_market_label(breadth, weighted_change, avg_change)
 

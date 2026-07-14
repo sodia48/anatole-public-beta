@@ -1793,6 +1793,11 @@ def page_header(
     title_text = str(title or "")
     subtitle_text = str(subtitle or "")
     icon_text = str(icon or "📈")
+    # Garde-fou : le troisième argument de page_header doit rester une icône.
+    # Si une page passe accidentellement une phrase, on évite le débordement
+    # visuel dans le hero, surtout en mobile.
+    if len(icon_text.strip()) > 4 or any(ch.isspace() for ch in icon_text):
+        icon_text = "📈"
     show_market_universe = bool(show_universe_selector) and title_text not in NO_UNIVERSE_SELECTOR_TITLES
 
     chips: list[str] = []
