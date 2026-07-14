@@ -1625,7 +1625,7 @@ def sidebar_context() -> str:
         unsafe_allow_html=True,
     )
 
-    st.sidebar.caption("Recherche : disponible directement sur l'accueil.")
+    st.sidebar.caption("Recherche intégrée : disponible dans le cockpit.")
 
     from core.universe import render_universe_selector
 
@@ -1770,7 +1770,6 @@ NO_UNIVERSE_SELECTOR_TITLES = {
     "Avis de confidentialité",
     "Conditions d’utilisation de la bêta",
     "État de la bêta publique",
-    "Recherche",
     "IPO à venir",
     "ETF sectoriels",
 }
@@ -1988,7 +1987,7 @@ def mobile_navigation() -> None:
         f"""
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
           <a data-path="cockpit" href="/?nav=cockpit{suffix}" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
-          <a data-path="recherche" href="/?nav=recherche{suffix}" target="_self" aria-label="Recherche">🔍<br>Recherche</a>
+          <a data-path="terminal" href="/?nav=terminal{suffix}" target="_self" aria-label="Terminal Pro">💎<br>Terminal</a>
           <a data-path="screener" href="/?nav=screener{suffix}" target="_self" aria-label="Screener">🔎<br>Screener</a>
           <a data-path="focus" href="/?nav=focus{suffix}" target="_self" aria-label="Focus">🎯<br>Focus</a>
           <a data-path="watchlist" href="/?nav=watchlist{suffix}" target="_self" aria-label="Liste">⭐<br>Liste</a>
