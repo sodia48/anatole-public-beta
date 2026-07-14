@@ -11,7 +11,7 @@ apply_style()
 profile = sidebar_context()
 page_header(
     "Préférences",
-    "Choisis une interface sobre, la densité des informations et le comportement des données live.",
+    "Le terminal sombre est maintenant l’apparence principale d’Anatole. Le thème bleu ciel reste disponible comme option secondaire.",
 )
 
 prefs = load_preferences(profile)
@@ -20,7 +20,13 @@ with st.form("preferences_form"):
     st.subheader("Interface")
     c1, c2, c3 = st.columns(3)
     with c1:
-        theme = st.selectbox("Thème", ["light", "dark"], index=0 if prefs["theme"] == "light" else 1, format_func=lambda x: "Bleu ciel" if x == "light" else "Sombre")
+        current_theme = "light" if str(prefs.get("theme", "dark")).lower() == "light" else "dark"
+        theme = st.selectbox(
+            "Apparence",
+            ["dark", "light"],
+            index=0 if current_theme == "dark" else 1,
+            format_func=lambda x: "Terminal sombre — par défaut" if x == "dark" else "Bleu ciel — optionnel",
+        )
     with c2:
         density = st.selectbox("Densité", ["comfortable", "compact"], index=0 if prefs["density"] == "comfortable" else 1, format_func=lambda x: "Confortable" if x == "comfortable" else "Compacte")
     with c3:
@@ -76,8 +82,8 @@ if submitted:
     except Exception:
         pass
     st.session_state.pop("_preferences_profile", None)
-    st.success("Préférences enregistrées.")
+    st.success("Préférences enregistrées. L’apparence choisie sera appliquée à toute la navigation.")
     st.rerun()
 
-st.caption("Le mode essentiel masque les analyses coûteuses jusqu'à ce que tu les demandes. Cela accélère nettement l'accueil.")
+st.caption("Le terminal sombre est l’expérience principale d’Anatole. Le bleu ciel reste une option visuelle secondaire.")
 footer()
