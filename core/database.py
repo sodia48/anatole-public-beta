@@ -16,16 +16,44 @@ _INIT_LOCK = threading.Lock()
 _DB_INITIALIZED = False
 _PROFILE_LOCK = threading.Lock()
 _INITIALIZED_PROFILES: set[str] = set()
+_POSTGRES_DISABLED = False
+_POSTGRES_DISABLE_REASON = ""
+
+
+def _database_url_wants_postgres() -> bool:
+    return DATABASE_URL.startswith(("postgres://", "postgresql://"))
+
+
+def _disable_postgres(exc: BaseException) -> None:
+    """Désactive PostgreSQL pour le processus courant et bascule vers SQLite.
+
+    Sur Render, une variable DATABASE_URL peut rester définie même si l'hôte
+    PostgreSQL est temporairement introuvable ou si le service a été supprimé.
+    Avant ce correctif, un simple souci DNS faisait tomber toute l'app.
+    Anatole doit rester disponible : les données utilisateur deviennent alors
+    temporaires/locales, mais l'interface continue de fonctionner.
+    """
+    global _POSTGRES_DISABLED, _POSTGRES_DISABLE_REASON
+    _POSTGRES_DISABLED = True
+    _POSTGRES_DISABLE_REASON = f"{type(exc).__name__}: {exc}"
 
 
 def database_backend() -> str:
-    return "postgresql" if DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite"
+    if _database_url_wants_postgres() and not _POSTGRES_DISABLED:
+        return "postgresql"
+    return "sqlite"
 
 
 def database_location() -> str:
     if database_backend() == "postgresql":
         return "PostgreSQL configuré par DATABASE_URL"
+    if _POSTGRES_DISABLED:
+        return f"SQLite local · PostgreSQL temporairement indisponible"
     return str(DB_PATH)
+
+
+def postgres_fallback_reason() -> str:
+    return _POSTGRES_DISABLE_REASON
 
 
 def _convert_placeholders(query: str, backend: str) -> str:
@@ -67,22 +95,26 @@ class ConnectionAdapter:
 @contextmanager
 def connection():
     backend = database_backend()
+    conn = None
 
     if backend == "postgresql":
         try:
             import psycopg
             from psycopg.rows import dict_row
-        except ImportError as exc:
-            raise RuntimeError(
-                "DATABASE_URL est configurée, mais psycopg n'est pas installé."
-            ) from exc
 
-        conn = psycopg.connect(
-            DATABASE_URL,
-            row_factory=dict_row,
-            connect_timeout=10,
-        )
-    else:
+            conn = psycopg.connect(
+                DATABASE_URL,
+                row_factory=dict_row,
+                connect_timeout=5,
+            )
+        except Exception as exc:
+            # Ne jamais laisser une panne PostgreSQL/DNS bloquer Anatole en bêta.
+            # L'app bascule vers SQLite pour la session Render courante.
+            _disable_postgres(exc)
+            backend = "sqlite"
+            conn = None
+
+    if backend == "sqlite":
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(DB_PATH, timeout=30)
         conn.row_factory = sqlite3.Row
@@ -353,7 +385,9 @@ def init_db(force: bool = False) -> None:
     """Initialise le schéma une seule fois par processus.
 
     Streamlit réexécute les pages très souvent. Éviter de rejouer tout le
-    schéma à chaque interaction réduit fortement la latence PostgreSQL.
+    schéma à chaque interaction réduit fortement la latence. Si PostgreSQL
+    est indisponible sur Render, Anatole bascule automatiquement sur SQLite
+    et reste utilisable au lieu d'afficher un écran rouge.
     """
     global _DB_INITIALIZED
 
@@ -363,12 +397,8 @@ def init_db(force: bool = False) -> None:
     with _INIT_LOCK:
         if _DB_INITIALIZED and not force:
             return
-        script = (
-            POSTGRES_SCHEMA
-            if database_backend() == "postgresql"
-            else SQLITE_SCHEMA
-        )
         with connection() as conn:
+            script = POSTGRES_SCHEMA if conn.backend == "postgresql" else SQLITE_SCHEMA
             conn.execute_statements(script)
         _DB_INITIALIZED = True
 
@@ -377,8 +407,11 @@ def database_health() -> tuple[bool, str]:
     try:
         with connection() as conn:
             row = conn.execute("SELECT 1 AS ok").fetchone()
+            backend = conn.backend
         value = row["ok"] if isinstance(row, dict) else row["ok"]
-        return bool(value == 1), database_backend()
+        if bool(value == 1) and _POSTGRES_DISABLED:
+            return True, "sqlite-fallback"
+        return bool(value == 1), backend
     except Exception as exc:
         return False, f"{type(exc).__name__}: {exc}"
 
