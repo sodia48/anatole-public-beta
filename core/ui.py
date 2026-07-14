@@ -15,6 +15,131 @@ from core.utils import market_status
 from core.universe import current_universe
 
 
+THEME_QUERY_PARAM = "anatole_theme"
+THEME_STORAGE_KEY = "anatole_theme"
+VALID_THEME_VALUES = {"light", "dark"}
+
+
+def _query_param_value(name: str, default: str = "") -> str:
+    try:
+        value = st.query_params.get(name, default)
+        if isinstance(value, list):
+            return str(value[0]) if value else default
+        return str(value or default)
+    except Exception:
+        return default
+
+
+def _set_query_param_value(name: str, value: str) -> None:
+    try:
+        if _query_param_value(name) != value:
+            st.query_params[name] = value
+    except Exception:
+        pass
+
+
+def _normalized_theme(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in VALID_THEME_VALUES:
+        return raw
+    return ""
+
+
+def _theme_from_session(default: str = "light") -> str:
+    return "dark" if bool(st.session_state.get("theme_toggle", False)) else default
+
+
+def _apply_theme_choice(profile: str, theme: str, *, save: bool = True) -> None:
+    theme = _normalized_theme(theme) or "light"
+    st.session_state["theme_toggle"] = theme == "dark"
+    st.session_state["_anatole_theme"] = theme
+    if save:
+        try:
+            save_preferences(profile, {"theme": theme})
+            st.session_state.pop("_preferences_profile", None)
+        except Exception:
+            pass
+    _set_query_param_value(THEME_QUERY_PARAM, theme)
+
+
+def _install_theme_persistence_bridge(current_theme: str) -> None:
+    """Persiste le thème côté navigateur et préserve le thème dans les liens internes."""
+    theme = _normalized_theme(current_theme) or "light"
+    try:
+        components.html(
+            f"""
+            <script>
+            (function() {{
+                try {{
+                    const KEY = {THEME_STORAGE_KEY!r};
+                    const PARAM = {THEME_QUERY_PARAM!r};
+                    const CURRENT = {theme!r};
+                    const win = window.parent || window;
+                    const doc = win.document;
+                    const url = new URL(win.location.href);
+                    const valid = new Set(["light", "dark"]);
+
+                    let stored = null;
+                    try {{ stored = win.localStorage.getItem(KEY); }} catch (e) {{ stored = null; }}
+                    const inUrl = url.searchParams.get(PARAM);
+
+                    if (valid.has(CURRENT)) {{
+                        try {{ win.localStorage.setItem(KEY, CURRENT); }} catch (e) {{}}
+                    }}
+
+                    if (!valid.has(inUrl) && valid.has(stored)) {{
+                        url.searchParams.set(PARAM, stored);
+                        win.location.replace(url.toString());
+                        return;
+                    }}
+
+                    if (valid.has(inUrl)) {{
+                        try {{ win.localStorage.setItem(KEY, inUrl); }} catch (e) {{}}
+                    }}
+
+                    function patchLinks() {{
+                        try {{
+                            const activeTheme = (function() {{
+                                const currentUrl = new URL(win.location.href);
+                                const q = currentUrl.searchParams.get(PARAM);
+                                if (valid.has(q)) return q;
+                                try {{
+                                    const local = win.localStorage.getItem(KEY);
+                                    if (valid.has(local)) return local;
+                                }} catch (e) {{}}
+                                return CURRENT;
+                            }})();
+
+                            doc.querySelectorAll('a[href]').forEach((anchor) => {{
+                                const href = anchor.getAttribute('href') || '';
+                                if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+                                const target = new URL(anchor.href, win.location.origin);
+                                if (target.origin !== win.location.origin) return;
+                                if (!target.searchParams.get(PARAM)) {{
+                                    target.searchParams.set(PARAM, activeTheme);
+                                    anchor.href = target.toString();
+                                }}
+                                anchor.setAttribute('target', '_self');
+                                anchor.removeAttribute('rel');
+                            }});
+                        }} catch (e) {{}}
+                    }}
+
+                    patchLinks();
+                    setTimeout(patchLinks, 200);
+                    setTimeout(patchLinks, 1000);
+                    win.setInterval(patchLinks, 2500);
+                }} catch (e) {{}}
+            }})();
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
+    except Exception:
+        pass
+
+
 def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
     """Force un branding navigateur Anatole sans bloquer le rendu.
 
@@ -303,7 +428,17 @@ def _hydrate_preferences_for_current_page() -> None:
         profile = str(getattr(context, "profile", "") or st.session_state.get("profile") or DEFAULT_PROFILE)
         profile = ensure_profile(profile)
         st.session_state["profile"] = profile
+
+        requested_theme = _normalized_theme(_query_param_value(THEME_QUERY_PARAM))
+        if requested_theme:
+            _apply_theme_choice(profile, requested_theme, save=True)
+
         hydrate_preferences(profile)
+
+        if requested_theme:
+            # Le query param a priorité, même si une ancienne préférence existe encore.
+            st.session_state["theme_toggle"] = requested_theme == "dark"
+            st.session_state["_anatole_theme"] = requested_theme
     except Exception:
         # Le style ne doit jamais empêcher l'application de charger.
         pass
@@ -323,6 +458,8 @@ def apply_style() -> None:
         pass
     dark = bool(st.session_state.get("theme_toggle", False))
     compact = bool(st.session_state.get("compact_toggle", False))
+    current_theme = "dark" if dark else "light"
+    st.session_state["_anatole_theme"] = current_theme
 
     if dark:
         background = """
@@ -1421,6 +1558,7 @@ def apply_style() -> None:
     hide_streamlit_chrome()
     force_anatole_browser_brand(str(st.session_state.get("_anatole_page_title", "Anatole")))
     enforce_same_tab_navigation()
+    _install_theme_persistence_bridge(str(st.session_state.get("_anatole_theme", current_theme)))
     try:
         from core.mobile_experience import install_mobile_viewport_probe
         install_mobile_viewport_probe()
@@ -1459,7 +1597,13 @@ def sidebar_context() -> str:
         profile = ensure_profile(active_profile)
 
     st.session_state.profile = profile
+    requested_theme = _normalized_theme(_query_param_value(THEME_QUERY_PARAM))
+    if requested_theme:
+        _apply_theme_choice(profile, requested_theme, save=True)
     hydrate_preferences(profile)
+    if requested_theme:
+        st.session_state["theme_toggle"] = requested_theme == "dark"
+        st.session_state["_anatole_theme"] = requested_theme
 
     st.sidebar.markdown(
         """
@@ -1498,14 +1642,18 @@ def sidebar_context() -> str:
         bool(st.session_state.get("compact_toggle", False)),
     )
     if st.session_state.get("_sidebar_preference_signature") != sidebar_pref_signature:
+        selected_theme = "dark" if sidebar_pref_signature[1] else "light"
         save_preferences(
             profile,
             {
-                "theme": "dark" if sidebar_pref_signature[1] else "light",
+                "theme": selected_theme,
                 "density": "compact" if sidebar_pref_signature[2] else "comfortable",
             },
         )
+        st.session_state["_anatole_theme"] = selected_theme
+        _set_query_param_value(THEME_QUERY_PARAM, selected_theme)
         st.session_state["_sidebar_preference_signature"] = sidebar_pref_signature
+        _install_theme_persistence_bridge(selected_theme)
 
     if st.sidebar.button(
         "↻ Actualiser les données live",
@@ -1822,35 +1970,33 @@ def plotly_mobile_config(*, interactive: bool = False) -> dict:
     return config
 
 def mobile_navigation() -> None:
-    """Navigation mobile stable et sans routes directes fragiles.
-
-    Les liens pointent vers la racine avec un paramètre ``nav``. ``app.py``
-    choisit ensuite la bonne page Streamlit. Cela évite les modales
-    "Page not found" sur Render/iOS, même quand le navigateur recharge une
-    page interne directement.
-    """
+    """Navigation mobile stable qui conserve aussi le thème actif."""
+    if not bool(st.session_state.get("show_mobile_nav", True)):
+        return
+    theme = _normalized_theme(st.session_state.get("_anatole_theme")) or _theme_from_session()
+    suffix = f"&{THEME_QUERY_PARAM}={theme}"
     st.markdown(
-        """
+        f"""
         <nav class="sky-mobile-nav" aria-label="Navigation mobile Anatole">
-          <a data-path="cockpit" href="/?nav=cockpit" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
-          <a data-path="recherche" href="/?nav=recherche" target="_self" aria-label="Recherche">🔍<br>Recherche</a>
-          <a data-path="screener" href="/?nav=screener" target="_self" aria-label="Screener">🔎<br>Screener</a>
-          <a data-path="focus" href="/?nav=focus" target="_self" aria-label="Focus">🎯<br>Focus</a>
-          <a data-path="watchlist" href="/?nav=watchlist" target="_self" aria-label="Liste">⭐<br>Liste</a>
+          <a data-path="cockpit" href="/?nav=cockpit{suffix}" target="_self" aria-label="Accueil">🏠<br>Accueil</a>
+          <a data-path="recherche" href="/?nav=recherche{suffix}" target="_self" aria-label="Recherche">🔍<br>Recherche</a>
+          <a data-path="screener" href="/?nav=screener{suffix}" target="_self" aria-label="Screener">🔎<br>Screener</a>
+          <a data-path="focus" href="/?nav=focus{suffix}" target="_self" aria-label="Focus">🎯<br>Focus</a>
+          <a data-path="watchlist" href="/?nav=watchlist{suffix}" target="_self" aria-label="Liste">⭐<br>Liste</a>
         </nav>
         <script>
-        (function() {
-          try {
+        (function() {{
+          try {{
             const params = new URLSearchParams(window.location.search || '');
             const nav = (params.get('nav') || '').toLowerCase();
             const path = window.location.pathname.toLowerCase().replace(/^\//, '');
-            document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {
+            document.querySelectorAll('.sky-mobile-nav a').forEach((node) => {{
               const target = (node.getAttribute('data-path') || '').toLowerCase();
               const active = target && (nav === target || path.startsWith(target) || (!nav && !path && target === 'cockpit'));
               node.classList.toggle('active', Boolean(active));
-            });
-          } catch (error) {}
-        })();
+            }});
+          }} catch (error) {{}}
+        }})();
         </script>
         """,
         unsafe_allow_html=True,
