@@ -68,6 +68,13 @@ if submitted:
         "refresh_only_market_open": refresh_only_open,
     }
     save_preferences(profile, values)
+    st.session_state["theme_toggle"] = theme == "dark"
+    st.session_state["compact_toggle"] = density == "compact"
+    st.session_state["_anatole_theme"] = theme
+    try:
+        st.query_params["anatole_theme"] = theme
+    except Exception:
+        pass
     st.session_state.pop("_preferences_profile", None)
     st.success("Préférences enregistrées.")
     st.rerun()
