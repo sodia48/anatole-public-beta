@@ -17,7 +17,7 @@ profile = sidebar_context()
 page_header(
     "Aujourd’hui sur le marché",
     "Le brief quotidien qui transforme le bruit du marché en priorités d’analyse.",
-    "Rétention · Lecture quotidienne",
+    "⚡",
 )
 
 ctx = current_context()
@@ -33,7 +33,10 @@ with st.spinner("Construction du brief Anatole…"):
     constituents, diagnostics, market, features = load_technical_bundle()
 
 frame = features if isinstance(features, pd.DataFrame) and not features.empty else market
-watchlist = get_watchlist(profile)
+try:
+    watchlist = get_watchlist(profile)
+except Exception:
+    watchlist = []
 brief = build_today_brief(frame, watchlist)
 
 st.caption(
