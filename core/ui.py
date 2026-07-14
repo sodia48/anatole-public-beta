@@ -593,6 +593,15 @@ def apply_style() -> None:
             padding-top: .75rem;
         }}
 
+        /* V5.9.4 — garde-fou visibilité sidebar desktop */
+        @media (min-width: 651px) {{
+            [data-testid="stSidebar"] {{
+                display: block !important;
+                visibility: visible !important;
+            }}
+        }}
+
+
         [data-testid="stSidebarNav"] a {{
             border-radius: 14px;
             margin: 4px 8px;
@@ -1445,8 +1454,22 @@ def apply_style() -> None:
             }}
         }}
 
+        /* V5.9.4 — le menu latéral reste accessible sur ordinateur, même si la fenêtre est étroite.
+           On ne masque la sidebar que sur les vrais écrans tactiles étroits. */
         @media (max-width: 650px) {{
             .block-container {{ padding-bottom: 6.5rem; }}
+            .sky-hero-icon {{
+                display: none;
+            }}
+            .sky-terminal-name {{
+                display: none;
+            }}
+            .sky-time {{
+                display: none;
+            }}
+        }}
+
+        @media (max-width: 650px) and (hover: none) and (pointer: coarse) {{
             [data-testid="stSidebar"] {{ display:none; }}
             .sky-mobile-nav {{
                 display:flex;position:fixed;z-index:9999;left:10px;right:10px;bottom:10px;
@@ -1459,15 +1482,6 @@ def apply_style() -> None:
                 font-size:.68rem;font-weight:800;padding:8px 3px;border-radius:11px;
             }}
             .sky-mobile-nav a:hover {{ background:rgba(37,99,235,.12);color:var(--sky-text); }}
-            .sky-hero-icon {{
-                display: none;
-            }}
-            .sky-terminal-name {{
-                display: none;
-            }}
-            .sky-time {{
-                display: none;
-            }}
         }}
 
         /* V5.7.7 — mobile premium polish */
