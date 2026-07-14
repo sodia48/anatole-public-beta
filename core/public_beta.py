@@ -166,168 +166,86 @@ def _mark_legal_accepted_in_url(profile: str) -> None:
 
 
 def _inject_mobile_persistence_bridge() -> None:
-    """Synchronise le consentement invité avec le navigateur mobile.
+    """Pont non bloquant pour conserver les paramètres Anatole dans les liens internes.
 
-    Sur mobile, un changement de page peut recréer une session Streamlit
-    ou perdre les query params. Ce pont :
-    - copie l'acceptation dans localStorage ;
-    - restaure les query params depuis localStorage ;
-    - ajoute les query params importants aux liens de navigation internes.
+    Version V5.9.8 : volontairement sans redirection automatique. Les anciennes
+    versions pouvaient utiliser une redirection forcée pour restaurer les paramètres
+    depuis le navigateur; sur certains navigateurs cela pouvait produire un écran
+    blanc juste après l'acceptation des conditions. Ici, on ne recharge jamais la
+    page : on mémorise l'état courant et on propage les paramètres sur les liens.
     """
     try:
         components.html(
             f"""
             <script>
             (function() {{
-                const LEGAL_VERSION = {LEGAL_VERSION!r};
-                const LEGAL_QUERY = {LEGAL_QUERY_PARAM!r};
-                const LEGAL_STORAGE = {LEGAL_STORAGE_KEY!r};
-                const GUEST_STORAGE = {GUEST_STORAGE_KEY!r};
-                const GUEST_MODE = {GUEST_MODE_QUERY_PARAM!r};
+                try {{
+                    const LEGAL_VERSION = {LEGAL_VERSION!r};
+                    const LEGAL_QUERY = {LEGAL_QUERY_PARAM!r};
+                    const LEGAL_STORAGE = {LEGAL_STORAGE_KEY!r};
+                    const GUEST_STORAGE = {GUEST_STORAGE_KEY!r};
+                    const GUEST_MODE = {GUEST_MODE_QUERY_PARAM!r};
+                    const win = window.parent || window;
+                    const doc = win.document;
+                    const url = new URL(win.location.toString());
+                    const keep = [
+                        "anatole_guest",
+                        GUEST_MODE,
+                        LEGAL_QUERY,
+                        "anatole_theme",
+                        "universe",
+                        "ticker",
+                        "symbol",
+                    ];
+                    let store = null;
+                    try {{ store = win.localStorage; }} catch (e) {{ store = null; }}
 
-                function parentWindow() {{
-                    try {{
-                        return window.parent || window;
-                    }} catch (e) {{
-                        return window;
+                    if (store) {{
+                        const accepted = url.searchParams.get(LEGAL_QUERY);
+                        const guest = url.searchParams.get("anatole_guest");
+                        const guestMode = url.searchParams.get(GUEST_MODE);
+                        const theme = url.searchParams.get("anatole_theme");
+                        if (accepted === LEGAL_VERSION) {{
+                            try {{ store.setItem(LEGAL_STORAGE, LEGAL_VERSION); }} catch (e) {{}}
+                        }}
+                        if (guest && /^guest-[0-9a-f]{{20,40}}$/.test(guest)) {{
+                            try {{ store.setItem(GUEST_STORAGE, guest); }} catch (e) {{}}
+                        }}
+                        if (guestMode === "1") {{
+                            try {{ store.setItem(GUEST_MODE, "1"); }} catch (e) {{}}
+                        }}
+                        if (theme) {{
+                            try {{ store.setItem("anatole_theme", theme); }} catch (e) {{}}
+                        }}
                     }}
-                }}
 
-                function storage(win) {{
-                    try {{
-                        return win.localStorage;
-                    }} catch (e) {{
-                        return null;
-                    }}
-                }}
-
-                const win = parentWindow();
-                const store = storage(win);
-                if (!store) {{
-                    return;
-                }}
-
-                const url = new URL(win.location.href);
-                let changed = false;
-
-                const queryAccepted = url.searchParams.get(LEGAL_QUERY);
-                const queryGuest = url.searchParams.get("anatole_guest");
-                const queryGuestMode = url.searchParams.get(GUEST_MODE);
-
-                if (queryAccepted === LEGAL_VERSION) {{
-                    store.setItem(LEGAL_STORAGE, LEGAL_VERSION);
-                }}
-
-                if (queryGuest && /^guest-[0-9a-f]{{20,40}}$/.test(queryGuest)) {{
-                    store.setItem(GUEST_STORAGE, queryGuest);
-                }}
-
-                if (queryGuestMode === "1") {{
-                    store.setItem(GUEST_MODE, "1");
-                }}
-
-                const storedAccepted = store.getItem(LEGAL_STORAGE);
-                const storedGuest = store.getItem(GUEST_STORAGE);
-                const storedGuestMode = store.getItem(GUEST_MODE);
-
-                if (
-                    storedAccepted === LEGAL_VERSION &&
-                    url.searchParams.get(LEGAL_QUERY) !== LEGAL_VERSION
-                ) {{
-                    url.searchParams.set(LEGAL_QUERY, LEGAL_VERSION);
-                    changed = true;
-                }}
-
-                if (
-                    storedGuest &&
-                    /^guest-[0-9a-f]{{20,40}}$/.test(storedGuest) &&
-                    !url.searchParams.get("anatole_guest")
-                ) {{
-                    url.searchParams.set("anatole_guest", storedGuest);
-                    changed = true;
-                }}
-
-                if (storedGuestMode === "1" && url.searchParams.get(GUEST_MODE) !== "1") {{
-                    url.searchParams.set(GUEST_MODE, "1");
-                    changed = true;
-                }}
-
-                if (changed) {{
-                    win.location.replace(url.toString());
-                    return;
-                }}
-
-                function patchInternalLinks() {{
-                    try {{
-                        const current = new URL(win.location.href);
-                        const paramsToKeep = [
-                            "anatole_guest",
-                            GUEST_MODE,
-                            LEGAL_QUERY,
-                            "anatole_theme",
-                            "universe",
-                            "ticker",
-                            "symbol"
-                        ];
-
-                        win.document.querySelectorAll("a[href]").forEach((anchor) => {{
-                            const href = anchor.getAttribute("href") || "";
-                            if (
-                                href.startsWith("#") ||
-                                href.startsWith("mailto:") ||
-                                href.startsWith("tel:")
-                            ) {{
-                                return;
-                            }}
-
-                            const target = new URL(anchor.href, win.location.origin);
-                            if (target.origin !== win.location.origin) {{
-                                return;
-                            }}
-
-                            let touched = false;
-                            paramsToKeep.forEach((param) => {{
-                                const value = current.searchParams.get(param);
-                                if (value && !target.searchParams.get(param)) {{
-                                    target.searchParams.set(param, value);
-                                    touched = true;
-                                }}
-                            }});
-
-                            if (touched) {{
+                    function patchInternalLinks() {{
+                        try {{
+                            const current = new URL(win.location.toString());
+                            doc.querySelectorAll("a[href]").forEach((anchor) => {{
+                                const href = anchor.getAttribute("href") || "";
+                                if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+                                const target = new URL(anchor.href, win.location.origin);
+                                if (target.origin !== win.location.origin) return;
+                                keep.forEach((param) => {{
+                                    const value = current.searchParams.get(param);
+                                    if (value && !target.searchParams.get(param)) {{
+                                        target.searchParams.set(param, value);
+                                    }}
+                                }});
                                 anchor.href = target.toString();
-                            }}
-                        }});
-                    }} catch (e) {{}}
-                }}
-
-                function patchClickNavigation() {{
-                    try {{
-                        if (win.__anatoleLegalClickBridge) return;
-                        win.__anatoleLegalClickBridge = true;
-                        win.document.addEventListener("click", function(event) {{
-                            const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
-                            if (!anchor) return;
-                            const target = new URL(anchor.href, win.location.origin);
-                            if (target.origin !== win.location.origin) return;
-                            const current = new URL(win.location.href);
-                            paramsToKeep.forEach((param) => {{
-                                const value = current.searchParams.get(param);
-                                if (value && !target.searchParams.get(param)) {{
-                                    target.searchParams.set(param, value);
-                                }}
+                                anchor.setAttribute("target", "_self");
                             }});
-                            if (target.toString() !== anchor.href) {{
-                                event.preventDefault();
-                                win.location.href = target.toString();
-                            }}
-                        }}, true);
-                    }} catch (e) {{}}
-                }}
+                        }} catch (e) {{}}
+                    }}
 
-                patchInternalLinks();
-                patchClickNavigation();
-                win.setInterval(patchInternalLinks, 700);
+                    patchInternalLinks();
+                    setTimeout(patchInternalLinks, 150);
+                    setTimeout(patchInternalLinks, 800);
+                    if (!win.__anatoleLegalLinkBridge) {{
+                        win.__anatoleLegalLinkBridge = win.setInterval(patchInternalLinks, 1000);
+                    }}
+                }} catch (e) {{}}
             }})();
             </script>
             """,
@@ -366,8 +284,13 @@ def _render_login_gate(mode: str) -> None:
 
 
 def _require_legal_consent(profile: str, authenticated: bool) -> None:
-    # Le consentement est sauvegardé pour tous les profils, y compris les invités.
-    # Sur mobile, il peut aussi être restauré via query param / localStorage.
+    """Vérifie l'acceptation légale sans écran blanc après le clic.
+
+    V5.9.8 : lorsqu'un utilisateur accepte les conditions, on vide le panneau
+    d'accueil légal et on laisse l'application continuer vers la navigation dans
+    la même exécution. On évite ainsi les boucles une relance de page / redirection qui
+    pouvaient laisser une page blanche sur Render ou mobile.
+    """
     stored = get_preference(profile, "legal_acceptance_version", "")
     profile_key = f"_anatole_legal_accepted_{profile}"
     browser_accepted = _query_acceptance_is_valid()
@@ -376,61 +299,59 @@ def _require_legal_consent(profile: str, authenticated: bool) -> None:
         or st.session_state.get("_anatole_legal_accepted")
     )
 
-    if stored == LEGAL_VERSION:
+    if stored == LEGAL_VERSION or browser_accepted or session_accepted:
         st.session_state[profile_key] = True
         st.session_state["_anatole_legal_accepted"] = True
+        if stored != LEGAL_VERSION:
+            set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
         _mark_legal_accepted_in_url(profile)
         return
 
-    if browser_accepted or session_accepted:
-        st.session_state[profile_key] = True
-        st.session_state["_anatole_legal_accepted"] = True
-        set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
-        _mark_legal_accepted_in_url(profile)
-        return
-
-    st.title("Bienvenue dans la bêta publique d’Anatole")
-    st.warning(
-        "Anatole est un outil expérimental d’information financière. "
-        "Les données peuvent être différées, incomplètes ou indisponibles. "
-        "Il ne fournit pas de conseil financier personnalisé."
-    )
-
-    with st.expander("Résumé des conditions", expanded=True):
-        st.markdown(
-            """
-            - Utilisation à des fins d’information et d’évaluation.
-            - Aucune garantie sur les prix, nouvelles, signaux ou calculs.
-            - Ne saisis pas de renseignements bancaires, numéros de compte ou secrets.
-            - Les données de portefeuille saisies sont des données de test.
-            - Les fonctionnalités et données peuvent changer pendant la bêta.
-            """
+    gate = st.empty()
+    with gate.container():
+        st.title("Bienvenue dans la bêta publique d’Anatole")
+        st.warning(
+            "Anatole est un outil expérimental d’information financière. "
+            "Les données peuvent être différées, incomplètes ou indisponibles. "
+            "Il ne fournit pas de conseil financier personnalisé."
         )
 
-    terms = st.checkbox(
-        "J’accepte les conditions d’utilisation de la bêta.",
-        key="_anatole_terms_checkbox",
-    )
-    privacy = st.checkbox(
-        "J’ai lu l’avis de confidentialité et j’accepte le traitement décrit.",
-        key="_anatole_privacy_checkbox",
-    )
+        with st.expander("Résumé des conditions", expanded=True):
+            st.markdown(
+                """
+                - Utilisation à des fins d’information et d’évaluation.
+                - Aucune garantie sur les prix, nouvelles, signaux ou calculs.
+                - Ne saisis pas de renseignements bancaires, numéros de compte ou secrets.
+                - Les données de portefeuille saisies sont des données de test.
+                - Les fonctionnalités et données peuvent changer pendant la bêta.
+                """
+            )
 
-    if st.button(
-        "Accéder à Anatole",
-        type="primary",
-        disabled=not (terms and privacy),
-        use_container_width=True,
-    ):
-        profile_key = f"_anatole_legal_accepted_{profile}"
+        terms = st.checkbox(
+            "J’accepte les conditions d’utilisation de la bêta.",
+            key="_anatole_terms_checkbox",
+        )
+        privacy = st.checkbox(
+            "J’ai lu l’avis de confidentialité et j’accepte le traitement décrit.",
+            key="_anatole_privacy_checkbox",
+        )
+
+        accepted_now = st.button(
+            "Accéder à Anatole",
+            type="primary",
+            disabled=not (terms and privacy),
+            use_container_width=True,
+        )
+
+    if accepted_now:
         st.session_state[profile_key] = True
         st.session_state["_anatole_legal_accepted"] = True
         set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
         _mark_legal_accepted_in_url(profile)
-        st.rerun()
+        gate.empty()
+        return
 
     st.stop()
-
 
 def bootstrap_public_beta() -> BetaContext:
     init_db()
