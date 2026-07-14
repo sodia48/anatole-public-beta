@@ -8,8 +8,6 @@ import uuid
 from typing import Any
 
 import streamlit as st
-import streamlit.components.v1 as components
-
 from core.database import (
     ensure_profile,
     get_preference,
@@ -166,94 +164,15 @@ def _mark_legal_accepted_in_url(profile: str) -> None:
 
 
 def _inject_mobile_persistence_bridge() -> None:
-    """Pont non bloquant pour conserver les paramètres Anatole dans les liens internes.
+    """Pont navigateur désactivé pour éviter les écrans blancs sur Render.
 
-    Version V5.9.8 : volontairement sans redirection automatique. Les anciennes
-    versions pouvaient utiliser une redirection forcée pour restaurer les paramètres
-    depuis le navigateur; sur certains navigateurs cela pouvait produire un écran
-    blanc juste après l'acceptation des conditions. Ici, on ne recharge jamais la
-    page : on mémorise l'état courant et on propage les paramètres sur les liens.
+    Les anciennes versions injectaient un composant HTML invisible pour propager
+    les paramètres de session. Sur certains navigateurs/versions Streamlit, ces
+    iframes pouvaient laisser une page blanche après acceptation des conditions.
+    La persistance est désormais gérée côté session, préférences et paramètres
+    générés par les liens Anatole.
     """
-    try:
-        components.html(
-            f"""
-            <script>
-            (function() {{
-                try {{
-                    const LEGAL_VERSION = {LEGAL_VERSION!r};
-                    const LEGAL_QUERY = {LEGAL_QUERY_PARAM!r};
-                    const LEGAL_STORAGE = {LEGAL_STORAGE_KEY!r};
-                    const GUEST_STORAGE = {GUEST_STORAGE_KEY!r};
-                    const GUEST_MODE = {GUEST_MODE_QUERY_PARAM!r};
-                    const win = window.parent || window;
-                    const doc = win.document;
-                    const url = new URL(win.location.toString());
-                    const keep = [
-                        "anatole_guest",
-                        GUEST_MODE,
-                        LEGAL_QUERY,
-                        "anatole_theme",
-                        "universe",
-                        "ticker",
-                        "symbol",
-                    ];
-                    let store = null;
-                    try {{ store = win.localStorage; }} catch (e) {{ store = null; }}
-
-                    if (store) {{
-                        const accepted = url.searchParams.get(LEGAL_QUERY);
-                        const guest = url.searchParams.get("anatole_guest");
-                        const guestMode = url.searchParams.get(GUEST_MODE);
-                        const theme = url.searchParams.get("anatole_theme");
-                        if (accepted === LEGAL_VERSION) {{
-                            try {{ store.setItem(LEGAL_STORAGE, LEGAL_VERSION); }} catch (e) {{}}
-                        }}
-                        if (guest && /^guest-[0-9a-f]{{20,40}}$/.test(guest)) {{
-                            try {{ store.setItem(GUEST_STORAGE, guest); }} catch (e) {{}}
-                        }}
-                        if (guestMode === "1") {{
-                            try {{ store.setItem(GUEST_MODE, "1"); }} catch (e) {{}}
-                        }}
-                        if (theme) {{
-                            try {{ store.setItem("anatole_theme", theme); }} catch (e) {{}}
-                        }}
-                    }}
-
-                    function patchInternalLinks() {{
-                        try {{
-                            const current = new URL(win.location.toString());
-                            doc.querySelectorAll("a[href]").forEach((anchor) => {{
-                                const href = anchor.getAttribute("href") || "";
-                                if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
-                                const target = new URL(anchor.href, win.location.origin);
-                                if (target.origin !== win.location.origin) return;
-                                keep.forEach((param) => {{
-                                    const value = current.searchParams.get(param);
-                                    if (value && !target.searchParams.get(param)) {{
-                                        target.searchParams.set(param, value);
-                                    }}
-                                }});
-                                anchor.href = target.toString();
-                                anchor.setAttribute("target", "_self");
-                            }});
-                        }} catch (e) {{}}
-                    }}
-
-                    patchInternalLinks();
-                    setTimeout(patchInternalLinks, 150);
-                    setTimeout(patchInternalLinks, 800);
-                    if (!win.__anatoleLegalLinkBridge) {{
-                        win.__anatoleLegalLinkBridge = win.setInterval(patchInternalLinks, 1000);
-                    }}
-                }} catch (e) {{}}
-            }})();
-            </script>
-            """,
-            height=0,
-            width=0,
-        )
-    except Exception:
-        pass
+    return
 
 def _render_login_gate(mode: str) -> None:
     st.title("Anatole — bêta publique")
@@ -348,8 +267,7 @@ def _require_legal_consent(profile: str, authenticated: bool) -> None:
         st.session_state["_anatole_legal_accepted"] = True
         set_preference(profile, "legal_acceptance_version", LEGAL_VERSION)
         _mark_legal_accepted_in_url(profile)
-        gate.empty()
-        return
+        st.rerun()
 
     st.stop()
 

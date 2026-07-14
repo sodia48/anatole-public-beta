@@ -2355,3 +2355,147 @@ def footer() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# V5.9.9 — Safe Render UI overrides
+# ---------------------------------------------------------------------------
+# Ces définitions remplacent les anciennes versions basées sur
+# st.components.v1.html. Le but est d'éviter les iframes invisibles qui peuvent
+# provoquer un écran blanc sur Render / mobile et de supprimer les avertissements
+# Streamlit répétés dans les logs. Les fonctions gardent le même nom pour rester
+# compatibles avec le reste du code.
+
+
+def _install_theme_persistence_bridge(current_theme: str) -> None:  # type: ignore[override]
+    theme = _normalized_theme(current_theme) or "dark"
+    st.session_state["_anatole_theme"] = theme
+    try:
+        if _query_param_value(THEME_QUERY_PARAM) != theme:
+            st.query_params[THEME_QUERY_PARAM] = theme
+    except Exception:
+        pass
+
+
+def force_anatole_browser_brand(page_title: str = "Anatole") -> None:  # type: ignore[override]
+    st.session_state["_anatole_page_title"] = str(page_title or "Anatole")
+
+
+def enforce_same_tab_navigation() -> None:  # type: ignore[override]
+    return
+
+
+def hide_streamlit_chrome() -> None:  # type: ignore[override]
+    st.markdown(
+        """
+        <style>
+            #MainMenu, footer, header [data-testid="stToolbar"],
+            [data-testid="stToolbar"], [data-testid="stDecoration"],
+            [data-testid="stStatusWidget"], [data-testid="stDeployButton"],
+            [data-testid="stMainMenu"], [aria-label="Main menu"],
+            [aria-label="Open menu"], button[title="View fullscreen"],
+            button[title="Exit fullscreen"] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+                width: 0 !important;
+                height: 0 !important;
+                max-width: 0 !important;
+                max-height: 0 !important;
+                overflow: hidden !important;
+            }
+            .stApp > header {
+                display: none !important;
+                height: 0 !important;
+            }
+            .stApp {
+                margin-top: 0 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def install_sidebar_rescue_navigation() -> None:  # type: ignore[override]
+    if not bool(st.session_state.get("show_mobile_nav", True)):
+        return
+    nav_items = [
+        ("🏠", "Cockpit", "cockpit"),
+        ("⚡", "Aujourd’hui", "aujourdhui"),
+        ("🔎", "Screener", "screener"),
+        ("🎯", "Focus", "focus"),
+        ("⭐", "Liste", "watchlist"),
+        ("🧠", "Psychologie", "psychologie"),
+        ("🧺", "ETF", "etf"),
+        ("🚀", "IPO", "ipo"),
+        ("🕵️", "Insiders", "insiders"),
+        ("💎", "Terminal", "terminal"),
+        ("⚙️", "Préférences", "preferences"),
+    ]
+    links = "".join(
+        f'<a href="/{html.escape(_navigation_query_suffix(nav=nav), quote=True)}" target="_self" title="{html.escape(label)}">'
+        f'<span class="sky-rescue-icon">{html.escape(icon)}</span><span>{html.escape(label)}</span></a>'
+        for icon, label, nav in nav_items
+    )
+    st.markdown(
+        f"""
+        <style>
+            .sky-desktop-rescue-nav {{
+                display: none;
+            }}
+            @media (min-width: 900px) {{
+                .sky-desktop-rescue-nav {{
+                    position: fixed;
+                    z-index: 999;
+                    top: 108px;
+                    left: 14px;
+                    width: 178px;
+                    max-height: calc(100vh - 140px);
+                    overflow-y: auto;
+                    padding: 12px 10px;
+                    border: 1px solid rgba(125, 211, 252, .18);
+                    border-radius: 22px;
+                    background: rgba(8, 21, 34, .72);
+                    backdrop-filter: blur(22px) saturate(1.15);
+                    box-shadow: 0 22px 60px rgba(0, 0, 0, .22);
+                }}
+                .sky-desktop-rescue-nav a {{
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 10px;
+                    margin: 2px 0;
+                    border-radius: 16px;
+                    color: #dbeafe !important;
+                    text-decoration: none !important;
+                    font-weight: 800;
+                    font-size: .88rem;
+                }}
+                .sky-desktop-rescue-nav a:hover {{
+                    background: rgba(56, 189, 248, .14);
+                    color: #ffffff !important;
+                }}
+                .sky-rescue-icon {{
+                    display: inline-flex;
+                    width: 26px;
+                    height: 26px;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 10px;
+                    background: rgba(148, 163, 184, .12);
+                }}
+                /* Quand la sidebar Streamlit est déjà visible, on masque le rail. */
+                section[data-testid="stSidebar"] ~ div .sky-desktop-rescue-nav {{
+                    display: none;
+                }}
+            }}
+            @media (max-width: 899px) {{
+                .sky-desktop-rescue-nav {{ display: none !important; }}
+            }}
+        </style>
+        <nav class="sky-desktop-rescue-nav" aria-label="Navigation Anatole">{links}</nav>
+        """,
+        unsafe_allow_html=True,
+    )
