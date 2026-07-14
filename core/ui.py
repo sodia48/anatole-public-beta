@@ -225,6 +225,70 @@ def _install_theme_persistence_bridge(current_theme: str) -> None:
         pass
 
 
+def force_anatole_browser_brand(page_title: str = "Anatole") -> None:
+    """Applique un titre navigateur Anatole et neutralise le branding Streamlit visible.
+
+    La fonction doit rester non bloquante : si le navigateur ou Streamlit bloque
+    l'injection, l'application continue sans erreur.
+    """
+    safe_title = html.escape(str(page_title or "Anatole"), quote=True)
+    try:
+        components.html(
+            f"""
+            <script>
+            (function() {{
+              try {{
+                const win = window.parent || window;
+                const doc = win.document;
+                if (!doc) return;
+                doc.title = "{safe_title}";
+                const hide = () => {{
+                  try {{
+                    doc.title = "{safe_title}";
+                    const selectors = [
+                      '#MainMenu',
+                      'footer',
+                      'header [data-testid="stToolbar"]',
+                      '[data-testid="stToolbar"]',
+                      '[data-testid="stDecoration"]',
+                      '[data-testid="stStatusWidget"]',
+                      '[aria-label="Main menu"]',
+                      '[title="Main menu"]'
+                    ];
+                    selectors.forEach((sel) => {{
+                      doc.querySelectorAll(sel).forEach((el) => {{
+                        el.style.visibility = 'hidden';
+                        el.style.display = 'none';
+                        el.style.pointerEvents = 'none';
+                      }});
+                    }});
+                    doc.querySelectorAll('*').forEach((el) => {{
+                      const txt = (el.innerText || '').trim();
+                      if (txt === 'Made with Streamlit' || txt.includes('Made with Streamlit')) {{
+                        el.style.display = 'none';
+                        el.style.visibility = 'hidden';
+                      }}
+                    }});
+                  }} catch (e) {{}}
+                }};
+                hide();
+                setTimeout(hide, 80);
+                setTimeout(hide, 400);
+                setTimeout(hide, 1200);
+                if (!win.__anatoleBrandInterval) {{
+                  win.__anatoleBrandInterval = win.setInterval(hide, 1500);
+                }}
+              }} catch (e) {{}}
+            }})();
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
+    except Exception:
+        pass
+
+
 def configure_page(title: str, icon: str = "📈") -> None:
     page_title = "Anatole" if str(title).strip().lower() == "anatole" else f"{title} · Anatole"
     if not st.session_state.get("_page_configured"):
