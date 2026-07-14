@@ -20,6 +20,10 @@ MOBILE_NAV_DEFAULTS = {
     "accueil": "cockpit",
     "home": "cockpit",
     "cockpit": "cockpit",
+    "aujourdhui": "aujourd-hui",
+    "today": "aujourd-hui",
+    "brief": "aujourd-hui",
+    "daily": "aujourd-hui",
     "recherche": "cockpit",
     "search": "cockpit",
     "screener": "screener",
@@ -59,6 +63,12 @@ pages = {
             icon="🏠",
             default=True,
             url_path="cockpit",
+        ),
+        _make_page(
+            "screens/28_AujourdHui.py",
+            title="Aujourd’hui",
+            icon="⚡",
+            url_path="aujourd-hui",
         ),
         _make_page(
             "screens/1_Screener.py",
