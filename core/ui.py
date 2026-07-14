@@ -45,12 +45,15 @@ def _normalized_theme(value: object) -> str:
     return ""
 
 
-def _theme_from_session(default: str = "light") -> str:
-    return "dark" if bool(st.session_state.get("theme_toggle", False)) else default
+def _theme_from_session(default: str = "dark") -> str:
+    """Retourne le thème courant avec le sombre comme valeur sûre par défaut."""
+    if "theme_toggle" not in st.session_state:
+        return default
+    return "dark" if bool(st.session_state.get("theme_toggle", True)) else "light"
 
 
 def _apply_theme_choice(profile: str, theme: str, *, save: bool = True) -> None:
-    theme = _normalized_theme(theme) or "light"
+    theme = _normalized_theme(theme) or "dark"
     st.session_state["theme_toggle"] = theme == "dark"
     st.session_state["_anatole_theme"] = theme
     if save:
@@ -64,7 +67,7 @@ def _apply_theme_choice(profile: str, theme: str, *, save: bool = True) -> None:
 
 def _install_theme_persistence_bridge(current_theme: str) -> None:
     """Persiste le thème côté navigateur et préserve le thème dans les liens internes."""
-    theme = _normalized_theme(current_theme) or "light"
+    theme = _normalized_theme(current_theme) or "dark"
     try:
         components.html(
             f"""
@@ -79,19 +82,16 @@ def _install_theme_persistence_bridge(current_theme: str) -> None:
                     const url = new URL(win.location.href);
                     const valid = new Set(["light", "dark"]);
 
-                    let stored = null;
-                    try {{ stored = win.localStorage.getItem(KEY); }} catch (e) {{ stored = null; }}
                     const inUrl = url.searchParams.get(PARAM);
 
-                    if (valid.has(CURRENT)) {{
-                        try {{ win.localStorage.setItem(KEY, CURRENT); }} catch (e) {{}}
+                    // V5.8.4 : le terminal sombre est le thème par défaut.
+                    // Une ancienne préférence navigateur "light" ne doit plus réactiver le bleu ciel toute seule.
+                    if (!valid.has(inUrl)) {{
+                        url.searchParams.set(PARAM, CURRENT);
+                        try {{ win.history.replaceState({{}}, "", url.toString()); }} catch (e) {{}}
                     }}
 
-                    if (!valid.has(inUrl) && valid.has(stored)) {{
-                        url.searchParams.set(PARAM, stored);
-                        win.location.replace(url.toString());
-                        return;
-                    }}
+                    try {{ win.localStorage.setItem(KEY, CURRENT); }} catch (e) {{}}
 
                     if (valid.has(inUrl)) {{
                         try {{ win.localStorage.setItem(KEY, inUrl); }} catch (e) {{}}
@@ -103,10 +103,6 @@ def _install_theme_persistence_bridge(current_theme: str) -> None:
                                 const currentUrl = new URL(win.location.href);
                                 const q = currentUrl.searchParams.get(PARAM);
                                 if (valid.has(q)) return q;
-                                try {{
-                                    const local = win.localStorage.getItem(KEY);
-                                    if (valid.has(local)) return local;
-                                }} catch (e) {{}}
                                 return CURRENT;
                             }})();
 
@@ -436,9 +432,19 @@ def _hydrate_preferences_for_current_page() -> None:
         hydrate_preferences(profile)
 
         if requested_theme:
-            # Le query param a priorité, même si une ancienne préférence existe encore.
+            # Le query param a priorité. Bleu ciel reste possible seulement lorsqu'il est demandé explicitement.
             st.session_state["theme_toggle"] = requested_theme == "dark"
             st.session_state["_anatole_theme"] = requested_theme
+        else:
+            # V5.8.4 : le sombre devient la base unique par défaut.
+            # Cela neutralise les anciennes préférences "light" enregistrées avant la migration.
+            st.session_state["theme_toggle"] = True
+            st.session_state["_anatole_theme"] = "dark"
+            try:
+                save_preferences(profile, {"theme": "dark"})
+                st.session_state.pop("_preferences_profile", None)
+            except Exception:
+                pass
     except Exception:
         # Le style ne doit jamais empêcher l'application de charger.
         pass
@@ -1604,6 +1610,9 @@ def sidebar_context() -> str:
     if requested_theme:
         st.session_state["theme_toggle"] = requested_theme == "dark"
         st.session_state["_anatole_theme"] = requested_theme
+    else:
+        st.session_state["theme_toggle"] = True
+        st.session_state["_anatole_theme"] = "dark"
 
     st.sidebar.markdown(
         """
@@ -1626,9 +1635,9 @@ def sidebar_context() -> str:
     # Ne pas fournir value= évite tout conflit entre la valeur du widget
     # et la valeur persistée.
     st.sidebar.toggle(
-        "Mode sombre",
+        "Terminal sombre",
         key="theme_toggle",
-        help="Bascule entre le thème bleu ciel et le terminal sombre.",
+        help="Activé par défaut. Désactive uniquement si tu veux utiliser le thème bleu ciel optionnel.",
     )
     st.sidebar.toggle(
         "Affichage compact",

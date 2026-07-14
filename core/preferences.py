@@ -55,7 +55,7 @@ def hydrate_preferences(profile: str) -> bool:
 
     prefs = load_preferences(profile)
     mapping = {
-        "theme_toggle": as_bool(prefs["theme"] == "dark"),
+        "theme_toggle": str(prefs.get("theme", "dark")).strip().lower() != "light",
         "compact_toggle": prefs["density"] == "compact",
         "experience_mode": prefs["experience_mode"],
         "show_ticker": as_bool(prefs["show_ticker"]),
