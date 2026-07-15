@@ -15,6 +15,7 @@ from core.etf_directory import (
     load_etf_history,
     load_etf_holdings,
     load_etf_quote,
+    load_top_etf_radar,
     sector_map_frame,
 )
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, plotly_mobile_config
@@ -120,6 +121,45 @@ def _display_frame(frame: pd.DataFrame) -> pd.DataFrame:
             "Ticker": "Symbole",
             "Variation": "Variation jour",
             "Rôle": "Utilité",
+        }
+    )
+
+
+
+def _display_top100_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+    display = frame.copy()
+    columns = [
+        "Rang",
+        "Ticker",
+        "Nom",
+        "Émetteur",
+        "Famille",
+        "Secteur",
+        "Prix",
+        "Rendement période",
+        "Variation",
+        "Volume radar",
+        "Score suivi",
+        "Score composite",
+    ]
+    for column in columns:
+        if column not in display.columns:
+            display[column] = pd.NA
+    display["Prix"] = display["Prix"].map(fmt_money)
+    display["Rendement période"] = display["Rendement période"].map(lambda value: fmt_pct(value, signed=True))
+    display["Variation"] = display["Variation"].map(lambda value: fmt_pct(value, signed=True))
+    display["Volume radar"] = display["Volume radar"].map(fmt_int)
+    display["Score suivi"] = display["Score suivi"].map(lambda value: "—" if _is_missing(value) else f"{float(value):.0f}/100")
+    display["Score composite"] = display["Score composite"].map(lambda value: "—" if _is_missing(value) else f"{float(value):.0f}/100")
+    return display[columns].rename(
+        columns={
+            "Ticker": "Symbole",
+            "Variation": "Variation jour",
+            "Volume radar": "Volume / suivi",
+            "Score suivi": "Score suivi",
+            "Score composite": "Score Anatole",
         }
     )
 
@@ -449,7 +489,7 @@ st.info(
 
 section = st.segmented_control(
     "Vue",
-    ["Cartographie sectorielle", "Fiche ETF", "ETF cotés TSX", "Analyse historique", "Comparer", "Méthode"],
+    ["Cartographie sectorielle", "Fiche ETF", "Top 100", "ETF cotés TSX", "Analyse historique", "Comparer", "Méthode"],
     default="Cartographie sectorielle",
     selection_mode="single",
 )
@@ -501,6 +541,71 @@ elif section == "Fiche ETF":
         if not st.session_state.get("etf_detail_ticker"):
             _select_etf(str(matches.iloc[0].get("Ticker", "XIC")))
         _show_etf_detail_panel(directory, period=PERIODS[detail_period_label])
+
+
+elif section == "Top 100":
+    st.subheader("Top 100 ETF — performance et suivi")
+    st.write(
+        "Cette vue classe les ETF les plus intéressants du catalogue Anatole selon la performance récente, "
+        "la liquidité observable et un score de suivi. Cliquez ensuite sur un symbole pour ouvrir sa fiche complète."
+    )
+
+    c1, c2, c3 = st.columns([1, 1, 1.2])
+    with c1:
+        top_period_label = st.selectbox("Période", list(PERIODS.keys()), index=3, key="top100_period")
+    with c2:
+        top_mode = st.selectbox(
+            "Classement",
+            ["Score composite", "Meilleure performance", "Plus suivis / liquides"],
+            key="top100_mode",
+        )
+    with c3:
+        top_query = st.text_input("Filtrer", placeholder="Technologie, dividendes, énergie, Vanguard, BMO…", key="top100_filter")
+
+    with st.spinner("Classement des ETF…"):
+        top_frame = load_top_etf_radar(period=PERIODS[top_period_label], sort_mode=top_mode, limit=120)
+
+    if top_frame.empty:
+        st.warning("Le classement ETF est temporairement indisponible. La fiche ETF et le répertoire restent accessibles.")
+    else:
+        filtered_top = top_frame.copy()
+        if top_query.strip():
+            q = top_query.strip().lower()
+            mask = pd.Series(False, index=filtered_top.index)
+            for column in ["Ticker", "Nom", "Émetteur", "Famille", "Secteur", "Région", "Exposition", "Rôle"]:
+                if column in filtered_top.columns:
+                    mask = mask | filtered_top[column].astype(str).str.lower().str.contains(q, regex=False)
+            filtered_top = filtered_top[mask].copy()
+            filtered_top["Rang"] = range(1, len(filtered_top) + 1)
+
+        shown = filtered_top.head(100).copy()
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("ETF affichés", f"{len(shown)}")
+        best_return = pd.to_numeric(shown.get("Rendement période", pd.Series(dtype="float64")), errors="coerce").max()
+        m2.metric("Meilleur rendement", fmt_pct(best_return, signed=True))
+        median_return = pd.to_numeric(shown.get("Rendement période", pd.Series(dtype="float64")), errors="coerce").median()
+        m3.metric("Rendement médian", fmt_pct(median_return, signed=True))
+        top_sector = shown.get("Secteur", pd.Series(dtype="str")).dropna().astype(str).mode()
+        m4.metric("Thème dominant", top_sector.iloc[0] if not top_sector.empty else "—")
+
+        st.caption(
+            "Le score suivi est un proxy fondé sur la liquidité observée et la priorité du catalogue Anatole. "
+            "Il ne représente pas un nombre officiel d’abonnés ou d’actifs sous gestion."
+        )
+        st.dataframe(_display_top100_frame(shown), hide_index=True, width="stretch")
+
+        st.markdown("#### Ouvrir une fiche ETF")
+        _render_etf_buttons(shown["Ticker"].astype(str).str.upper().tolist(), directory, "top100_etf", limit=40)
+        if st.session_state.get("etf_detail_ticker"):
+            _show_etf_detail_panel(directory, period=PERIODS[top_period_label])
+
+        st.download_button(
+            "Télécharger le Top 100",
+            data=shown.to_csv(index=False).encode("utf-8"),
+            file_name="anatole_top_100_etf.csv",
+            mime="text/csv",
+            width="stretch",
+        )
 
 elif section == "ETF cotés TSX":
     st.subheader("Répertoire des ETF cotés au Canada")
