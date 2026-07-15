@@ -543,3 +543,130 @@ def etf_history_summary(history: pd.DataFrame) -> dict[str, object]:
     drawdown_series = pd.to_numeric(history.get("Repli depuis sommet", pd.Series(dtype=float)), errors="coerce").dropna()
     drawdown = float(drawdown_series.min()) if not drawdown_series.empty else None
     return {"start": start, "end": end, "return": total, "drawdown": drawdown}
+
+
+@st.cache_data(ttl=90, show_spinner=False)
+def load_etf_quote(etf_ticker: str, etf_yahoo_ticker: str = "") -> dict[str, object]:
+    """Return the most recent available quote for an ETF.
+
+    The data source can be live or delayed depending on the market-data provider.
+    The function is defensive: if one path fails, it falls back to recent daily data
+    so the ETF page remains usable on Render.
+    """
+    etf = str(etf_ticker or "").upper().strip()
+    yahoo = str(etf_yahoo_ticker or "").strip()
+    if not yahoo and etf:
+        catalogue = load_etf_catalogue()
+        if not catalogue.empty and "Ticker" in catalogue.columns:
+            match = catalogue[catalogue["Ticker"].astype(str).str.upper().eq(etf)]
+            if not match.empty:
+                yahoo = str(match.iloc[0].get("YahooTicker", ""))
+    if not yahoo and etf:
+        yahoo = raw_to_yahoo(etf)
+    result: dict[str, object] = {
+        "Ticker": etf,
+        "YahooTicker": yahoo,
+        "Prix": None,
+        "Variation": None,
+        "VariationPct": None,
+        "Volume": None,
+        "Devise": None,
+        "Ouverture": None,
+        "HautJour": None,
+        "BasJour": None,
+        "ClôturePrécédente": None,
+        "Haut52S": None,
+        "Bas52S": None,
+        "SourceCours": "Indisponible",
+    }
+    if not yahoo:
+        return result
+
+    try:
+        ticker = yf.Ticker(yahoo)
+        fast = getattr(ticker, "fast_info", None)
+        if fast is not None:
+            def _fast_get(*names: str):
+                for name in names:
+                    try:
+                        value = fast.get(name) if hasattr(fast, "get") else getattr(fast, name)
+                    except Exception:
+                        value = None
+                    if value is not None:
+                        return value
+                return None
+
+            price = _fast_get("last_price", "lastPrice", "regular_market_price")
+            previous = _fast_get("previous_close", "previousClose", "regular_market_previous_close")
+            result.update(
+                {
+                    "Prix": price,
+                    "Volume": _fast_get("last_volume", "lastVolume", "volume"),
+                    "Devise": _fast_get("currency"),
+                    "Ouverture": _fast_get("open", "regular_market_open"),
+                    "HautJour": _fast_get("day_high", "dayHigh"),
+                    "BasJour": _fast_get("day_low", "dayLow"),
+                    "ClôturePrécédente": previous,
+                    "Haut52S": _fast_get("year_high", "yearHigh"),
+                    "Bas52S": _fast_get("year_low", "yearLow"),
+                    "SourceCours": "Marché disponible",
+                }
+            )
+            try:
+                if price is not None and previous not in (None, 0):
+                    result["Variation"] = float(price) - float(previous)
+                    result["VariationPct"] = (float(price) / float(previous) - 1.0) * 100.0
+            except Exception:
+                pass
+            if result.get("Prix") is not None:
+                return result
+    except Exception:
+        pass
+
+    try:
+        raw = yf.download(yahoo, period="7d", interval="1d", auto_adjust=False, progress=False, threads=False)
+    except Exception:
+        raw = pd.DataFrame()
+    if raw is None or raw.empty:
+        return result
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = [str(col[0]) for col in raw.columns]
+    price_col = "Close" if "Close" in raw.columns else next((col for col in raw.columns if str(col).lower() == "close"), None)
+    volume_col = "Volume" if "Volume" in raw.columns else next((col for col in raw.columns if str(col).lower() == "volume"), None)
+    high_col = "High" if "High" in raw.columns else next((col for col in raw.columns if str(col).lower() == "high"), None)
+    low_col = "Low" if "Low" in raw.columns else next((col for col in raw.columns if str(col).lower() == "low"), None)
+    open_col = "Open" if "Open" in raw.columns else next((col for col in raw.columns if str(col).lower() == "open"), None)
+    if price_col is None:
+        return result
+    clean = raw.dropna(subset=[price_col]).copy()
+    if clean.empty:
+        return result
+    last = clean.iloc[-1]
+    prev = clean.iloc[-2] if len(clean) > 1 else None
+    price = float(last[price_col])
+    previous = float(prev[price_col]) if prev is not None else None
+    result.update(
+        {
+            "Prix": price,
+            "Volume": float(last[volume_col]) if volume_col and pd.notna(last.get(volume_col)) else None,
+            "Ouverture": float(last[open_col]) if open_col and pd.notna(last.get(open_col)) else None,
+            "HautJour": float(last[high_col]) if high_col and pd.notna(last.get(high_col)) else None,
+            "BasJour": float(last[low_col]) if low_col and pd.notna(last.get(low_col)) else None,
+            "ClôturePrécédente": previous,
+            "SourceCours": "Marché disponible",
+        }
+    )
+    if previous not in (None, 0):
+        result["Variation"] = price - previous
+        result["VariationPct"] = (price / previous - 1.0) * 100.0
+    return result
+
+
+def etf_detail_sources(etf_ticker: str, etf_yahoo_ticker: str = "") -> dict[str, str]:
+    """Useful public links for an ETF detail card."""
+    etf = str(etf_ticker or "").upper().strip()
+    yahoo = str(etf_yahoo_ticker or "").strip() or raw_to_yahoo(etf)
+    return {
+        "Yahoo Finance": f"https://finance.yahoo.com/quote/{yahoo}",
+        "TMX Money": f"https://money.tmx.com/en/quote/{etf}",
+    }
