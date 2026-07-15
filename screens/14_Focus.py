@@ -42,10 +42,18 @@ from core.ui import apply_style, configure_page, footer, page_header, sidebar_co
 from core.utils import format_compact, format_money, format_number, get_secret, safe_float
 from core.trader_toolkit import (
     build_trader_dashboard,
+    confluence_map,
+    execution_ladder,
+    institutional_trade_memo,
     position_sizing_table,
+    risk_reward_matrix,
     scenario_table,
+    setup_scorecards,
+    smart_alert_recipes,
+    timeframe_alignment_table,
     trade_plan,
     trader_checklist,
+    trader_journal_template,
     trader_levels_table,
     trader_narrative,
 )
@@ -420,121 +428,193 @@ if section == "Aperçu":
 
 
 elif section == "Trader Pro":
-    st.subheader("Terminal trader du titre")
+    st.subheader("Trader Pro — Edge Lab")
     st.caption(
-        "Cette section transforme la fiche action en plan de travail tactique : régime, niveaux, risque, taille de position et scénarios. "
-        "Elle ne donne pas de recommandation personnalisée; elle force surtout une discipline de décision."
+        "Un poste de décision tactique : lecture multi-horizon, confluence, setups, niveaux, taille de position, exécution et journal de trade. "
+        "L'objectif est d'imposer une méthode froide, pas de promettre un résultat."
     )
 
     trader_dashboard = build_trader_dashboard(history, info, currency)
-    trader_style = st.segmented_control(
-        "Horizon de travail",
-        ["Court terme", "Swing", "Position"],
-        default="Swing",
-        selection_mode="single",
-        help="Ajuste la distance d'invalidation indicative selon l'horizon de travail.",
-        key=f"focus_trader_style_{ticker}",
-    )
-    plan = trade_plan(history, currency=currency, style=trader_style or "Swing")
+    top_controls = st.columns([1.2, 1.2, 2.2])
+    with top_controls[0]:
+        trader_style = st.segmented_control(
+            "Horizon",
+            ["Court terme", "Swing", "Position"],
+            default="Swing",
+            selection_mode="single",
+            help="Ajuste la distance d'invalidation indicative selon l'horizon de travail.",
+            key=f"focus_trader_style_{ticker}",
+        )
+    with top_controls[1]:
+        decision_mode = st.segmented_control(
+            "Mode",
+            ["Diagnostic", "Plan", "Exécution"],
+            default="Plan",
+            selection_mode="single",
+            key=f"focus_trader_decision_mode_{ticker}",
+        )
+    with top_controls[2]:
+        st.caption(
+            "Chaque chiffre est indicatif et doit être vérifié avec le carnet d'ordres, les nouvelles, la liquidité et ton propre risque. "
+            "Anatole structure la décision; il ne remplace pas le jugement."
+        )
 
-    st.markdown("#### Tableau de bord trader")
+    plan = trade_plan(history, currency=currency, style=trader_style or "Swing")
     score = trader_dashboard.get("score", 0)
     regime = trader_dashboard.get("regime", "N/D")
     bias = trader_dashboard.get("bias", "N/D")
     metrics_map = trader_dashboard.get("metrics", {}) or {}
 
-    t1, t2, t3, t4 = st.columns(4)
+    st.markdown("#### Cockpit tactique")
+    t1, t2, t3, t4, t5 = st.columns(5)
     t1.metric("Score trader", f"{score}/100")
     t2.metric("Régime", str(regime))
     t3.metric("Biais", str(bias))
     t4.metric("Volume relatif", metrics_map.get("Volume relatif", "N/D"))
-
-    t5, t6, t7, t8 = st.columns(4)
     t5.metric("ATR 14", metrics_map.get("ATR 14", "N/D"), metrics_map.get("ATR %", None))
+
+    t6, t7, t8, t9 = st.columns(4)
     t6.metric("Volatilité 20j", metrics_map.get("Volatilité 20j ann.", "N/D"))
     t7.metric("Support proche", metrics_map.get("Support proche", "N/D"))
     t8.metric("Résistance proche", metrics_map.get("Résistance proche", "N/D"))
+    t9.metric("Drawdown période", metrics_map.get("Drawdown max", "N/D"))
 
     for line in trader_narrative(str(name), ticker, trader_dashboard, plan):
         st.write(line)
 
-    st.markdown("#### Niveaux de marché et zones de décision")
-    levels = trader_levels_table(history, currency=currency)
-    if levels.empty:
-        st.info("Niveaux indisponibles pour ce titre sur la période affichée.")
-    else:
-        st.dataframe(levels, hide_index=True, width="stretch")
-
-    st.markdown("#### Plan de risque")
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Entrée indicative", format_money(plan.get("entry"), currency))
-    r2.metric("Invalidation", format_money(plan.get("stop"), currency))
-    r3.metric("Risque / action", format_money(plan.get("risk_per_share"), currency))
-    r4.metric("Cible 1", format_money(plan.get("target1"), currency), f"R/R {ratio_text(plan.get('rr1'))}")
-
-    account_cols = st.columns([1, 1, 2])
-    with account_cols[0]:
-        account_size = st.number_input(
-            "Capital simulé",
-            min_value=500.0,
-            max_value=5_000_000.0,
-            value=float(st.session_state.get("focus_trader_capital", 10_000.0)),
-            step=500.0,
-            key=f"focus_trader_account_{ticker}",
-        )
-        st.session_state.focus_trader_capital = account_size
-    with account_cols[1]:
-        risk_pct = st.number_input(
-            "Risque par idée (%)",
-            min_value=0.1,
-            max_value=10.0,
-            value=float(st.session_state.get("focus_trader_risk_pct", 1.0)),
-            step=0.1,
-            key=f"focus_trader_risk_{ticker}",
-        )
-        st.session_state.focus_trader_risk_pct = risk_pct
-    with account_cols[2]:
-        st.caption(
-            "La taille de position est une simulation éducative basée sur l'écart entre le prix actuel et l'invalidation. "
-            "Elle ne tient pas compte des frais, de la fiscalité, du spread ni de ta situation personnelle."
-        )
-
-    sizing = position_sizing_table(plan, float(account_size), float(risk_pct))
-    st.dataframe(sizing, hide_index=True, width="stretch")
-
-    plan_tab, checklist_tab, scenarios_tab, prompt_tab = st.tabs(
-        ["Checklist", "Scénarios", "Exécution", "Question à l'assistant"]
+    overview_tab, setup_tab, risk_tab, execution_tab, journal_tab = st.tabs(
+        ["Vue institutionnelle", "Setup", "Risque & taille", "Exécution", "Journal & assistant"]
     )
-    with plan_tab:
-        st.markdown("#### Checklist avant décision")
-        checklist = trader_checklist(history)
-        st.dataframe(checklist, hide_index=True, width="stretch")
-        st.caption(
-            "Une idée devient plus sérieuse quand tendance, momentum, volume et risque sont alignés. "
-            "Si plusieurs points sont à surveiller, la bonne décision peut être d'attendre."
+
+    with overview_tab:
+        st.markdown("#### Alignement multi-horizon")
+        timeframes = timeframe_alignment_table(history)
+        if timeframes.empty:
+            st.info("Historique insuffisant pour calculer l'alignement multi-horizon.")
+        else:
+            st.dataframe(timeframes, hide_index=True, width="stretch")
+
+        st.markdown("#### Carte de confluence")
+        confluence = confluence_map(history)
+        if confluence.empty:
+            st.info("Confluence indisponible pour ce titre.")
+        else:
+            st.dataframe(confluence, hide_index=True, width="stretch")
+
+        st.markdown("#### Mémo institutionnel")
+        st.text_area(
+            "Lecture structurée",
+            institutional_trade_memo(str(name), ticker, trader_dashboard, plan),
+            height=310,
+            key=f"focus_institutional_memo_{ticker}",
         )
-    with checklist_tab:
+
+    with setup_tab:
+        st.markdown("#### Setups détectables")
+        setups = setup_scorecards(history, plan)
+        if setups.empty:
+            st.info("Aucun setup exploitable calculé avec les données actuelles.")
+        else:
+            st.dataframe(
+                setups,
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100),
+                },
+            )
+            best_setup = str(setups.iloc[0].get("Setup", "N/D")) if not setups.empty else "N/D"
+            best_score = int(setups.iloc[0].get("Score", 0)) if not setups.empty else 0
+            st.success(f"Setup prioritaire à vérifier : {best_setup} · qualité indicative {best_score}/100")
+
+        st.markdown("#### Niveaux de marché et zones de décision")
+        levels = trader_levels_table(history, currency=currency)
+        if levels.empty:
+            st.info("Niveaux indisponibles pour ce titre sur la période affichée.")
+        else:
+            st.dataframe(levels, hide_index=True, width="stretch")
+
+    with risk_tab:
+        st.markdown("#### Plan de risque")
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Entrée indicative", format_money(plan.get("entry"), currency))
+        r2.metric("Invalidation", format_money(plan.get("stop"), currency))
+        r3.metric("Risque / action", format_money(plan.get("risk_per_share"), currency))
+        r4.metric("Cible 1", format_money(plan.get("target1"), currency), f"R/R {ratio_text(plan.get('rr1'))}")
+
+        account_cols = st.columns([1, 1, 2])
+        with account_cols[0]:
+            account_size = st.number_input(
+                "Capital simulé",
+                min_value=500.0,
+                max_value=5_000_000.0,
+                value=float(st.session_state.get("focus_trader_capital", 10_000.0)),
+                step=500.0,
+                key=f"focus_trader_account_{ticker}",
+            )
+            st.session_state.focus_trader_capital = account_size
+        with account_cols[1]:
+            risk_pct = st.number_input(
+                "Risque par idée (%)",
+                min_value=0.1,
+                max_value=10.0,
+                value=float(st.session_state.get("focus_trader_risk_pct", 1.0)),
+                step=0.1,
+                key=f"focus_trader_risk_{ticker}",
+            )
+            st.session_state.focus_trader_risk_pct = risk_pct
+        with account_cols[2]:
+            st.caption(
+                "La taille est calculée à partir du risque maximal choisi et de l'écart entre le prix et l'invalidation. "
+                "Elle ne tient pas compte des frais, spreads, taxes, glissement ou contraintes personnelles."
+            )
+
+        sizing = position_sizing_table(plan, float(account_size), float(risk_pct))
+        st.dataframe(sizing, hide_index=True, width="stretch")
+
+        st.markdown("#### Matrice rendement / risque")
+        st.dataframe(risk_reward_matrix(plan), hide_index=True, width="stretch")
+
+    with execution_tab:
+        st.markdown("#### Ladder d'exécution")
+        st.dataframe(execution_ladder(plan), hide_index=True, width="stretch")
+
         st.markdown("#### Scénarios de prix")
         st.dataframe(scenario_table(plan), hide_index=True, width="stretch")
-    with scenarios_tab:
-        st.markdown("#### Règles d'exécution proposées")
-        st.write("- Ne pas entrer uniquement parce que le titre bouge; attendre une zone, une confirmation ou une invalidation claire.")
-        st.write("- Réduire la taille si l'ATR est élevé ou si le stop logique est trop éloigné.")
-        st.write("- Refuser un trade si le ratio rendement/risque vers la première zone de décision est insuffisant.")
-        st.write("- Après une cassure, surveiller le volume relatif et le maintien au-dessus du niveau franchi.")
-        st.write("- Éviter de moyenner à la baisse sans nouveau signal objectif.")
-    with prompt_tab:
+
+        st.markdown("#### Alertes intelligentes à créer")
+        alerts = smart_alert_recipes(ticker, plan, trader_dashboard)
+        st.dataframe(alerts, hide_index=True, width="stretch")
+
+        st.markdown("#### Règles d'exécution")
+        st.write("- Ne pas entrer parce que le titre bouge; entrer seulement si le plan défini se déclenche.")
+        st.write("- Ne jamais augmenter la taille si l'invalidation devient plus éloignée.")
+        st.write("- Si le prix atteint la cible 1, considérer une action : réduire, sécuriser, ou laisser courir avec stop remonté.")
+        st.write("- Si le volume contredit la cassure, traiter le signal comme fragile.")
+        st.write("- Si l'asymétrie R/R devient mauvaise, attendre le prochain setup.")
+
+    with journal_tab:
+        st.markdown("#### Journal de trade")
+        journal = trader_journal_template(str(name), ticker, trader_dashboard, plan)
+        st.text_area(
+            "Modèle à copier dans ton journal",
+            journal,
+            height=310,
+            key=f"focus_trader_journal_{ticker}",
+        )
+
+        st.markdown("#### Question avancée à l'assistant")
         assistant_prompt = (
-            f"Analyse {ticker} comme un trader institutionnel. Utilise le régime {regime}, "
+            f"Analyse {ticker} comme un desk trader institutionnel. Utilise le régime {regime}, "
             f"le score trader {score}/100, le prix {format_money(plan.get('entry'), currency)}, "
-            f"l'invalidation {format_money(plan.get('stop'), currency)}, "
-            f"la cible 1 {format_money(plan.get('target1'), currency)} et explique les scénarios, "
-            f"les risques, les niveaux à surveiller et les conditions qui annuleraient le trade."
+            f"l'invalidation {format_money(plan.get('stop'), currency)}, la cible 1 {format_money(plan.get('target1'), currency)}, "
+            f"les setups détectables, la confluence multi-horizon, le risque de faux signal, la taille de position, "
+            f"et conclus avec un plan d'exécution conditionnel en 3 scénarios."
         )
         st.text_area(
             "Copier-coller dans l'assistant Anatole",
             assistant_prompt,
-            height=160,
+            height=180,
             key=f"focus_trader_prompt_{ticker}",
         )
         if st.button("Ouvrir l'assistant", width="stretch", key=f"focus_open_assistant_{ticker}"):
@@ -542,8 +622,8 @@ elif section == "Trader Pro":
             st.page_link("screens/13_Assistant.py", label="Aller à l'assistant", width="stretch")
 
     st.warning(
-        "Rappel : cette section fournit un cadre d'analyse et de gestion du risque. "
-        "Elle ne rend personne invincible et ne remplace pas un plan personnel, une vérification des nouvelles ou une gestion stricte du capital."
+        "Rappel : Trader Pro fournit un cadre de lecture, de discipline et de gestion du risque. "
+        "Il ne prédit pas le marché, ne garantit aucun résultat et ne constitue pas une recommandation personnalisée."
     )
 
 elif section == "Écosystème":
