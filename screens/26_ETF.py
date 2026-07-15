@@ -8,11 +8,13 @@ import streamlit as st
 
 from core.etf_directory import (
     estimate_etf_contributors,
+    etf_detail_sources,
     etf_history_summary,
     etf_summary,
     load_etf_directory,
     load_etf_history,
     load_etf_holdings,
+    load_etf_quote,
     sector_map_frame,
 )
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, plotly_mobile_config
@@ -222,6 +224,208 @@ def _format_contributor_frame(frame: pd.DataFrame, limit: int = 10) -> pd.DataFr
     )
 
 
+
+
+def _safe_float(value: object) -> float | None:
+    if _is_missing(value):
+        return None
+    try:
+        number = float(value)
+    except Exception:
+        return None
+    if math.isnan(number):
+        return None
+    return number
+
+
+def _ticker_tokens(value: object) -> list[str]:
+    raw = str(value or "")
+    tokens: list[str] = []
+    for chunk in raw.replace(";", ",").split(","):
+        token = chunk.strip().upper()
+        if token and token != "—" and token not in tokens:
+            tokens.append(token)
+    return tokens
+
+
+def _select_etf(ticker: str) -> None:
+    value = str(ticker or "").upper().strip()
+    if value:
+        st.session_state["etf_detail_ticker"] = value
+
+
+def _selected_etf_detail_row(directory: pd.DataFrame, fallback: str = "XIC") -> pd.Series:
+    ticker = str(st.session_state.get("etf_detail_ticker") or fallback).upper().strip()
+    matched = directory[directory["Ticker"].astype(str).str.upper().eq(ticker)]
+    if matched.empty:
+        matched = directory[directory["Ticker"].astype(str).str.upper().eq(str(fallback).upper())]
+    if matched.empty:
+        return directory.iloc[0]
+    return matched.iloc[0]
+
+
+def _format_holdings_frame(frame: pd.DataFrame, limit: int = 25) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+    display = frame.copy().head(limit)
+    for column in ["Ticker", "Nom", "Poids", "Secteur", "SourcePositions"]:
+        if column not in display.columns:
+            display[column] = pd.NA
+    display["Poids"] = display["Poids"].map(fmt_weight)
+    display["SourcePositions"] = display["SourcePositions"].replace(
+        {
+            "Profil indicatif": "Profil indicatif",
+            "Données publiques": "Source publique",
+            "Catalogue positions": "Catalogue validé",
+        }
+    )
+    return display[["Ticker", "Nom", "Poids", "Secteur", "SourcePositions"]].rename(
+        columns={
+            "Ticker": "Symbole",
+            "Poids": "Poids",
+            "SourcePositions": "Source composition",
+        }
+    )
+
+
+def _render_etf_buttons(tickers: list[str], directory: pd.DataFrame, prefix: str, limit: int = 20) -> None:
+    clean = []
+    directory_tickers = set(directory["Ticker"].astype(str).str.upper().tolist())
+    for ticker in tickers:
+        t = str(ticker or "").upper().strip()
+        if t and t in directory_tickers and t not in clean:
+            clean.append(t)
+    if not clean:
+        return
+    cols = st.columns(4)
+    for idx, ticker in enumerate(clean[:limit]):
+        row = directory[directory["Ticker"].astype(str).str.upper().eq(ticker)].head(1)
+        name = str(row.iloc[0].get("Nom", "")) if not row.empty else ticker
+        with cols[idx % 4]:
+            if st.button(f"Ouvrir {ticker}", key=f"{prefix}_{ticker}_{idx}", width="stretch", help=name):
+                _select_etf(ticker)
+
+
+def _show_etf_detail_panel(directory: pd.DataFrame, ticker: str | None = None, period: str = "1y") -> None:
+    if directory.empty:
+        return
+    if ticker:
+        _select_etf(ticker)
+    row = _selected_etf_detail_row(directory)
+    etf_ticker = str(row.get("Ticker", "")).upper().strip()
+    etf_yahoo = str(row.get("YahooTicker", "")).strip()
+    if not etf_ticker:
+        return
+
+    quote = load_etf_quote(etf_ticker, etf_yahoo)
+    holdings = load_etf_holdings(etf_ticker, etf_yahoo)
+
+    st.markdown("---")
+    st.subheader(f"Fiche ETF — {etf_ticker}")
+    st.caption(
+        f"{row.get('Nom', '')} · {row.get('Émetteur', '—')} · {row.get('Famille', '—')} · {row.get('Exposition', '—')}"
+    )
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Prix", fmt_money(quote.get("Prix")))
+    m2.metric("Variation", fmt_pct(quote.get("VariationPct"), signed=True))
+    m3.metric("Volume", fmt_int(quote.get("Volume")))
+    m4.metric("Haut jour", fmt_money(quote.get("HautJour")))
+    m5.metric("Bas jour", fmt_money(quote.get("BasJour")))
+
+    st.caption(
+        "Prix disponible via les sources de marché intégrées. Selon la source et la bourse, les données peuvent être en direct ou différées."
+    )
+
+    link_cols = st.columns(2)
+    sources = etf_detail_sources(etf_ticker, etf_yahoo)
+    with link_cols[0]:
+        st.link_button("Ouvrir la fiche Yahoo Finance", sources.get("Yahoo Finance", "#"), width="stretch")
+    with link_cols[1]:
+        st.link_button("Ouvrir la fiche TMX", sources.get("TMX Money", "#"), width="stretch")
+
+    tabs = st.tabs(["Prix", "Composition", "Moteurs", "Lecture"])
+    with tabs[0]:
+        hist = load_etf_history(etf_yahoo, period=period)
+        if hist.empty:
+            st.info("L’historique de prix est temporairement indisponible pour cet ETF.")
+        else:
+            chart_frame = hist.copy()
+            chart_frame["Date"] = pd.to_datetime(chart_frame["Date"], errors="coerce")
+            fig = px.line(
+                chart_frame,
+                x="Date",
+                y="Base 100",
+                title=f"{etf_ticker} — évolution en base 100",
+                labels={"Base 100": "Base 100", "Date": "Date"},
+            )
+            fig.update_layout(height=430, margin=dict(l=10, r=10, t=55, b=10))
+            st.plotly_chart(fig, width="stretch", config=plotly_mobile_config())
+
+    with tabs[1]:
+        if holdings.empty:
+            st.info("La composition principale n’est pas disponible automatiquement pour cet ETF.")
+        else:
+            h = holdings.copy()
+            h["Poids"] = h["Poids"].map(_safe_float)
+            h = h.sort_values("Poids", ascending=False, na_position="last")
+            weights = pd.to_numeric(h["Poids"], errors="coerce").dropna()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Positions suivies", f"{len(h)}")
+            c2.metric("Poids top 5", fmt_pct(weights.head(5).sum() if not weights.empty else None))
+            c3.metric("Source", str(h.get("SourcePositions", pd.Series(["—"])).dropna().astype(str).head(1).iloc[0] if not h.empty else "—"))
+            st.dataframe(_format_holdings_frame(h, limit=30), hide_index=True, width="stretch")
+
+            chart = h.dropna(subset=["Poids"]).head(15).copy()
+            if not chart.empty:
+                chart["Libellé"] = chart["Ticker"].astype(str) + " — " + chart["Nom"].astype(str).str.slice(0, 28)
+                fig_h = px.bar(
+                    chart.sort_values("Poids"),
+                    x="Poids",
+                    y="Libellé",
+                    orientation="h",
+                    title=f"Principales positions de {etf_ticker}",
+                    labels={"Poids": "Poids estimé (%)", "Libellé": "Position"},
+                )
+                fig_h.update_layout(height=480, margin=dict(l=10, r=10, t=55, b=10))
+                st.plotly_chart(fig_h, width="stretch", config=plotly_mobile_config())
+
+    with tabs[2]:
+        contributors = estimate_etf_contributors(etf_ticker, etf_yahoo, period=period)
+        if contributors.empty:
+            st.info("Les moteurs de performance ne sont pas disponibles pour cet ETF.")
+        else:
+            pos = contributors[contributors["Contribution estimée"].fillna(0).ge(0)].sort_values(
+                "Contribution estimée", ascending=False
+            )
+            neg = contributors[contributors["Contribution estimée"].fillna(0).lt(0)].sort_values(
+                "Contribution estimée", ascending=True
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("#### Actions qui ont porté l’ETF")
+                st.dataframe(_format_contributor_frame(pos, limit=8), hide_index=True, width="stretch")
+            with c2:
+                st.markdown("#### Actions qui ont freiné l’ETF")
+                st.dataframe(_format_contributor_frame(neg, limit=8), hide_index=True, width="stretch")
+
+    with tabs[3]:
+        family = str(row.get("Famille", "—"))
+        exposure = str(row.get("Exposition", "—"))
+        role = str(row.get("Rôle", "—"))
+        st.markdown(
+            f"""
+            **Lecture Anatole**
+
+            **{etf_ticker}** sert principalement à suivre : **{exposure}**.  
+            Famille : **{family}**.  
+            Utilité : **{role}**.
+
+            À vérifier avant de prendre une décision : frais, liquidité, devise, concentration, composition officielle et horizon de placement.
+            """
+        )
+
+
 with st.spinner("Préparation du catalogue ETF…"):
     directory = load_etf_directory(include_prices=True)
 
@@ -245,7 +449,7 @@ st.info(
 
 section = st.segmented_control(
     "Vue",
-    ["Cartographie sectorielle", "ETF cotés TSX", "Analyse historique", "Comparer", "Méthode"],
+    ["Cartographie sectorielle", "Fiche ETF", "ETF cotés TSX", "Analyse historique", "Comparer", "Méthode"],
     default="Cartographie sectorielle",
     selection_mode="single",
 )
@@ -255,7 +459,18 @@ if section == "Cartographie sectorielle":
     st.write(
         "Utilisez cette vue pour passer rapidement d’un secteur économique à des ETF canadiens ou mondiaux cotés au Canada."
     )
-    st.dataframe(sector_map_frame(), hide_index=True, width="stretch")
+    sector_map = sector_map_frame()
+    st.dataframe(sector_map, hide_index=True, width="stretch")
+
+    st.markdown("#### Ouvrir rapidement une fiche ETF")
+    map_tickers: list[str] = []
+    for column in ["ETF Canada", "ETF mondial coté TSX"]:
+        if column in sector_map.columns:
+            for value in sector_map[column].tolist():
+                map_tickers.extend(_ticker_tokens(value))
+    _render_etf_buttons(map_tickers, directory, "sector_map_etf", limit=24)
+    if st.session_state.get("etf_detail_ticker"):
+        _show_etf_detail_panel(directory, period="1y")
 
     st.subheader("ETF sectoriels et thématiques")
     sector_frame = directory[
@@ -266,6 +481,26 @@ if section == "Cartographie sectorielle":
     if selected_sector != "Tous":
         sector_frame = sector_frame[sector_frame["Secteur"].astype(str).eq(selected_sector)]
     st.dataframe(_display_frame(sector_frame), hide_index=True, width="stretch")
+
+elif section == "Fiche ETF":
+    st.subheader("Rechercher une fiche ETF")
+    st.write("Cliquez sur un ETF pour afficher son prix disponible, son historique, sa composition et les principaux titres qui expliquent sa performance.")
+
+    c_search, c_period = st.columns([2.2, 1])
+    with c_search:
+        query = st.text_input("Rechercher un ETF", placeholder="XIC, XFN, banques, énergie, dividendes, technologie…", key="etf_detail_search")
+    with c_period:
+        detail_period_label = st.selectbox("Période d’analyse", list(PERIODS.keys()), index=3, key="etf_detail_period")
+
+    matches = _search_etfs(directory, query, limit=16)
+    if matches.empty:
+        st.warning("Aucun ETF ne correspond à cette recherche.")
+    else:
+        st.dataframe(_compact_search_frame(matches), hide_index=True, width="stretch")
+        _render_etf_buttons(matches["Ticker"].astype(str).str.upper().tolist(), directory, "detail_search_etf", limit=16)
+        if not st.session_state.get("etf_detail_ticker"):
+            _select_etf(str(matches.iloc[0].get("Ticker", "XIC")))
+        _show_etf_detail_panel(directory, period=PERIODS[detail_period_label])
 
 elif section == "ETF cotés TSX":
     st.subheader("Répertoire des ETF cotés au Canada")
@@ -294,6 +529,10 @@ elif section == "ETF cotés TSX":
 
     st.caption(f"{len(filtered)} ETF affiché(s).")
     st.dataframe(_display_frame(filtered), hide_index=True, width="stretch")
+    st.markdown("#### Cliquer pour ouvrir la fiche")
+    _render_etf_buttons(filtered["Ticker"].astype(str).str.upper().tolist(), directory, "listed_etf", limit=24)
+    if st.session_state.get("etf_detail_ticker"):
+        _show_etf_detail_panel(directory, period="1y")
 
     st.download_button(
         "Télécharger la liste",
@@ -346,12 +585,14 @@ elif section == "Analyse historique":
         with button_cols[idx % 4]:
             if st.button(label, key=f"etf_history_pick_{ticker}_{idx}", width="stretch", help=name):
                 st.session_state["etf_history_selected_ticker"] = ticker
+                st.session_state["etf_detail_ticker"] = ticker
                 selected_ticker = ticker
 
     selected_rows = directory[directory["Ticker"].astype(str).str.upper().eq(str(selected_ticker).upper())]
     if selected_rows.empty:
         selected_rows = matches.head(1)
     etf_row = selected_rows.iloc[0]
+    _select_etf(str(etf_row.get("Ticker", selected_ticker)))
 
     period = PERIODS[selected_period_label]
     etf_ticker = str(etf_row.get("Ticker", "")).upper()
