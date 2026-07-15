@@ -96,8 +96,101 @@ SECTOR_MAP: list[dict[str, str]] = [
 ]
 
 
+# Catalogue élargi utilisé pour le radar Top 100. Il privilégie des FNB cotés au
+# Canada largement utilisés pour suivre les grands marchés, les secteurs, les
+# revenus, les obligations, les devises, les thèmes et les liquidités.
+# Les prix et les rendements sont ensuite calculés dynamiquement lorsque les
+# sources de marché répondent.
+EXTRA_POPULAR_ETFS: list[dict[str, object]] = [
+    {"Ticker": "VFV", "Nom": "Vanguard S&P 500 Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "S&P 500", "Rôle": "Grandes capitalisations américaines"},
+    {"Ticker": "VUN", "Nom": "Vanguard U.S. Total Market Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "Marché total américain", "Rôle": "Exposition large aux actions américaines"},
+    {"Ticker": "VUS", "Nom": "Vanguard U.S. Total Market Index ETF CAD-hedged", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines couvertes", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "Marché total américain couvert CAD", "Rôle": "Actions américaines avec couverture de devise"},
+    {"Ticker": "VGG", "Nom": "Vanguard U.S. Dividend Appreciation Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes", "Secteur": "Revenu actions", "Région": "États-Unis", "Exposition": "Actions américaines à dividendes croissants", "Rôle": "Croissance du dividende américain"},
+    {"Ticker": "VDY", "Nom": "Vanguard FTSE Canadian High Dividend Yield Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Dividendes canadiens élevés", "Rôle": "Rendement de dividendes canadien"},
+    {"Ticker": "VCE", "Nom": "Vanguard FTSE Canada Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Canada large marché", "Secteur": "Marché canadien", "Région": "Canada", "Exposition": "FTSE Canada", "Rôle": "Actions canadiennes grandes capitalisations"},
+    {"Ticker": "VXC", "Nom": "Vanguard FTSE Global All Cap ex Canada Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions mondiales", "Secteur": "Marché mondial", "Région": "Global hors Canada", "Exposition": "Actions mondiales hors Canada", "Rôle": "Diversification mondiale hors Canada"},
+    {"Ticker": "VIU", "Nom": "Vanguard FTSE Developed All Cap ex North America Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions internationales", "Secteur": "Marchés développés", "Région": "International", "Exposition": "Développés hors Amérique du Nord", "Rôle": "Europe, Japon, Australie et marchés développés"},
+    {"Ticker": "VEE", "Nom": "Vanguard FTSE Emerging Markets All Cap Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions émergentes", "Secteur": "Marchés émergents", "Région": "Émergents", "Exposition": "Actions émergentes", "Rôle": "Croissance et risque émergent"},
+    {"Ticker": "VEQT", "Nom": "Vanguard All-Equity ETF Portfolio", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Portefeuille tout-en-un", "Secteur": "Allocation", "Région": "Global", "Exposition": "100 % actions mondiales", "Rôle": "Portefeuille actions diversifié"},
+    {"Ticker": "VGRO", "Nom": "Vanguard Growth ETF Portfolio", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Portefeuille tout-en-un", "Secteur": "Allocation", "Région": "Global", "Exposition": "Portefeuille croissance", "Rôle": "Actions majoritaires avec obligations"},
+    {"Ticker": "VBAL", "Nom": "Vanguard Balanced ETF Portfolio", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Portefeuille tout-en-un", "Secteur": "Allocation", "Région": "Global", "Exposition": "Portefeuille équilibré", "Rôle": "Allocation équilibrée actions/obligations"},
+    {"Ticker": "VCNS", "Nom": "Vanguard Conservative ETF Portfolio", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Portefeuille tout-en-un", "Secteur": "Allocation", "Région": "Global", "Exposition": "Portefeuille conservateur", "Rôle": "Allocation défensive"},
+    {"Ticker": "VRIF", "Nom": "Vanguard Retirement Income ETF Portfolio", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu", "Secteur": "Allocation", "Région": "Global", "Exposition": "Portefeuille de revenu", "Rôle": "Flux de revenu diversifié"},
+    {"Ticker": "VAB", "Nom": "Vanguard Canadian Aggregate Bond Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations canadiennes agrégées", "Rôle": "Cœur obligataire canadien"},
+    {"Ticker": "VSB", "Nom": "Vanguard Canadian Short-Term Bond Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations canadiennes court terme", "Rôle": "Durée courte"},
+    {"Ticker": "VSC", "Nom": "Vanguard Canadian Short-Term Corporate Bond Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations corporatives", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations corporatives court terme", "Rôle": "Crédit court terme"},
+    {"Ticker": "VGV", "Nom": "Vanguard Canadian Government Bond Index ETF", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations gouvernementales", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations gouvernementales canadiennes", "Rôle": "Qualité gouvernementale"},
+    {"Ticker": "VBU", "Nom": "Vanguard U.S. Aggregate Bond Index ETF CAD-hedged", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations américaines", "Secteur": "Revenu fixe", "Région": "États-Unis", "Exposition": "Obligations américaines couvertes CAD", "Rôle": "Revenu fixe américain couvert"},
+    {"Ticker": "VBG", "Nom": "Vanguard Global ex-U.S. Aggregate Bond Index ETF CAD-hedged", "Émetteur": "Vanguard", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations mondiales", "Secteur": "Revenu fixe", "Région": "Global", "Exposition": "Obligations mondiales couvertes CAD", "Rôle": "Diversification obligataire mondiale"},
+
+    {"Ticker": "ZSP", "Nom": "BMO S&P 500 Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "S&P 500", "Rôle": "Grandes capitalisations américaines"},
+    {"Ticker": "ZQQ", "Nom": "BMO Nasdaq 100 Equity Hedged to CAD Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Technologie américaine", "Secteur": "Technologie", "Région": "États-Unis", "Exposition": "Nasdaq 100 couvert CAD", "Rôle": "Méga-cap technologie américaine"},
+    {"Ticker": "ZNQ", "Nom": "BMO Nasdaq 100 Equity Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Technologie américaine", "Secteur": "Technologie", "Région": "États-Unis", "Exposition": "Nasdaq 100", "Rôle": "Nasdaq 100 non couvert"},
+    {"Ticker": "ZEA", "Nom": "BMO MSCI EAFE Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions internationales", "Secteur": "Marchés développés", "Région": "International", "Exposition": "MSCI EAFE", "Rôle": "Actions développées hors Amérique du Nord"},
+    {"Ticker": "ZEM", "Nom": "BMO MSCI Emerging Markets Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions émergentes", "Secteur": "Marchés émergents", "Région": "Émergents", "Exposition": "MSCI Emerging Markets", "Rôle": "Actions émergentes"},
+    {"Ticker": "ZGQ", "Nom": "BMO MSCI All Country World High Quality Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions mondiales qualité", "Secteur": "Qualité", "Région": "Global", "Exposition": "Qualité mondiale", "Rôle": "Facteur qualité mondial"},
+    {"Ticker": "ZAG", "Nom": "BMO Aggregate Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations canadiennes agrégées", "Rôle": "Cœur obligataire canadien"},
+    {"Ticker": "ZDB", "Nom": "BMO Discount Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations à escompte", "Rôle": "Efficience fiscale obligataire"},
+    {"Ticker": "ZFL", "Nom": "BMO Long Federal Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations longues", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations fédérales long terme", "Rôle": "Sensibilité aux taux longs"},
+    {"Ticker": "ZFS", "Nom": "BMO Short Federal Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations courtes", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations fédérales court terme", "Rôle": "Qualité court terme"},
+    {"Ticker": "ZPS", "Nom": "BMO Short Provincial Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations provinciales", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations provinciales court terme", "Rôle": "Crédit provincial court terme"},
+    {"Ticker": "ZPR", "Nom": "BMO Laddered Preferred Share Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions privilégiées", "Secteur": "Revenu", "Région": "Canada", "Exposition": "Actions privilégiées canadiennes", "Rôle": "Revenu privilégié"},
+    {"Ticker": "ZHY", "Nom": "BMO High Yield US Corporate Bond Hedged to CAD Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations haut rendement", "Secteur": "Crédit", "Région": "États-Unis", "Exposition": "High yield américain couvert CAD", "Rôle": "Crédit haut rendement"},
+    {"Ticker": "ZST", "Nom": "BMO Ultra Short-Term Bond ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Trésorerie", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations ultra court terme", "Rôle": "Stationnement de liquidités"},
+    {"Ticker": "ZCM", "Nom": "BMO Mid Corporate Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations corporatives", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations corporatives moyen terme", "Rôle": "Crédit investment grade"},
+    {"Ticker": "ZFM", "Nom": "BMO Mid Federal Bond Index ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations gouvernementales", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations fédérales moyen terme", "Rôle": "Duration gouvernementale"},
+    {"Ticker": "ZLB", "Nom": "BMO Low Volatility Canadian Equity ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Facteur faible volatilité", "Secteur": "Actions canadiennes", "Région": "Canada", "Exposition": "Actions canadiennes faible volatilité", "Rôle": "Défensif actions Canada"},
+    {"Ticker": "ZLU", "Nom": "BMO Low Volatility US Equity ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Facteur faible volatilité", "Secteur": "Actions américaines", "Région": "États-Unis", "Exposition": "Actions américaines faible volatilité", "Rôle": "Défensif actions USA"},
+    {"Ticker": "ZDV", "Nom": "BMO Canadian Dividend ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Dividendes canadiens", "Rôle": "Revenu de dividendes Canada"},
+    {"Ticker": "ZWC", "Nom": "BMO Canadian High Dividend Covered Call ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Dividendes canadiens + options couvertes", "Rôle": "Revenu amélioré"},
+    {"Ticker": "ZWB", "Nom": "BMO Covered Call Canadian Banks ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Finance", "Région": "Canada", "Exposition": "Banques canadiennes + options couvertes", "Rôle": "Revenu sur banques canadiennes"},
+    {"Ticker": "ZWU", "Nom": "BMO Covered Call Utilities ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Services publics", "Région": "Canada", "Exposition": "Services publics + options couvertes", "Rôle": "Revenu défensif"},
+    {"Ticker": "ZPAY", "Nom": "BMO Premium Yield ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Revenu", "Région": "Global", "Exposition": "Stratégies de revenu par options", "Rôle": "Revenu premium"},
+    {"Ticker": "ZWP", "Nom": "BMO Europe High Dividend Covered Call ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Revenu actions", "Région": "Europe", "Exposition": "Actions européennes + options couvertes", "Rôle": "Revenu Europe"},
+    {"Ticker": "ZWE", "Nom": "BMO Europe High Dividend Covered Call Hedged to CAD ETF", "Émetteur": "BMO", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Revenu actions", "Région": "Europe", "Exposition": "Actions Europe couvertes + options", "Rôle": "Revenu Europe couvert CAD"},
+
+    {"Ticker": "XSP", "Nom": "iShares Core S&P 500 Index ETF CAD-Hedged", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines couvertes", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "S&P 500 couvert CAD", "Rôle": "S&P 500 avec couverture de devise"},
+    {"Ticker": "XUS", "Nom": "iShares Core S&P 500 Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "S&P 500", "Rôle": "Grandes capitalisations américaines"},
+    {"Ticker": "XUU", "Nom": "iShares Core S&P U.S. Total Market Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "Marché total américain", "Rôle": "Actions américaines larges"},
+    {"Ticker": "XAW", "Nom": "iShares Core MSCI All Country World ex Canada Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions mondiales", "Secteur": "Marché mondial", "Région": "Global hors Canada", "Exposition": "Monde hors Canada", "Rôle": "Diversification mondiale hors Canada"},
+    {"Ticker": "XEF", "Nom": "iShares Core MSCI EAFE IMI Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions internationales", "Secteur": "Marchés développés", "Région": "International", "Exposition": "EAFE IMI", "Rôle": "Actions développées internationales"},
+    {"Ticker": "XEC", "Nom": "iShares Core MSCI Emerging Markets IMI Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions émergentes", "Secteur": "Marchés émergents", "Région": "Émergents", "Exposition": "MSCI Emerging Markets IMI", "Rôle": "Actions émergentes larges"},
+    {"Ticker": "XQQ", "Nom": "iShares NASDAQ 100 Index ETF CAD-Hedged", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Technologie américaine", "Secteur": "Technologie", "Région": "États-Unis", "Exposition": "Nasdaq 100 couvert CAD", "Rôle": "Technologie américaine couverte"},
+    {"Ticker": "XBB", "Nom": "iShares Core Canadian Universe Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations canadiennes univers", "Rôle": "Cœur obligataire"},
+    {"Ticker": "XSB", "Nom": "iShares Core Canadian Short Term Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations courtes", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations canadiennes court terme", "Rôle": "Durée courte"},
+    {"Ticker": "XCB", "Nom": "iShares Canadian Corporate Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations corporatives", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations corporatives canadiennes", "Rôle": "Crédit canadien"},
+    {"Ticker": "XHY", "Nom": "iShares U.S. High Yield Bond Index ETF CAD-Hedged", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations haut rendement", "Secteur": "Crédit", "Région": "États-Unis", "Exposition": "High yield américain couvert CAD", "Rôle": "Crédit haut rendement"},
+    {"Ticker": "XSH", "Nom": "iShares Core Canadian Short Term Corporate Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations corporatives courtes", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Crédit canadien court terme", "Rôle": "Crédit court terme"},
+    {"Ticker": "XRB", "Nom": "iShares Canadian Real Return Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations indexées", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations à rendement réel", "Rôle": "Protection inflation"},
+    {"Ticker": "XGB", "Nom": "iShares Canadian Government Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations gouvernementales", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations gouvernementales", "Rôle": "Qualité souveraine"},
+    {"Ticker": "XQB", "Nom": "iShares High Quality Canadian Bond Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations qualité", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Obligations canadiennes qualité", "Rôle": "Revenu fixe qualité"},
+    {"Ticker": "XFR", "Nom": "iShares Floating Rate Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Obligations taux variable", "Secteur": "Revenu fixe", "Région": "Canada", "Exposition": "Taux variable", "Rôle": "Sensibilité réduite aux taux"},
+    {"Ticker": "CMR", "Nom": "iShares Premium Money Market ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Trésorerie", "Secteur": "Liquidités", "Région": "Canada", "Exposition": "Marché monétaire", "Rôle": "Liquidités et rendement court terme"},
+    {"Ticker": "XDV", "Nom": "iShares Canadian Select Dividend Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Dividendes canadiens sélectionnés", "Rôle": "Revenu actions Canada"},
+    {"Ticker": "XEI", "Nom": "iShares S&P/TSX Composite High Dividend Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Dividendes élevés TSX", "Rôle": "Rendement de dividendes"},
+    {"Ticker": "XDIV", "Nom": "iShares Core MSCI Canadian Quality Dividend Index ETF", "Émetteur": "iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes qualité", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Dividendes canadiens qualité", "Rôle": "Qualité et dividendes"},
+
+    {"Ticker": "HXS", "Nom": "Global X S&P 500 Index Corporate Class ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions américaines", "Secteur": "Marché américain", "Région": "États-Unis", "Exposition": "S&P 500", "Rôle": "S&P 500 structure corporative"},
+    {"Ticker": "HXQ", "Nom": "Global X Nasdaq 100 Index Corporate Class ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Technologie américaine", "Secteur": "Technologie", "Région": "États-Unis", "Exposition": "Nasdaq 100", "Rôle": "Méga-cap croissance américaine"},
+    {"Ticker": "HXX", "Nom": "Global X Europe 50 Index Corporate Class ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions européennes", "Secteur": "Marchés développés", "Région": "Europe", "Exposition": "Europe 50", "Rôle": "Grandes capitalisations européennes"},
+    {"Ticker": "HXDM", "Nom": "Global X Developed Markets ex North America ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Actions internationales", "Secteur": "Marchés développés", "Région": "International", "Exposition": "Développés hors Amérique du Nord", "Rôle": "Diversification développée"},
+    {"Ticker": "HURA", "Nom": "Global X Uranium Index ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Thématique matières premières", "Secteur": "Uranium", "Région": "Global", "Exposition": "Uranium et nucléaire", "Rôle": "Chaîne nucléaire et uranium"},
+    {"Ticker": "HMAX", "Nom": "Hamilton Canadian Financials Yield Maximizer ETF", "Émetteur": "Hamilton", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Finance", "Région": "Canada", "Exposition": "Financières canadiennes avec revenu", "Rôle": "Revenu sur financières"},
+    {"Ticker": "HYLD", "Nom": "Hamilton Enhanced U.S. Covered Call ETF", "Émetteur": "Hamilton", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Revenu actions", "Région": "États-Unis", "Exposition": "Actions américaines + options", "Rôle": "Revenu couvert américain"},
+    {"Ticker": "HDIV", "Nom": "Hamilton Enhanced Multi-Sector Covered Call ETF", "Émetteur": "Hamilton", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Revenu multi-secteurs", "Région": "Canada / États-Unis", "Exposition": "Multi-secteurs avec options", "Rôle": "Revenu diversifié"},
+    {"Ticker": "HFIN", "Nom": "Hamilton Enhanced Canadian Financials ETF", "Émetteur": "Hamilton", "Bourse": "TSX", "Devise": "CAD", "Famille": "Finance canadienne", "Secteur": "Finance", "Région": "Canada", "Exposition": "Financières canadiennes", "Rôle": "Exposition financière canadienne amplifiée"},
+    {"Ticker": "QQCC", "Nom": "Global X Nasdaq 100 Covered Call ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Revenu options", "Secteur": "Technologie", "Région": "États-Unis", "Exposition": "Nasdaq 100 + options couvertes", "Rôle": "Revenu sur Nasdaq 100"},
+    {"Ticker": "CASH", "Nom": "Global X High Interest Savings ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Trésorerie", "Secteur": "Liquidités", "Région": "Canada", "Exposition": "Comptes d’épargne institutionnels", "Rôle": "Liquidités à rendement élevé"},
+    {"Ticker": "HSAV", "Nom": "Global X Cash Maximizer Corporate Class ETF", "Émetteur": "Global X", "Bourse": "TSX", "Devise": "CAD", "Famille": "Trésorerie", "Secteur": "Liquidités", "Région": "Canada", "Exposition": "Liquidités corporate class", "Rôle": "Gestion de trésorerie"},
+    {"Ticker": "PSA", "Nom": "Purpose High Interest Savings Fund", "Émetteur": "Purpose", "Bourse": "TSX", "Devise": "CAD", "Famille": "Trésorerie", "Secteur": "Liquidités", "Région": "Canada", "Exposition": "Épargne à intérêt élevé", "Rôle": "Stationnement de liquidités"},
+    {"Ticker": "CSAV", "Nom": "CI High Interest Savings ETF", "Émetteur": "CI", "Bourse": "TSX", "Devise": "CAD", "Famille": "Trésorerie", "Secteur": "Liquidités", "Région": "Canada", "Exposition": "Épargne à intérêt élevé", "Rôle": "Liquidités et rendement court terme"},
+    {"Ticker": "RBNK", "Nom": "RBC Canadian Bank Yield Index ETF", "Émetteur": "RBC iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Secteur canadien", "Secteur": "Finance", "Région": "Canada", "Exposition": "Banques canadiennes", "Rôle": "Banques canadiennes avec revenu"},
+    {"Ticker": "RCD", "Nom": "RBC Quant Canadian Dividend Leaders ETF", "Émetteur": "RBC iShares", "Bourse": "TSX", "Devise": "CAD", "Famille": "Dividendes", "Secteur": "Revenu actions", "Région": "Canada", "Exposition": "Leaders de dividendes canadiens", "Rôle": "Dividendes quantitatifs"},
+]
+
+
 def _prepare_base_frame() -> pd.DataFrame:
-    frame = pd.DataFrame(BASE_ETFS)
+    frame = pd.DataFrame(BASE_ETFS + EXTRA_POPULAR_ETFS)
     frame["Ticker"] = frame["Ticker"].astype(str).str.upper().str.strip()
     frame["YahooTicker"] = frame["Ticker"].map(lambda ticker: f"{ticker}.TO")
     frame["Coté TSX"] = frame["Bourse"].astype(str).str.upper().eq("TSX")
@@ -195,6 +288,125 @@ def etf_summary(frame: pd.DataFrame) -> dict[str, object]:
         "sector": int(frame.get("Famille", pd.Series(dtype=str)).astype(str).str.contains("Secteur|Thématique", case=False, regex=True).sum()),
         "issuers": int(frame.get("Émetteur", pd.Series(dtype=str)).nunique()),
     }
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_etf_performance_snapshot(yahoo_tickers: tuple[str, ...], period: str = "1y") -> pd.DataFrame:
+    """Return performance and liquidity proxies for a basket of ETF tickers.
+
+    This is designed for the Top 100 view. It uses one batched yfinance call and
+    fails closed: if a source is unavailable, the ETF directory remains usable.
+    """
+    tickers = tuple(dict.fromkeys(str(ticker).strip() for ticker in yahoo_tickers if str(ticker or "").strip()))
+    if not tickers:
+        return pd.DataFrame(columns=["YahooTicker", "Rendement période", "Dernier prix", "Dernier volume", "Volume moyen"])
+    try:
+        data = yf.download(
+            list(tickers),
+            period=period,
+            interval="1d",
+            auto_adjust=False,
+            progress=False,
+            threads=True,
+            group_by="ticker",
+        )
+    except Exception:
+        return pd.DataFrame(columns=["YahooTicker", "Rendement période", "Dernier prix", "Dernier volume", "Volume moyen"])
+    if data is None or getattr(data, "empty", True):
+        return pd.DataFrame(columns=["YahooTicker", "Rendement période", "Dernier prix", "Dernier volume", "Volume moyen"])
+
+    rows: list[dict[str, object]] = []
+
+    def _extract_block(yahoo_ticker: str) -> pd.DataFrame:
+        if isinstance(data.columns, pd.MultiIndex):
+            level0 = data.columns.get_level_values(0)
+            if yahoo_ticker in level0:
+                return data[yahoo_ticker].copy()
+            # Some yfinance versions invert the column order.
+            level1 = data.columns.get_level_values(1)
+            if yahoo_ticker in level1:
+                return data.xs(yahoo_ticker, axis=1, level=1).copy()
+            return pd.DataFrame()
+        if len(tickers) == 1:
+            return data.copy()
+        return pd.DataFrame()
+
+    for yahoo_ticker in tickers:
+        block = _extract_block(yahoo_ticker)
+        if block.empty:
+            continue
+        price_col = "Adj Close" if "Adj Close" in block.columns else "Close" if "Close" in block.columns else None
+        if not price_col:
+            continue
+        prices = pd.to_numeric(block[price_col], errors="coerce").dropna()
+        if len(prices) < 2:
+            continue
+        first = float(prices.iloc[0])
+        last = float(prices.iloc[-1])
+        if first <= 0:
+            continue
+        volumes = pd.to_numeric(block.get("Volume", pd.Series(dtype="float64")), errors="coerce").dropna()
+        rows.append(
+            {
+                "YahooTicker": yahoo_ticker,
+                "Rendement période": (last / first - 1.0) * 100.0,
+                "Dernier prix": last,
+                "Dernier volume": float(volumes.iloc[-1]) if not volumes.empty else pd.NA,
+                "Volume moyen": float(volumes.tail(20).mean()) if not volumes.empty else pd.NA,
+                "Observations": int(len(prices)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _percentile_score(series: pd.Series) -> pd.Series:
+    values = pd.to_numeric(series, errors="coerce")
+    if values.dropna().empty:
+        return pd.Series(0.0, index=series.index)
+    return values.rank(pct=True).fillna(0.0) * 100.0
+
+
+def load_top_etf_radar(period: str = "1y", sort_mode: str = "Score composite", limit: int = 100) -> pd.DataFrame:
+    """Build a Top ETF radar combining performance and liquidity/following proxies."""
+    directory = load_etf_directory(include_prices=True, limit_prices=180).copy()
+    if directory.empty:
+        return pd.DataFrame()
+
+    directory["Rang catalogue"] = range(1, len(directory) + 1)
+    yahoo_tickers = tuple(directory["YahooTicker"].dropna().astype(str).head(180).tolist())
+    perf = load_etf_performance_snapshot(yahoo_tickers, period=period)
+    if not perf.empty:
+        frame = directory.merge(perf, on="YahooTicker", how="left")
+    else:
+        frame = directory.copy()
+        for column in ["Rendement période", "Dernier prix", "Dernier volume", "Volume moyen", "Observations"]:
+            frame[column] = pd.NA
+
+    # Prefer the latest market snapshot price when available, otherwise history.
+    if "Prix" not in frame.columns:
+        frame["Prix"] = pd.NA
+    frame["Prix"] = frame["Prix"].where(frame["Prix"].notna(), frame.get("Dernier prix", pd.Series(pd.NA, index=frame.index)))
+
+    volume_source = pd.to_numeric(frame.get("Volume", pd.Series(pd.NA, index=frame.index)), errors="coerce")
+    volume_avg = pd.to_numeric(frame.get("Volume moyen", pd.Series(pd.NA, index=frame.index)), errors="coerce")
+    frame["Volume radar"] = volume_source.where(volume_source.notna(), volume_avg)
+
+    n = max(float(len(frame)), 1.0)
+    frame["Score catalogue"] = ((n - pd.to_numeric(frame["Rang catalogue"], errors="coerce").fillna(n)) / n * 100.0).clip(0, 100)
+    frame["Score performance"] = _percentile_score(frame["Rendement période"])
+    frame["Score suivi"] = (_percentile_score(frame["Volume radar"]) * 0.75 + frame["Score catalogue"] * 0.25).clip(0, 100)
+    frame["Score composite"] = (frame["Score performance"] * 0.55 + frame["Score suivi"] * 0.45).clip(0, 100)
+
+    mode = str(sort_mode or "Score composite").lower()
+    if "performance" in mode:
+        frame = frame.sort_values(["Rendement période", "Score suivi"], ascending=[False, False], na_position="last")
+    elif "suivi" in mode or "liquid" in mode:
+        frame = frame.sort_values(["Score suivi", "Volume radar", "Score performance"], ascending=[False, False, False], na_position="last")
+    else:
+        frame = frame.sort_values(["Score composite", "Rendement période", "Score suivi"], ascending=[False, False, False], na_position="last")
+
+    frame = frame.drop_duplicates(subset=["Ticker"]).head(int(limit)).copy()
+    frame.insert(0, "Rang", range(1, len(frame) + 1))
+    return frame.reset_index(drop=True)
 
 
 # Positions indicatives utilisées seulement si les sources publiques ne retournent pas
