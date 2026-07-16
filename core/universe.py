@@ -30,6 +30,14 @@ XMD_HOLDINGS_URL = (
 )
 
 DEFAULT_UNIVERSE_KEY = "tsx60"
+SUPPORTED_UNIVERSE_KEYS = ("tsx60", "tsx_composite")
+LEGACY_UNIVERSE_ALIASES = {
+    "tsx_full": "tsx_composite",
+    "tsx_extended": "tsx_composite",
+    "extended": "tsx_composite",
+    "tsx_etendu": "tsx_composite",
+    "tsx étendu": "tsx_composite",
+}
 
 
 def _env_int(name: str, default: int) -> int:
@@ -44,8 +52,22 @@ def hosting_profile() -> str:
     return str(os.getenv("ANATOLE_HOSTING_PROFILE", "starter")).strip().lower() or "starter"
 
 
+def _normalise_universe_key(key: str | None) -> str:
+    raw = str(key or DEFAULT_UNIVERSE_KEY).strip().lower()
+    raw = LEGACY_UNIVERSE_ALIASES.get(raw, raw)
+    return raw if raw in SUPPORTED_UNIVERSE_KEYS else DEFAULT_UNIVERSE_KEY
+
+
 def default_limits(universe_key: str) -> tuple[int, int]:
-    """Retourne (snapshot_limit, history_limit) selon l'hébergement."""
+    """Retourne (snapshot_limit, history_limit) selon l'hébergement.
+
+    V5.9.14 : Anatole est volontairement limité à deux univers clairs :
+    TSX 60 et S&P/TSX Composite. Le Composite utilise un plafond assez haut
+    pour permettre d'afficher toutes les composantes disponibles dans la map
+    et dans les listes, tout en gardant une limite raisonnable pour les
+    historiques lourds.
+    """
+    key = _normalise_universe_key(universe_key)
     profile = hosting_profile()
     matrix = {
         "tsx60": {
@@ -54,22 +76,16 @@ def default_limits(universe_key: str) -> tuple[int, int]:
             "performance": (70, 70),
         },
         "tsx_composite": {
-            "conservative": (100, 60),
-            "starter": (100, 50),
-            "performance": (240, 140),
-        },
-        "tsx_full": {
-            "conservative": (80, 40),
-            "starter": (80, 35),
-            "performance": (300, 120),
+            "conservative": (280, 90),
+            "starter": (320, 110),
+            "performance": (360, 180),
         },
     }
-    limits = matrix.get(universe_key, matrix["tsx60"])
+    limits = matrix.get(key, matrix[DEFAULT_UNIVERSE_KEY])
     snapshot, history = limits.get(profile, limits["starter"])
-    snapshot = _env_int(f"ANATOLE_{universe_key.upper()}_SNAPSHOT_LIMIT", snapshot)
-    history = _env_int(f"ANATOLE_{universe_key.upper()}_HISTORY_LIMIT", history)
+    snapshot = _env_int(f"ANATOLE_{key.upper()}_SNAPSHOT_LIMIT", snapshot)
+    history = _env_int(f"ANATOLE_{key.upper()}_HISTORY_LIMIT", history)
     return snapshot, history
-
 
 @dataclass(frozen=True)
 class MarketUniverse:
@@ -102,8 +118,8 @@ UNIVERSES: dict[str, MarketUniverse] = {
         label="S&P/TSX Composite",
         short_label="Composite",
         description=(
-            "Univers canadien large via XIC. Plus riche que le TSX 60, "
-            "mais encore assez rapide."
+            "Univers canadien large via XIC. Anatole reste simple : "
+            "TSX 60 pour la vitesse ou Composite pour la couverture."
         ),
         source_kind="blackrock_xic",
         expected_count=None,
@@ -111,26 +127,10 @@ UNIVERSES: dict[str, MarketUniverse] = {
         history_limit=default_limits("tsx_composite")[1],
         holdings_urls=(XIC_HOLDINGS_URL,),
     ),
-    "tsx_full": MarketUniverse(
-        key="tsx_full",
-        label="TSX complet / étendu",
-        short_label="TSX étendu",
-        description=(
-            "Univers TSX élargi avec couverture progressive des titres canadiens, "
-            "incluant un proxy large lorsque la source complète est temporairement limitée."
-        ),
-        source_kind="tsx_directory_or_proxy",
-        expected_count=None,
-        snapshot_limit=default_limits("tsx_full")[0],
-        history_limit=default_limits("tsx_full")[1],
-        holdings_urls=(XIC_HOLDINGS_URL, XMD_HOLDINGS_URL),
-        allow_user_directory=True,
-    ),
 }
 
-
-# Graine de secours élargie. Elle n'est utilisée que si les sources live échouent.
-TSX_EXTENDED_SEED = sorted(set(FALLBACK_TICKERS + [
+# Graine de secours Composite. Elle est utilisée seulement si les sources live échouent.
+TSX_COMPOSITE_SEED = sorted(set(FALLBACK_TICKERS + [
     "AC", "ACO.X", "ADEN", "AIF", "ALA", "AP.UN", "AQN", "ARE", "ARX", "ATS",
     "BBD.B", "BEP.UN", "BIP.UN", "BLX", "BNE", "BTE", "CAR.UN", "CCA", "CCL.B",
     "CFP", "CG", "CJT", "CJT", "CS", "CSH.UN", "CU", "DPM", "DRM", "DSG",
@@ -144,13 +144,16 @@ TSX_EXTENDED_SEED = sorted(set(FALLBACK_TICKERS + [
     "WDO", "WEED", "WFG", "X", "YRI",
 ]))
 
+# Alias conservé pour éviter de casser d'anciens imports/tests locaux.
+TSX_EXTENDED_SEED = TSX_COMPOSITE_SEED
+
 
 def universe_keys() -> list[str]:
-    return list(UNIVERSES)
+    return list(SUPPORTED_UNIVERSE_KEYS)
 
 
 def get_universe(key: str | None = None) -> MarketUniverse:
-    return UNIVERSES.get(str(key or DEFAULT_UNIVERSE_KEY), UNIVERSES[DEFAULT_UNIVERSE_KEY])
+    return UNIVERSES[_normalise_universe_key(key)]
 
 
 def _query_value(name: str, default: str = "") -> str:
@@ -164,17 +167,16 @@ def _query_value(name: str, default: str = "") -> str:
 
 
 def current_universe_key() -> str:
-    session_value = st.session_state.get("market_universe")
-    if session_value in UNIVERSES:
-        return str(session_value)
-
-    query_value = _query_value("universe")
-    if query_value in UNIVERSES:
-        st.session_state["market_universe"] = query_value
-        return query_value
-
-    st.session_state["market_universe"] = DEFAULT_UNIVERSE_KEY
-    return DEFAULT_UNIVERSE_KEY
+    session_value = _normalise_universe_key(st.session_state.get("market_universe"))
+    query_value = _normalise_universe_key(_query_value("universe", session_value))
+    key = query_value or session_value or DEFAULT_UNIVERSE_KEY
+    st.session_state["market_universe"] = key
+    try:
+        if _query_value("universe") != key:
+            st.query_params["universe"] = key
+    except Exception:
+        pass
+    return key
 
 
 def current_universe() -> MarketUniverse:
@@ -182,7 +184,7 @@ def current_universe() -> MarketUniverse:
 
 
 def set_current_universe(key: str) -> None:
-    safe_key = key if key in UNIVERSES else DEFAULT_UNIVERSE_KEY
+    safe_key = _normalise_universe_key(key)
     previous = st.session_state.get("market_universe")
     st.session_state["market_universe"] = safe_key
     st.session_state["_market_universe_nonce"] = int(st.session_state.get("_market_universe_nonce", 0) or 0) + 1
@@ -211,8 +213,8 @@ def render_universe_selector(profile: str) -> str:
         index=keys.index(current_key),
         format_func=lambda value: UNIVERSES[value].label,
         help=(
-            "TSX 60 reste le mode le plus rapide. Composite et TSX étendu "
-            "chargent plus de titres avec des limites intelligentes."
+            "Anatole est limité volontairement à deux univers : TSX 60 pour la vitesse, "
+            "et Composite pour la couverture canadienne large."
         ),
         key=f"market_universe_selector_{current_key}",
     )
@@ -245,7 +247,6 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
     labels = {
         "tsx60": "TSX 60",
         "tsx_composite": "Composite",
-        "tsx_full": "TSX étendu",
     }
 
     selected = st.radio(
@@ -256,8 +257,8 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
         horizontal=True,
         key=f"market_universe_inline_{key_suffix}_{current_key}",
         help=(
-            "TSX 60 est le plus rapide. Composite élargit la couverture. "
-            "TSX étendu charge davantage de titres avec des limites de performance."
+            "TSX 60 est le plus rapide. Composite affiche l'univers canadien large "
+            "et permet de consulter la liste des composantes."
         ),
     )
 
@@ -272,8 +273,69 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
             pass
         st.rerun()
 
+    if selected == "tsx_composite":
+        _render_composite_constituents_panel(key_suffix=key_suffix)
+
     return selected
 
+
+def _render_composite_constituents_panel(key_suffix: str = "main") -> None:
+    """Affiche la composition du Composite sans ajouter de troisième univers.
+
+    L'objectif est simple : lorsque l'utilisateur choisit Composite, il peut
+    consulter les composantes disponibles directement depuis la page courante.
+    La composition est chargée par `load_constituents`, qui est déjà caché.
+    """
+    with st.expander("Voir les actions du S&P/TSX Composite", expanded=False):
+        try:
+            from core.data import load_constituents
+
+            frame, diagnostics = load_constituents("tsx_composite")
+        except Exception:
+            st.info("La composition du Composite est temporairement indisponible.")
+            return
+
+        if frame is None or frame.empty:
+            st.info("Aucune composante disponible pour le moment.")
+            return
+
+        work = frame.copy()
+        search = st.text_input(
+            "Filtrer les composantes",
+            placeholder="Ex. RY, banque, énergie, Shopify…",
+            key=f"tsx_composite_constituents_filter_{key_suffix}",
+        )
+        if search.strip():
+            q = search.strip().lower()
+            mask = (
+                work["Ticker"].astype(str).str.lower().str.contains(q, regex=False)
+                | work["Nom"].astype(str).str.lower().str.contains(q, regex=False)
+                | work["Secteur"].astype(str).str.lower().str.contains(q, regex=False)
+            )
+            work = work.loc[mask].copy()
+
+        display = work[["Ticker", "Nom", "Secteur", "PoidsIndice", "YahooTicker"]].copy()
+        display = display.rename(
+            columns={
+                "Ticker": "Symbole",
+                "Nom": "Société",
+                "Secteur": "Secteur",
+                "PoidsIndice": "Poids indicatif (%)",
+                "YahooTicker": "Ticker données",
+            }
+        )
+        st.caption(
+            f"{len(work):,} composantes affichées sur {len(frame):,} disponibles · "
+            f"Source : {diagnostics.get('source', 'Composition disponible')}"
+        )
+        st.dataframe(display, width="stretch", hide_index=True, height=420)
+        st.download_button(
+            "Télécharger la composition Composite",
+            data=display.to_csv(index=False).encode("utf-8"),
+            file_name="anatole_tsx_composite_composantes.csv",
+            mime="text/csv",
+            width="stretch",
+        )
 
 
 def normalise_tmx_symbol(value: Any) -> str:
@@ -285,13 +347,14 @@ def normalise_tmx_symbol(value: Any) -> str:
 
 
 def seed_constituents(universe_key: str) -> pd.DataFrame:
-    universe = get_universe(universe_key)
-    if universe_key == "tsx60":
+    key = _normalise_universe_key(universe_key)
+    if key == "tsx60":
         symbols = FALLBACK_TICKERS
         source = "Liste de secours TSX 60 intégrée"
     else:
-        symbols = TSX_EXTENDED_SEED
-        source = "Liste de secours TSX élargie intégrée"
+        symbols = TSX_COMPOSITE_SEED
+        source = "Liste de secours TSX Composite intégrée"
+    universe = get_universe(key)
 
     equal_weight = 100 / max(len(symbols), 1)
     return pd.DataFrame(

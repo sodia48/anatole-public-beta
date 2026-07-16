@@ -72,125 +72,7 @@ def _use_intraday_snapshot(ticker_count: int) -> bool:
     return ticker_count <= limit
 
 
-
-def _snapshot_store_frames() -> dict[str, pd.DataFrame]:
-    store = _market_snapshot_store()
-    frames = store.setdefault("frames", {})
-    return frames if isinstance(frames, dict) else {}
-
-
-def _snapshot_store_metadata() -> dict[str, dict[str, Any]]:
-    store = _market_snapshot_store()
-    metadata = store.setdefault("metadata", {})
-    return metadata if isinstance(metadata, dict) else {}
-
-
-def _snapshot_store_refreshing() -> set[str]:
-    store = _market_snapshot_store()
-    refreshing = store.setdefault("refreshing", set())
-    return refreshing if isinstance(refreshing, set) else set()
-
-
-def _snapshot_executor() -> ThreadPoolExecutor:
-    store = _market_snapshot_store()
-    executor = store.get("executor")
-    if not isinstance(executor, ThreadPoolExecutor):
-        executor = ThreadPoolExecutor(max_workers=1)
-        store["executor"] = executor
-    return executor
-
-
-def _stamp_snapshot(frame: pd.DataFrame, source: str, status: str) -> pd.DataFrame:
-    result = frame.copy()
-    if not result.empty:
-        result["SourceCours"] = source
-        result["StatutDonnee"] = status
-    return result
-
-
-def _remember_snapshot(tickers: tuple[str, ...], frame: pd.DataFrame, source: str = "Yahoo Finance", status: str = "Live") -> None:
-    if frame.empty:
-        return
-    timestamp = datetime.now(TORONTO_TZ)
-    key = _snapshot_key(tickers)
-    frames = _snapshot_store_frames()
-    metadata = _snapshot_store_metadata()
-    frames[key] = frame.copy()
-    metadata[key] = {
-        "updated_at": timestamp,
-        "source": source,
-        "status": status,
-        "count": int(len(frame)),
-    }
-    store = _market_snapshot_store()
-    store["updated_at"] = timestamp
-
-
-def _snapshot_age_seconds(tickers: tuple[str, ...]) -> float | None:
-    metadata = _snapshot_store_metadata().get(_snapshot_key(tickers), {})
-    updated_at = metadata.get("updated_at")
-    if updated_at is None:
-        updated_at = _market_snapshot_store().get("updated_at")
-    if updated_at is None:
-        return None
-    try:
-        return max(0.0, (datetime.now(TORONTO_TZ) - updated_at).total_seconds())
-    except Exception:
-        return None
-
-
-def _fast_snapshot_enabled() -> bool:
-    return _env_flag("ANATOLE_FAST_START", True)
-
-
-def _fast_snapshot_refresh_seconds() -> int:
-    return _env_positive_int("ANATOLE_FAST_REFRESH_SECONDS", 60)
-
-
-def _refresh_snapshot_background(tickers: tuple[str, ...]) -> None:
-    key = _snapshot_key(tickers)
-    refreshing = _snapshot_store_refreshing()
-    if key in refreshing:
-        return
-    refreshing.add(key)
-
-    def _task() -> None:
-        try:
-            fresh = _download_market_snapshot(tickers)
-            if not fresh.empty:
-                _remember_snapshot(tickers, fresh)
-        except Exception:
-            pass
-        finally:
-            refreshing.discard(key)
-            try:
-                fetch_market_snapshot.clear()
-            except Exception:
-                pass
-
-    _snapshot_executor().submit(_task)
-
-
-def _fast_cached_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
-    if not _fast_snapshot_enabled():
-        return pd.DataFrame()
-    cached = _last_good_snapshot(
-        tickers,
-        source_label="Cache rapide Anatole",
-        status_label="Cache rapide",
-    )
-    if cached.empty:
-        return pd.DataFrame()
-    age = _snapshot_age_seconds(tickers)
-    if age is None or age >= _fast_snapshot_refresh_seconds():
-        _refresh_snapshot_background(tickers)
-    return cached
-
-def _last_good_snapshot(
-    tickers: tuple[str, ...] | None = None,
-    source_label: str = "Dernière donnée disponible",
-    status_label: str = "Cache",
-) -> pd.DataFrame:
+def _last_good_snapshot(tickers: tuple[str, ...] | None = None) -> pd.DataFrame:
     store = _market_snapshot_store()
     frames = store.get("frames", {})
     if not isinstance(frames, dict):
@@ -201,8 +83,7 @@ def _last_good_snapshot(
         frame = frames.get(key)
         if isinstance(frame, pd.DataFrame) and not frame.empty:
             result = frame.copy()
-            result["SourceCours"] = source_label
-            result["StatutDonnee"] = status_label
+            result["SourceCours"] = "Dernière donnée disponible"
             return result
 
         # Fallback strict : only keep rows matching the requested tickers.
@@ -217,8 +98,7 @@ def _last_good_snapshot(
         if collected:
             result = pd.concat(collected, ignore_index=True)
             result = result.drop_duplicates(subset=["YahooTicker"], keep="last")
-            result["SourceCours"] = source_label
-            result["StatutDonnee"] = status_label
+            result["SourceCours"] = "Dernière donnée disponible"
             return result
 
         return pd.DataFrame()
@@ -230,8 +110,7 @@ def _last_good_snapshot(
     if latest is None:
         return pd.DataFrame()
     result = latest.copy()
-    result["SourceCours"] = source_label
-    result["StatutDonnee"] = status_label
+    result["SourceCours"] = "Dernière donnée disponible"
     return result
 
 
@@ -302,11 +181,14 @@ def _download_blackrock_holdings(url: str, universe_key: str) -> pd.DataFrame:
 
 
 def _load_user_tsx_directory(universe_key: str) -> pd.DataFrame:
-    """Charge une liste complète fournie par l'utilisateur ou par une URL CSV.
+    """Charge une liste Composite fournie par l'utilisateur ou par une URL CSV.
 
     Format tolérant : Symbol/Ticker, Name/Company, Sector.
+    V5.9.14 : l'ancien univers étendu est retiré. Un fichier CSV fourni
+    sert maintenant à renforcer la couverture du Composite uniquement.
     """
-    if universe_key != "tsx_full":
+    safe_universe = "tsx_composite" if str(universe_key) == "tsx_full" else str(universe_key)
+    if safe_universe != "tsx_composite":
         return pd.DataFrame()
 
     from core.universe import user_directory_paths
@@ -351,8 +233,8 @@ def _load_user_tsx_directory(universe_key: str) -> pd.DataFrame:
         frame["Secteur"] = raw[sector_column].astype(str) if sector_column else "Autre"
         frame["PoidsIndice"] = np.nan
         frame["YahooTicker"] = frame["Ticker"].map(raw_to_yahoo)
-        frame["SourceComposition"] = "Répertoire TSX fourni"
-        frame["Univers"] = get_universe(universe_key).short_label
+        frame["SourceComposition"] = "Répertoire Composite fourni"
+        frame["Univers"] = get_universe(safe_universe).short_label
         frames.append(frame)
 
     if not frames:
@@ -400,7 +282,8 @@ def _normalise_constituents(frame: pd.DataFrame, universe_key: str) -> pd.DataFr
 
 
 def fallback_constituents(universe_key: str | None = None) -> pd.DataFrame:
-    return seed_constituents(universe_key or current_universe_key())
+    key = "tsx_composite" if str(universe_key or "") == "tsx_full" else (universe_key or current_universe_key())
+    return seed_constituents(key)
 
 
 @st.cache_data(ttl=43_200, max_entries=8, show_spinner=False)
@@ -464,10 +347,18 @@ def _load_constituents_cached(universe_key: str) -> tuple[pd.DataFrame, dict[str
 
 def load_constituents(universe_key: str | None = None) -> tuple[pd.DataFrame, dict[str, Any]]:
     key = universe_key or current_universe_key()
+    if str(key) == "tsx_full":
+        key = "tsx_composite"
     return _load_constituents_cached(key)
 
 
-def _download_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
+@st.cache_data(ttl=60, max_entries=4, show_spinner=False)
+def fetch_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
+    """Télécharge un snapshot groupé et conserve le dernier résultat valide.
+
+    En cas de limitation temporaire de Yahoo, Anatole continue d'afficher la
+    dernière donnée connue au lieu de vider entièrement le cockpit.
+    """
     tickers = tuple(dict.fromkeys(tickers))
     if not tickers:
         return pd.DataFrame()
@@ -485,7 +376,7 @@ def _download_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
             timeout=12,
         )
     except Exception:
-        return pd.DataFrame()
+        return _last_good_snapshot(tickers)
 
     is_open, _ = market_status()
     use_intraday = is_open and _use_intraday_snapshot(len(tickers))
@@ -585,35 +476,20 @@ def _download_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
                 "Volume": volume,
                 "Horodatage": timestamp,
                 "SourceCours": "Yahoo Finance",
-                "StatutDonnee": "Live",
             }
         )
 
-    return pd.DataFrame(rows)
-
-
-@st.cache_data(ttl=60, max_entries=4, show_spinner=False)
-def fetch_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
-    """Retourne un snapshot rapide, puis rafraichit le cache en arriere-plan.
-
-    Au premier appel sans cache, Anatole telecharge normalement. Ensuite, les
-    pages peuvent afficher immediatement la derniere donnee connue pendant que
-    le rafraichissement se prepare, ce qui evite les ouvertures lentes.
-    """
-    tickers = tuple(dict.fromkeys(tickers))
-    if not tickers:
-        return pd.DataFrame()
-
-    cached = _fast_cached_snapshot(tickers)
-    if not cached.empty:
-        return cached
-
-    result = _download_market_snapshot(tickers)
+    result = pd.DataFrame(rows)
     if result.empty:
         return _last_good_snapshot(tickers)
 
-    _remember_snapshot(tickers, result)
+    store = _market_snapshot_store()
+    frames = store.setdefault("frames", {})
+    if isinstance(frames, dict):
+        frames[_snapshot_key(tickers)] = result.copy()
+    store["updated_at"] = timestamp
     return result
+
 
 @st.cache_data(ttl=1_800, max_entries=32, show_spinner=False)
 def fetch_batch_history(
