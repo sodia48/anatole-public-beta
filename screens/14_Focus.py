@@ -30,6 +30,14 @@ from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
 from core.mobile_experience import plotly_config
 from core.pro_chart import build_event_markers
+from core.pro_chart_tools import (
+    apply_pro_chart_models,
+    apply_pro_chart_style,
+    chart_model_options,
+    drawing_tool_labels,
+    pro_chart_config,
+    pro_quote_panel,
+)
 from core.strategy_lab import (
     STRATEGIES,
     run_strategy_backtest,
@@ -315,36 +323,101 @@ if not np.isnan(safe_float(info.get("targetMeanPrice"))):
         }
     )
 
-# Graphique Plotly intégré automatiquement.
-# Aucun bouton d'activation n'est nécessaire pour l'utilisateur.
+# Graphique professionnel : lecture + tracés + modèles.
 event_note = (
     f" · {len(markers)} événement(s) affiché(s)"
     if show_markers and markers
     else ""
 )
+
+st.markdown("### Graphique Pro")
 st.caption(
-    "Graphique technique automatique : chandeliers, volume, moyennes mobiles, "
-    "EMA 20 et bandes de Bollinger lorsque les données sont disponibles"
+    "Chandeliers, volume, moyennes mobiles, EMA 20, bandes de Bollinger, modèles techniques et outils de tracé intégrés"
     f"{event_note}."
 )
+
+chart_toolbar = st.container(border=True)
+with chart_toolbar:
+    chart_cols = st.columns([1.05, 1.15, 1.6, 1.1])
+    with chart_cols[0]:
+        chart_workspace = st.segmented_control(
+            "Espace",
+            ["Lecture", "Tracé", "Modèles"],
+            default=str(st.session_state.get(f"focus_chart_workspace_{ticker}", "Tracé")),
+            selection_mode="single",
+            key=f"focus_chart_workspace_{ticker}",
+        )
+    with chart_cols[1]:
+        chart_density = st.segmented_control(
+            "Densité",
+            ["Standard", "Desk", "Épuré"],
+            default=str(st.session_state.get(f"focus_chart_density_{ticker}", "Desk")),
+            selection_mode="single",
+            key=f"focus_chart_density_{ticker}",
+        )
+    with chart_cols[2]:
+        default_models = ["Zones support / résistance", "Canal de tendance"]
+        selected_models = st.multiselect(
+            "Modèles automatiques",
+            chart_model_options(),
+            default=list(st.session_state.get(f"focus_chart_models_{ticker}", default_models)),
+            key=f"focus_chart_models_{ticker}",
+        )
+    with chart_cols[3]:
+        enable_manual_drawing = st.toggle(
+            "Outils de tracé",
+            value=bool(st.session_state.get(f"focus_chart_drawing_{ticker}", True)),
+            key=f"focus_chart_drawing_{ticker}",
+            help="Active les outils natifs Plotly : ligne, rectangle, chemin, cercle et suppression.",
+        )
+
 if show_markers and not markers:
     st.info(
         "Aucun événement daté n'a été trouvé pour la période affichée. "
         "Essaie une période plus longue ou vérifie les actualités disponibles."
     )
 
-st.plotly_chart(
-    price_chart(
-        history,
-        ticker,
-        DEFAULT_PLOTLY_OVERLAYS,
-        markers=markers if show_markers else None,
-        price_lines=price_lines,
-    ),
-    width="stretch",
-    config=plotly_config(),
-    key=f"focus_plotly_auto_{ticker}_{period}_{interval}_{len(markers)}_{show_markers}",
+chart_height = 820 if chart_density == "Desk" else 720 if chart_density == "Standard" else 660
+fig = price_chart(
+    history,
+    ticker,
+    DEFAULT_PLOTLY_OVERLAYS,
+    markers=markers if show_markers else None,
+    price_lines=price_lines,
 )
+fig = apply_pro_chart_models(
+    fig,
+    history,
+    selected_models,
+    info=info,
+    currency=currency,
+)
+fig = apply_pro_chart_style(fig, ticker, height=chart_height)
+
+chart_col, quote_col = st.columns([4.4, 1.15], vertical_alignment="top")
+with chart_col:
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        config=pro_chart_config(enable_drawing=enable_manual_drawing, scroll_zoom=False),
+        key=f"focus_pro_chart_{ticker}_{period}_{interval}_{len(markers)}_{show_markers}_{chart_workspace}_{chart_density}_{hash(tuple(selected_models))}_{enable_manual_drawing}",
+    )
+
+with quote_col:
+    with st.container(border=True):
+        st.markdown("#### Informations")
+        st.markdown(f"**{ticker}**")
+        st.caption(str(name))
+        quote = pro_quote_panel(history, info, currency=currency)
+        for label in ["Prix", "Variation", "Volume", "Volume moyen 20j", "Objectif moyen", "Potentiel vs objectif", "Résistance 1", "Support 1"]:
+            st.metric(label, quote.get(label, "N/D"))
+
+    with st.expander("Outils de tracé disponibles", expanded=False):
+        st.dataframe(drawing_tool_labels(), hide_index=True, width="stretch")
+        st.caption(
+            "Utilise la barre d'outils du graphique pour dessiner. Les tracés manuels sont pratiques pour l'analyse visuelle; "
+            "les modèles automatiques d'Anatole restent recalculés à chaque chargement."
+        )
 
 ownership_quick = {
     "held_percent_institutions": info.get("heldPercentInstitutions"),
