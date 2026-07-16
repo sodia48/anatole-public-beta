@@ -257,8 +257,7 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
         horizontal=True,
         key=f"market_universe_inline_{key_suffix}_{current_key}",
         help=(
-            "TSX 60 est le plus rapide. Composite affiche l'univers canadien large "
-            "et permet de consulter la liste des composantes."
+            "TSX 60 est le plus rapide. Composite affiche l'univers canadien large."
         ),
     )
 
@@ -273,69 +272,8 @@ def render_universe_selector_inline(profile: str, key_suffix: str = "main") -> s
             pass
         st.rerun()
 
-    if selected == "tsx_composite":
-        _render_composite_constituents_panel(key_suffix=key_suffix)
-
     return selected
 
-
-def _render_composite_constituents_panel(key_suffix: str = "main") -> None:
-    """Affiche la composition du Composite sans ajouter de troisième univers.
-
-    L'objectif est simple : lorsque l'utilisateur choisit Composite, il peut
-    consulter les composantes disponibles directement depuis la page courante.
-    La composition est chargée par `load_constituents`, qui est déjà caché.
-    """
-    with st.expander("Voir les actions du S&P/TSX Composite", expanded=False):
-        try:
-            from core.data import load_constituents
-
-            frame, diagnostics = load_constituents("tsx_composite")
-        except Exception:
-            st.info("La composition du Composite est temporairement indisponible.")
-            return
-
-        if frame is None or frame.empty:
-            st.info("Aucune composante disponible pour le moment.")
-            return
-
-        work = frame.copy()
-        search = st.text_input(
-            "Filtrer les composantes",
-            placeholder="Ex. RY, banque, énergie, Shopify…",
-            key=f"tsx_composite_constituents_filter_{key_suffix}",
-        )
-        if search.strip():
-            q = search.strip().lower()
-            mask = (
-                work["Ticker"].astype(str).str.lower().str.contains(q, regex=False)
-                | work["Nom"].astype(str).str.lower().str.contains(q, regex=False)
-                | work["Secteur"].astype(str).str.lower().str.contains(q, regex=False)
-            )
-            work = work.loc[mask].copy()
-
-        display = work[["Ticker", "Nom", "Secteur", "PoidsIndice", "YahooTicker"]].copy()
-        display = display.rename(
-            columns={
-                "Ticker": "Symbole",
-                "Nom": "Société",
-                "Secteur": "Secteur",
-                "PoidsIndice": "Poids indicatif (%)",
-                "YahooTicker": "Ticker données",
-            }
-        )
-        st.caption(
-            f"{len(work):,} composantes affichées sur {len(frame):,} disponibles · "
-            f"Source : {diagnostics.get('source', 'Composition disponible')}"
-        )
-        st.dataframe(display, width="stretch", hide_index=True, height=420)
-        st.download_button(
-            "Télécharger la composition Composite",
-            data=display.to_csv(index=False).encode("utf-8"),
-            file_name="anatole_tsx_composite_composantes.csv",
-            mime="text/csv",
-            width="stretch",
-        )
 
 
 def normalise_tmx_symbol(value: Any) -> str:
