@@ -9,3 +9,4 @@ openai==2.41.1
 reportlab==4.5.1
 XlsxWriter==3.2.5
 psycopg[binary]==3.2.10
+streamlit-autorefresh==1.0.1
