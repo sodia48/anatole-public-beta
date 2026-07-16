@@ -352,7 +352,7 @@ def load_constituents(universe_key: str | None = None) -> tuple[pd.DataFrame, di
     return _load_constituents_cached(key)
 
 
-@st.cache_data(ttl=60, max_entries=4, show_spinner=False)
+@st.cache_data(ttl=15, max_entries=8, show_spinner=False)
 def fetch_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
     """Télécharge un snapshot groupé et conserve le dernier résultat valide.
 
@@ -515,7 +515,7 @@ def fetch_batch_history(
     }
 
 
-@st.cache_data(ttl=300, max_entries=128, show_spinner=False)
+@st.cache_data(ttl=30, max_entries=128, show_spinner=False)
 def fetch_history(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
     data = yf.download(
         tickers=ticker,

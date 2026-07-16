@@ -1978,16 +1978,6 @@ def sidebar_context() -> str:
         st.session_state["_sidebar_preference_signature"] = sidebar_pref_signature
         _install_theme_persistence_bridge(selected_theme)
 
-    if st.sidebar.button(
-        "↻ Actualiser les données live",
-        width="stretch",
-        help="Renouvelle les cotations sans vider les autres caches.",
-    ):
-        from core.runtime import clear_live_market_caches
-
-        clear_live_market_caches()
-        st.rerun()
-
     if context.public_beta:
         identity_label = context.display_name
         if context.email:
@@ -2106,6 +2096,13 @@ def page_header(
 
     title_text = str(title or "")
     subtitle_text = str(subtitle or "")
+    try:
+        from core.live_refresh import apply_auto_live_refresh
+
+        apply_auto_live_refresh(title_text)
+    except Exception:
+        # Le moteur live ne doit jamais empêcher une page de s'afficher.
+        pass
     icon_text = str(icon or "📈")
     # Garde-fou : le troisième argument de page_header doit rester une icône.
     # Si une page passe accidentellement une phrase, on évite le débordement

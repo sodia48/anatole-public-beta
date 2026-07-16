@@ -250,7 +250,7 @@ def load_etf_catalogue() -> pd.DataFrame:
     return merged.drop_duplicates(subset=["Ticker"], keep="first").reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=45, show_spinner=False)
 def load_etf_market_snapshot(tickers: tuple[str, ...]) -> pd.DataFrame:
     tickers = tuple(dict.fromkeys(str(ticker) for ticker in tickers if str(ticker or "").strip()))
     if not tickers:
@@ -289,7 +289,7 @@ def etf_summary(frame: pd.DataFrame) -> dict[str, object]:
         "issuers": int(frame.get("Émetteur", pd.Series(dtype=str)).nunique()),
     }
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_etf_performance_snapshot(yahoo_tickers: tuple[str, ...], period: str = "1y") -> pd.DataFrame:
     """Return performance and liquidity proxies for a basket of ETF tickers.
 
@@ -757,7 +757,7 @@ def etf_history_summary(history: pd.DataFrame) -> dict[str, object]:
     return {"start": start, "end": end, "return": total, "drawdown": drawdown}
 
 
-@st.cache_data(ttl=90, show_spinner=False)
+@st.cache_data(ttl=45, show_spinner=False)
 def load_etf_quote(etf_ticker: str, etf_yahoo_ticker: str = "") -> dict[str, object]:
     """Return the most recent available quote for an ETF.
 
