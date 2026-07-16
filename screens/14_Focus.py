@@ -29,6 +29,7 @@ from core.ecosystem import (
 from core.device import mobile_chart_height, mobile_is_lite
 from core.performance import load_timer, perf_caption
 from core.mobile_experience import plotly_config
+from core.live_quote import render_live_quote_panel, remember_live_selection
 from core.pro_chart import build_event_markers
 from core.pro_chart_tools import (
     apply_pro_chart_models,
@@ -258,6 +259,22 @@ fallback_sector = (
     else "N/D"
 )
 
+live_payload = {
+    "ticker": str(selected_row.iloc[0]["Ticker"]) if not selected_row.empty else ticker,
+    "yahoo": ticker,
+    "name": fallback_name,
+    "sector": fallback_sector,
+}
+remember_live_selection(live_payload)
+render_live_quote_panel(
+    ticker,
+    symbol=live_payload["ticker"],
+    name=fallback_name,
+    sector=fallback_sector,
+    key_prefix="focus_live_quote",
+    refresh_seconds=5,
+)
+
 with st.spinner("Chargement du graphique…"):
     with load_timer("focus_history"):
         history = add_indicators(fetch_history(ticker, period, interval))
@@ -284,7 +301,7 @@ change = (
 st.subheader(f"{name} · {ticker}")
 metrics = st.columns(6)
 metrics[0].metric(
-    "Cours",
+    "Clôture du graphique",
     format_money(price, currency),
     f"{change:+.2f}%" if not np.isnan(change) else None,
 )

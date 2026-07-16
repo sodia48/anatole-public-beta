@@ -16,6 +16,7 @@ from core.database import get_watchlist
 from core.device import mobile_chart_height, mobile_is_lite, mobile_page_limit
 from core.public_beta import current_context
 from core.performance import load_timer, perf_caption, safe_display_count
+from core.live_quote import render_live_quote_panel, remember_live_selection, current_live_selection
 from core.runtime import load_light_market_bundle, load_technical_bundle
 from core.summary import daily_market_summary
 from core.ui import (
@@ -135,6 +136,13 @@ def render_heatmap_focus_selector(frame: pd.DataFrame, key_prefix: str) -> None:
                 "sector": str(row.get("Secteur", "")),
             }
             _store_cross_page_ticker(payload)
+            render_live_quote_panel(
+                payload["yahoo"],
+                symbol=payload["ticker"],
+                name=payload["name"],
+                sector=payload["sector"],
+                key_prefix=f"{key_prefix}_search_live",
+            )
             _render_cross_page_actions(payload, key_prefix=f"{key_prefix}_search_actions")
 
 
@@ -230,6 +238,7 @@ def _store_cross_page_ticker(payload: dict[str, str]) -> None:
     st.session_state["insider_symbol_query"] = ticker
     st.session_state["alert_prefill_ticker"] = yahoo
     st.session_state["watchlist_prefill_ticker"] = yahoo
+    remember_live_selection(payload)
 
 
 def _switch_to_ticker_destination(destination: str, payload: dict[str, str]) -> None:
@@ -521,20 +530,10 @@ def live_cockpit() -> None:
             mobile_readable=is_mobile_map or readable_mode,
             size_mode="equal" if readable_mode else "weight",
         )
-        action_col, hint_col = st.columns([1, 2.2])
-        with action_col:
-            click_destination = st.selectbox(
-                "Action au clic",
-                ["Screener", "Focus", "Insiders", "Alertes", "Watchlist"],
-                index=0,
-                key=f"minimal_heatmap_click_destination_{universe_key}",
-                help="Choisis où Anatole doit t’amener quand tu touches une action sur la carte.",
-            )
-        with hint_col:
-            st.caption(
-                "Touchez une case d’action pour l’envoyer vers la section choisie. "
-                "Le zoom est désactivé; la carte reste consultable en faisant défiler la page."
-            )
+        st.caption(
+            "Cliquez sur une action pour afficher immédiatement sa cotation et sa variation live. "
+            "Vous pourrez ensuite poursuivre vers Focus, Screener, Insiders, Alertes ou la Watchlist."
+        )
 
         plotly_event = None
         chart_key = f"minimal_heatmap_{universe_key}_{len(filtered)}_{size_choice}_clickable"
@@ -557,26 +556,22 @@ def live_cockpit() -> None:
 
         selected_payload = _extract_selected_heatmap_ticker(plotly_event, filtered)
         if selected_payload:
-            _switch_to_ticker_destination(str(click_destination), selected_payload)
+            _store_cross_page_ticker(selected_payload)
 
         st.caption(
             f"Carte complète : {len(filtered)} titres affichés selon l’univers et les filtres actifs. "
             "Si ton navigateur ne transmet pas le clic sur la carte, utilise la recherche rapide ci-dessous."
         )
         render_heatmap_focus_selector(filtered, key_prefix=f"minimal_heatmap_{universe_key}")
-        last_payload = None
-        last_ticker = st.session_state.get("anatole_bridge_ticker")
-        if last_ticker:
-            matched = filtered[filtered["Ticker"].astype(str).str.upper() == str(last_ticker).upper()]
-            if not matched.empty:
-                row = matched.iloc[0]
-                last_payload = {
-                    "ticker": str(row.get("Ticker", last_ticker)),
-                    "yahoo": str(row.get("YahooTicker", row.get("Ticker", last_ticker))),
-                    "name": str(row.get("Nom", "")),
-                    "sector": str(row.get("Secteur", "")),
-                }
+        last_payload = selected_payload or current_live_selection()
         if last_payload:
+            render_live_quote_panel(
+                last_payload.get("yahoo", last_payload.get("ticker", "")),
+                symbol=last_payload.get("ticker", ""),
+                name=last_payload.get("name", ""),
+                sector=last_payload.get("sector", ""),
+                key_prefix=f"minimal_heatmap_live_{universe_key}",
+            )
             _render_cross_page_actions(last_payload, key_prefix=f"minimal_heatmap_last_{universe_key}")
 
     with st.expander("Principaux mouvements", expanded=False):

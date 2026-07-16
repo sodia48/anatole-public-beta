@@ -8,6 +8,7 @@ from core.data import fetch_fundamentals
 from core.data_quality import render_data_quality_strip
 from core.device import mobile_is_lite, mobile_page_limit
 from core.performance import load_timer, perf_caption
+from core.live_quote import render_live_quote_panel, remember_live_selection
 from core.runtime import load_market_bundle
 from core.universe import current_universe, current_universe_key
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context
@@ -123,6 +124,21 @@ if bridge_symbol:
         st.success(
             f"{bridge_row.get('Ticker', bridge_symbol)} ouvert depuis une autre section · "
             f"{bridge_row.get('Nom', '')}"
+        )
+        bridge_payload = {
+            "ticker": str(bridge_row.get("Ticker", bridge_symbol)),
+            "yahoo": str(bridge_row.get("YahooTicker", bridge_symbol)),
+            "name": str(bridge_row.get("Nom", "")),
+            "sector": str(bridge_row.get("Secteur", "")),
+        }
+        remember_live_selection(bridge_payload)
+        render_live_quote_panel(
+            bridge_payload["yahoo"],
+            symbol=bridge_payload["ticker"],
+            name=bridge_payload["name"],
+            sector=bridge_payload["sector"],
+            key_prefix="screener_bridge_live",
+            compact=True,
         )
         b1, b2, b3, b4 = st.columns(4)
         with b1:
@@ -290,24 +306,67 @@ display_result = result[base_columns].head(mobile_page_limit(220, 70))
 if len(result) > len(display_result):
     st.caption(f"Affichage limité à {len(display_result)} titres pour préserver la fluidité. Télécharge la liste complète pour obtenir tous les résultats.")
 
-st.dataframe(
-    display_result,
-    hide_index=True,
-    width="stretch",
-    height=620,
-    column_config={
-        "Prix": st.column_config.NumberColumn(format="$%.2f"),
-        "Variation": st.column_config.NumberColumn(format="%+.2f%%"),
-        "RSI14": st.column_config.NumberColumn("RSI", format="%.1f"),
-        "Momentum1M": st.column_config.NumberColumn("Mom. 1M", format="%+.2f%%"),
-        "Momentum3M": st.column_config.NumberColumn("Mom. 3M", format="%+.2f%%"),
-        "VolumeRelatif": st.column_config.NumberColumn("Vol. relatif", format="%.2fx"),
-        "Volatilite20": st.column_config.NumberColumn("Volatilité", format="%.1f%%"),
-        "DistanceHigh52": st.column_config.NumberColumn("Écart sommet 52s", format="%+.1f%%"),
-        "DividendYield": st.column_config.NumberColumn("Dividende", format="%.2f%%"),
-        "MarketCap": st.column_config.NumberColumn("Capitalisation", format="compact"),
-    },
-)
+screener_table_config = {
+    "Prix": st.column_config.NumberColumn(format="$%.2f"),
+    "Variation": st.column_config.NumberColumn(format="%+.2f%%"),
+    "RSI14": st.column_config.NumberColumn("RSI", format="%.1f"),
+    "Momentum1M": st.column_config.NumberColumn("Mom. 1M", format="%+.2f%%"),
+    "Momentum3M": st.column_config.NumberColumn("Mom. 3M", format="%+.2f%%"),
+    "VolumeRelatif": st.column_config.NumberColumn("Vol. relatif", format="%.2fx"),
+    "Volatilite20": st.column_config.NumberColumn("Volatilité", format="%.1f%%"),
+    "DistanceHigh52": st.column_config.NumberColumn("Écart sommet 52s", format="%+.1f%%"),
+    "DividendYield": st.column_config.NumberColumn("Dividende", format="%.2f%%"),
+    "MarketCap": st.column_config.NumberColumn("Capitalisation", format="compact"),
+}
+
+screener_table_event = None
+try:
+    screener_table_event = st.dataframe(
+        display_result,
+        hide_index=True,
+        width="stretch",
+        height=620,
+        column_config=screener_table_config,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="screener_live_selectable_table",
+    )
+except TypeError:
+    st.dataframe(
+        display_result,
+        hide_index=True,
+        width="stretch",
+        height=620,
+        column_config=screener_table_config,
+    )
+
+selected_live_row = None
+try:
+    selected_rows = list(screener_table_event.selection.rows) if screener_table_event is not None else []
+    if selected_rows:
+        selected_live_row = display_result.iloc[int(selected_rows[0])]
+except Exception:
+    selected_live_row = None
+
+if selected_live_row is not None:
+    selected_symbol = str(selected_live_row.get("Ticker", ""))
+    full_match = result[result["Ticker"].astype(str) == selected_symbol].head(1)
+    source_row = full_match.iloc[0] if not full_match.empty else selected_live_row
+    live_payload = {
+        "ticker": selected_symbol,
+        "yahoo": str(source_row.get("YahooTicker", selected_symbol)),
+        "name": str(source_row.get("Nom", "")),
+        "sector": str(source_row.get("Secteur", "")),
+    }
+    remember_live_selection(live_payload)
+    render_live_quote_panel(
+        live_payload["yahoo"],
+        symbol=live_payload["ticker"],
+        name=live_payload["name"],
+        sector=live_payload["sector"],
+        key_prefix="screener_table_live",
+        compact=True,
+    )
 
 if not display_result.empty:
     st.markdown("#### Continuer l’analyse")
@@ -328,6 +387,21 @@ if not display_result.empty:
         if not selected_row.empty:
             row = selected_row.iloc[0]
             yahoo = str(row.get("YahooTicker", selected_symbol)) if "YahooTicker" in row.index else selected_symbol
+            live_payload = {
+                "ticker": selected_symbol,
+                "yahoo": yahoo,
+                "name": str(row.get("Nom", "")),
+                "sector": str(row.get("Secteur", "")),
+            }
+            remember_live_selection(live_payload)
+            render_live_quote_panel(
+                yahoo,
+                symbol=selected_symbol,
+                name=live_payload["name"],
+                sector=live_payload["sector"],
+                key_prefix="screener_selector_live",
+                compact=True,
+            )
             c1, c2, c3, c4 = st.columns(4)
             with c1:
                 if st.button("Mode Focus", key="screener_continue_focus", width="stretch"):

@@ -6,6 +6,7 @@ import streamlit as st
 from core.device import mobile_is_lite
 from core.data import fetch_market_snapshot, load_constituents
 from core.database import add_watchlist, get_watchlist, remove_watchlist
+from core.live_quote import render_live_quote_panel, remember_live_selection
 from core.ui import apply_style, configure_page, footer, page_header, sidebar_context, render_mobile_watchlist_card
 from core.utils import normalise_symbol
 
@@ -81,26 +82,87 @@ if mobile_is_lite():
             change=_watch_value(row.get("Variation"), percent=True),
             volume=_watch_value(row.get("Volume")),
         )
-        if st.button(
-            f"Ouvrir {row.get('Ticker', row.get('YahooTicker', 'N/D'))} dans Focus",
-            key=f"open_watch_mobile_{row.get('YahooTicker')}",
-            width="stretch",
-        ):
-            st.session_state.selected_ticker = str(row.get("YahooTicker"))
-            st.switch_page("screens/14_Focus.py")
+        mobile_actions = st.columns(2)
+        with mobile_actions[0]:
+            if st.button(
+                "Voir live",
+                key=f"live_watch_mobile_{row.get('YahooTicker')}",
+                width="stretch",
+            ):
+                payload = {
+                    "ticker": str(row.get("Ticker", row.get("YahooTicker", "N/D"))),
+                    "yahoo": str(row.get("YahooTicker", "")),
+                    "name": str(row.get("Nom", "")),
+                    "sector": str(row.get("Secteur", "")),
+                }
+                remember_live_selection(payload)
+                st.session_state["watchlist_live_ticker"] = payload["yahoo"]
+                st.rerun()
+        with mobile_actions[1]:
+            if st.button(
+                "Ouvrir Focus",
+                key=f"open_watch_mobile_{row.get('YahooTicker')}",
+                width="stretch",
+            ):
+                st.session_state.selected_ticker = str(row.get("YahooTicker"))
+                st.switch_page("screens/14_Focus.py")
 else:
-    st.dataframe(
-        table[["Ticker", "Nom", "Secteur", "Prix", "Variation", "PlusHaut", "PlusBas", "Volume", "SourceCours"]],
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "Prix": st.column_config.NumberColumn(format="$%.2f"),
-            "Variation": st.column_config.NumberColumn(format="%+.2f%%"),
-            "PlusHaut": st.column_config.NumberColumn(format="$%.2f"),
-            "PlusBas": st.column_config.NumberColumn(format="$%.2f"),
-            "Volume": st.column_config.NumberColumn(format="compact"),
-        },
-    )
+    watch_display = table[["Ticker", "Nom", "Secteur", "Prix", "Variation", "PlusHaut", "PlusBas", "Volume", "SourceCours"]].copy()
+    watch_event = None
+    watch_config = {
+        "Prix": st.column_config.NumberColumn(format="$%.2f"),
+        "Variation": st.column_config.NumberColumn(format="%+.2f%%"),
+        "PlusHaut": st.column_config.NumberColumn(format="$%.2f"),
+        "PlusBas": st.column_config.NumberColumn(format="$%.2f"),
+        "Volume": st.column_config.NumberColumn(format="compact"),
+    }
+    try:
+        watch_event = st.dataframe(
+            watch_display,
+            hide_index=True,
+            width="stretch",
+            column_config=watch_config,
+            on_select="rerun",
+            selection_mode="single-row",
+            key="watchlist_live_selectable_table",
+        )
+    except TypeError:
+        st.dataframe(
+            watch_display,
+            hide_index=True,
+            width="stretch",
+            column_config=watch_config,
+        )
+
+    try:
+        selected_rows = list(watch_event.selection.rows) if watch_event is not None else []
+    except Exception:
+        selected_rows = []
+    if selected_rows:
+        picked = table.iloc[int(selected_rows[0])]
+        payload = {
+            "ticker": str(picked.get("Ticker", picked.get("YahooTicker", ""))),
+            "yahoo": str(picked.get("YahooTicker", "")),
+            "name": str(picked.get("Nom", "")),
+            "sector": str(picked.get("Secteur", "")),
+        }
+        remember_live_selection(payload)
+        st.session_state["watchlist_live_ticker"] = payload["yahoo"]
+
+live_ticker = str(st.session_state.get("watchlist_live_ticker") or "").strip()
+if live_ticker:
+    match = table[table["YahooTicker"].astype(str) == live_ticker].head(1)
+    if not match.empty:
+        picked = match.iloc[0]
+        render_live_quote_panel(
+            live_ticker,
+            symbol=str(picked.get("Ticker", live_ticker)),
+            name=str(picked.get("Nom", "")),
+            sector=str(picked.get("Secteur", "")),
+            key_prefix="watchlist_live_quote",
+            compact=True,
+            refresh_seconds=10,
+        )
 
 remove = st.selectbox("Retirer un titre", watchlist)
 if st.button("Retirer de la watchlist"):
